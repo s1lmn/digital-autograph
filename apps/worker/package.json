@@ -1,0 +1,17 @@
+{
+  "name": "@digital-autograph/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@digital-autograph/config": "workspace:*",
+    "@digital-autograph/db": "workspace:*",
+    "pg": "^8.16.0"
+  }
+}

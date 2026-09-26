@@ -2,6 +2,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 
 export { eq, sql } from 'drizzle-orm';
+export { createPgSessionRepository } from './session-repository';
 
 export function createDatabase(databaseUrl: string) {
   const pool = new Pool({ connectionString: databaseUrl });

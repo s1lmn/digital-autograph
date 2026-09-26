@@ -21,10 +21,49 @@ const databaseSchema = baseSchema.extend({
     ),
 });
 
-const apiSchema = databaseSchema.extend({
-  API_HOST: z.string().min(1),
-  API_PORT: z.coerce.number().int().min(1).max(65535),
-});
+const apiSchema = databaseSchema
+  .extend({
+    API_HOST: z.string().min(1),
+    API_PORT: z.coerce.number().int().min(1).max(65535),
+    SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(2_592_000),
+    TRUSTED_WEB_ORIGINS: z
+      .string()
+      .min(1)
+      .transform((value) => value.split(',').map((origin) => origin.trim()))
+      .pipe(
+        z
+          .array(
+            z.string().refine((value) => {
+              try {
+                const url = new URL(value);
+                return (
+                  ['http:', 'https:'].includes(url.protocol) &&
+                  url.origin === value &&
+                  !url.username &&
+                  !url.password
+                );
+              } catch {
+                return false;
+              }
+            }, 'must be an exact HTTP(S) origin'),
+          )
+          .min(1),
+      ),
+  })
+  .superRefine((config, context) => {
+    if (!['production', 'staging'].includes(config.APP_ENV)) return;
+    if (
+      config.TRUSTED_WEB_ORIGINS.some(
+        (origin) => !origin.startsWith('https://'),
+      )
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['TRUSTED_WEB_ORIGINS'],
+        message: 'must use HTTPS origins in staging and production',
+      });
+    }
+  });
 
 const workerSchema = databaseSchema;
 

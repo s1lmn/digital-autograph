@@ -1,4 +1,5 @@
 import {
+  administrativeRoles,
   placementSources,
   userStatuses,
   wallStatuses,
@@ -10,6 +11,7 @@ import {
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -26,6 +28,10 @@ const updatedAt = () =>
 export const userStatus = pgEnum('user_status', userStatuses);
 export const wallStatus = pgEnum('wall_status', wallStatuses);
 export const placementSource = pgEnum('placement_source', placementSources);
+export const administrativeRole = pgEnum(
+  'administrative_role',
+  administrativeRoles,
+);
 
 export const users = pgTable('users', {
   id: id(),
@@ -33,6 +39,20 @@ export const users = pgTable('users', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+export const userRoles = pgTable(
+  'user_roles',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    role: administrativeRole().notNull(),
+    grantedAt: timestamp('granted_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.role] })],
+);
 
 export const socialIdentities = pgTable(
   'social_identities',

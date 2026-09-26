@@ -1,11 +1,23 @@
 import { loadApiConfig } from '@digital-autograph/config';
-import { createDatabase } from '@digital-autograph/db';
+import { SessionService } from '@digital-autograph/auth';
+import {
+  createDatabase,
+  createPgSessionRepository,
+} from '@digital-autograph/db';
 import { buildApi } from './app';
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const database = createDatabase(config.DATABASE_URL);
-  const app = buildApi(database);
+  const sessions = new SessionService(
+    createPgSessionRepository(database.pool),
+    config.SESSION_TTL_SECONDS,
+  );
+  const app = buildApi(database, sessions, {
+    appEnvironment: config.APP_ENV,
+    sessionTtlSeconds: config.SESSION_TTL_SECONDS,
+    trustedWebOrigins: config.TRUSTED_WEB_ORIGINS,
+  });
   let closing = false;
 
   const shutdown = async (): Promise<void> => {

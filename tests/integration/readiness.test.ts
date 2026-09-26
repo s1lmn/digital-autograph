@@ -1,5 +1,9 @@
 import { buildApi } from '../../apps/api/src/app';
-import { createDatabase } from '../../packages/db/src/index';
+import { SessionService } from '../../packages/auth/src/index';
+import {
+  createDatabase,
+  createPgSessionRepository,
+} from '../../packages/db/src/index';
 import { describe, expect, it } from 'vitest';
 
 describe('API readiness with PostgreSQL', () => {
@@ -14,7 +18,15 @@ describe('API readiness with PostgreSQL', () => {
       );
     }
     const database = createDatabase(value);
-    const app = buildApi(database);
+    const sessions = new SessionService(
+      createPgSessionRepository(database.pool),
+      1209600,
+    );
+    const app = buildApi(database, sessions, {
+      appEnvironment: 'test',
+      sessionTtlSeconds: 1209600,
+      trustedWebOrigins: ['http://127.0.0.1:3000'],
+    });
     try {
       const response = await app.inject('/health/ready');
       expect(response.statusCode).toBe(200);

@@ -26,6 +26,8 @@ The local MinIO image is a pinned community build of the upstream MinIO release 
 
 The sample `.env` values are local-only. Provide real secrets through the deployment environment when that environment is designed. All server configuration is validated at startup; the web health check runs server-side so `API_INTERNAL_URL` is not bundled for the browser. Supported `APP_ENV` values are `local`, `test`, `development`, `staging`, and `production`.
 
+Auth Core requires `SESSION_TTL_SECONDS` and `TRUSTED_WEB_ORIGINS` in the API environment. The latter is a comma-separated list of exact web origins allowed to send credentialed requests. See [authentication.md](docs/architecture/authentication.md) for session and cookie behavior. There is no public login endpoint yet.
+
 ## Checks
 
 ```sh
@@ -48,6 +50,7 @@ The integration suite requires the separate `autograph_test` PostgreSQL instance
 - `apps/api`: HTTP endpoints and future application orchestration.
 - `apps/worker`: process lifecycle and future background tasks.
 - `packages/domain`: framework-independent rules.
+- `packages/auth`: provider-independent session lifecycle.
 - `packages/db`: PostgreSQL connection, domain schema, Drizzle migrations, transaction access.
 - `packages/contracts`: shared Zod API schemas.
 - `packages/integrations`: future provider adapters.

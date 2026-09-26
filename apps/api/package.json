@@ -10,9 +10,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@digital-autograph/auth": "workspace:*",
     "@digital-autograph/config": "workspace:*",
     "@digital-autograph/contracts": "workspace:*",
     "@digital-autograph/db": "workspace:*",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
     "fastify": "^5.12.5",
     "pg": "^8.16.0"
   }

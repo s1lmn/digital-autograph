@@ -9,3 +9,9 @@ export interface PrivateObjectStorage {
   readPrivate(key: string): Promise<Uint8Array | null>;
   removePrivate(key: string): Promise<void>;
 }
+
+export {
+  createGoogleOidcClient,
+  type GoogleOidcClient,
+  type GoogleOidcConfig,
+} from './google';

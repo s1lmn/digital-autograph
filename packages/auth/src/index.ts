@@ -1,5 +1,17 @@
 import { createHash, randomBytes } from 'node:crypto';
 
+export {
+  IdentityNotAllowedError,
+  IdentityService,
+  type ProviderIdentityRepository,
+} from './identity';
+export {
+  OAuthAttemptService,
+  type OAuthAttemptRepository,
+  type ClaimedOAuthAttempt,
+  type NewOAuthAttempt,
+} from './oauth-attempt';
+
 export type AuthenticatedSession = {
   sessionId: string;
   user: { id: string; status: 'active' };

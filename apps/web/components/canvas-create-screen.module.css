@@ -68,3 +68,17 @@
   background: #f6f7f8;
   border: 1px solid #d9dfe5;
 }
+.approval {
+  border: 1px solid #d9dfe5;
+  border-radius: 0.6rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: #fff8ed;
+}
+.approval p {
+  line-height: 1.45;
+}
+.approval [role='alert'] {
+  color: #9a3027;
+  font-weight: 600;
+}

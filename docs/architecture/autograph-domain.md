@@ -5,12 +5,20 @@
 An authenticated User creates an Autograph with source `photo` or `canvas`. Its User ID comes only from the validated server session. The same owner may read it, initiate its original upload, and complete that upload. No public Autograph route exists. `autographs.id` is the logical identity; an object-storage key is private infrastructure data.
 
 ```text
-draft → upload_pending → uploaded_unverified → processing → awaiting_approval
+draft → upload_pending → uploaded_unverified → processing → awaiting_approval → awaiting_moderation
                                               └──────────→ processing_failed
 upload_pending (expired and abandoned) → draft
 ```
 
-`uploaded_unverified` proves only that the backend found an object and checked its HEAD metadata against the reservation. The worker validates actual bytes and creates a private cleaned derivative. `awaiting_approval` does not imply user approval, moderation, public safety, or Placement eligibility. No current state authorizes a Free Claim; `ready` requires later approval/moderation rules.
+`uploaded_unverified` proves only that the backend found an object and checked its HEAD metadata against the reservation. The worker validates actual bytes and creates a private cleaned derivative. `awaiting_approval` does not imply user approval, moderation, public safety, or Placement eligibility. `awaiting_moderation` means the owner approved one specific cleaned derivative and submitted it for later moderation. It does not imply platform approval, public safety, public visibility, legal validity, or Placement eligibility. No current state authorizes a Free Claim; `ready` requires later moderation rules.
+
+## Owner approval gate
+
+`GET /autographs/:id/preview` returns an owner-only short-lived signed URL and the cleaned Asset UUID in `assetId`. The canvas waits for that image to load before enabling approval. `POST /autographs/:id/approve` requires `{ "reviewedAssetId": "<UUID>" }` as a precondition describing what the owner saw, not as authority to select an asset. The backend takes the authenticated User ID from the session, locks the Autograph, selects its current uploaded cleaned Asset under a row lock, compares its ID with the reviewed ID, inserts one `autograph_user_approvals` row, and changes status to `awaiting_moderation` in the same PostgreSQL transaction. A different asset ID fails closed. A repeated call with matching persisted evidence succeeds without another insert; state/evidence disagreement fails closed.
+
+The approval row stores `autograph_id`, `user_id`, `cleaned_asset_id`, and `approved_at`. Foreign keys use restrictive deletion and a unique Autograph index limits this MVP lifecycle to one approval. A database trigger rejects approval-row UPDATE/DELETE; another rejects mutation of an already approved cleaned Asset. The approval binds to Asset identity and cannot silently transfer to a replacement derivative. If future reprocessing produces a new cleaned Asset, it needs a deliberately new approval workflow. This PR provides no such workflow. Existing `awaiting_approval` records remain private without automatic retention cleanup.
+
+After approval, the owner may still request a private preview. Original upload initiation and completion are rejected, and the succeeded processing job is not requeued. User approval alone never makes an image public or creates a Placement. Separate legal consent, if required by product policy, is outside this technical approval gate.
 
 ## Asset model
 
@@ -41,7 +49,7 @@ drawing; it never marks an Autograph approved or public.
 1. `POST /autographs` creates a draft owned by the session User.
 2. `POST /autographs/:id/upload` reserves one original Asset under a PostgreSQL row lock. The request declares `image/png` or `image/jpeg` and 1–10 MiB. Repeating initiation with the same metadata refreshes the reservation and signs the same key; different metadata or an already completed upload is rejected.
 3. The response returns a short-lived signed PUT URL and the required `Content-Type` and `If-None-Match: *` headers. `UPLOAD_URL_TTL_SECONDS` defaults to 300 and is bounded to 60–600. Both headers are signed. Conditional PUT prevents a replayed URL from overwriting an already stored original. The client uploads directly to private object storage.
-4. `POST /autographs/:id/upload/complete` locks the Autograph, performs a backend HEAD, and rejects a missing, zero-length, oversized, mismatched-size, or mismatched-content-type object. Rejected oversized/mismatched objects are deleted best-effort while the lock is held; a failed deletion leaves the reserved row for eventual cleanup. A PostgreSQL transaction changes Asset and Autograph state and enqueues one processing job together. Repeated completion is idempotent.
+4. `POST /autographs/:id/upload/complete` locks the Autograph, performs a backend HEAD, and rejects a missing, zero-length, oversized, mismatched-size, or mismatched-content-type object. Rejected oversized/mismatched objects are deleted best-effort while the lock is held; a failed deletion leaves the reserved row for eventual cleanup. A PostgreSQL transaction changes Asset and Autograph state and enqueues one processing job together. Repeated completion is idempotent until owner approval; after approval it is rejected.
 
 The declared MIME type and size, S3 Content-Type metadata, and a successful PUT are untrusted. The signed URL limits the upload route, key, headers, and time; it does not validate image bytes. Size is checked at HEAD and must be enforced again while reading bytes in the processing worker. SVG, PDF, and arbitrary binary types cannot be requested through the API.
 

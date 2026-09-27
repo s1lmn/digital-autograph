@@ -186,6 +186,25 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
         })
       ).statusCode,
     ).toBe(403);
+    const approved = await service.approveCleanedAutograph(
+      f.userId,
+      f.draft.id,
+      preview.json().assetId as string,
+    );
+    expect(approved.status).toBe('awaiting_moderation');
+    expect(await processOneAutographJob(operations)).toBe(false);
+    expect((await service.get(f.userId, f.draft.id)).status).toBe(
+      'awaiting_moderation',
+    );
+    const approvedPreview = await app.inject({
+      url: `/autographs/${f.draft.id}/preview`,
+      headers: { cookie: `da_session=${f.token}` },
+    });
+    expect(approvedPreview.statusCode).toBe(200);
+    expect(approvedPreview.json().assetId).toBe(preview.json().assetId);
+    expect((await fetch(approvedPreview.json().url as string)).status).toBe(
+      200,
+    );
   });
 
   it('fails invalid uploaded bytes without a cleaned asset', async () => {

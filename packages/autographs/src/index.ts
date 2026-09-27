@@ -14,6 +14,7 @@ export type AutographView = {
   status: AutographStatus;
   createdAt: Date;
   updatedAt: Date;
+  approvedAt: Date | null;
   original: null | {
     id: string;
     status: 'reserved' | 'uploaded';
@@ -58,7 +59,15 @@ export interface AutographRepository {
     autographId: string,
     verify: (asset: ReservedOriginal) => Promise<number>,
   ): Promise<AutographView>;
-  cleanedAssetKey(userId: string, autographId: string): Promise<string | null>;
+  cleanedAssetPreview(
+    userId: string,
+    autographId: string,
+  ): Promise<{ assetId: string; key: string } | null>;
+  approveOwnedAutograph(
+    userId: string,
+    autographId: string,
+    reviewedAssetId: string,
+  ): Promise<{ id: string; status: 'awaiting_moderation'; approvedAt: Date }>;
 }
 
 export interface PrivateOriginalStorage {
@@ -86,7 +95,11 @@ export type AutographErrorCode =
   | 'UPLOAD_NOT_FOUND'
   | 'UPLOAD_TOO_LARGE'
   | 'UPLOAD_METADATA_MISMATCH'
-  | 'CLEANED_PREVIEW_NOT_AVAILABLE';
+  | 'CLEANED_PREVIEW_NOT_AVAILABLE'
+  | 'AUTOGRAPH_NOT_AWAITING_APPROVAL'
+  | 'CLEANED_ASSET_NOT_AVAILABLE'
+  | 'REVIEWED_ASSET_MISMATCH'
+  | 'APPROVAL_STATE_INCONSISTENT';
 
 export class AutographError extends Error {
   constructor(readonly code: AutographErrorCode) {
@@ -124,6 +137,18 @@ export class AutographService {
 
   get(userId: string, autographId: string): Promise<AutographView> {
     return this.repository.findOwned(userId, autographId);
+  }
+
+  approveCleanedAutograph(
+    userId: string,
+    autographId: string,
+    reviewedAssetId: string,
+  ) {
+    return this.repository.approveOwnedAutograph(
+      userId,
+      autographId,
+      reviewedAssetId,
+    );
   }
 
   async initiateUpload(
@@ -203,10 +228,17 @@ export class AutographService {
   }
 
   async preview(userId: string, autographId: string) {
-    const key = await this.repository.cleanedAssetKey(userId, autographId);
-    if (!key) throw new AutographError('CLEANED_PREVIEW_NOT_AVAILABLE');
+    const asset = await this.repository.cleanedAssetPreview(
+      userId,
+      autographId,
+    );
+    if (!asset) throw new AutographError('CLEANED_PREVIEW_NOT_AVAILABLE');
     return {
-      url: await this.storage.signPrivateRead(key, this.previewTtlSeconds),
+      assetId: asset.assetId,
+      url: await this.storage.signPrivateRead(
+        asset.key,
+        this.previewTtlSeconds,
+      ),
       expiresAt: new Date(
         this.clock().getTime() + this.previewTtlSeconds * 1000,
       ),

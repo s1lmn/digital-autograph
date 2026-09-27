@@ -29,7 +29,7 @@ export type SubmissionApi = {
   preview(
     id: string,
     signal: AbortSignal,
-  ): Promise<{ url: string; expiresAt: string }>;
+  ): Promise<{ assetId: string; url: string; expiresAt: string }>;
 };
 
 function wait(ms: number, signal: AbortSignal): Promise<void> {
@@ -55,7 +55,12 @@ export async function submitCanvas(
   onCreated: (id: string) => void,
   existingId?: string,
   pause: (ms: number, signal: AbortSignal) => Promise<void> = wait,
-): Promise<{ id: string; previewUrl: string; expiresAt: string }> {
+): Promise<{
+  id: string;
+  previewAssetId: string;
+  previewUrl: string;
+  expiresAt: string;
+}> {
   let autograph: Autograph;
   if (existingId) {
     autograph = await api.get(existingId, signal);
@@ -102,6 +107,7 @@ export async function submitCanvas(
       const preview = await api.preview(autograph.id, signal);
       return {
         id: autograph.id,
+        previewAssetId: preview.assetId,
         previewUrl: preview.url,
         expiresAt: preview.expiresAt,
       };

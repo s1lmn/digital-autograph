@@ -13,6 +13,7 @@
     "@digital-autograph/auth": "workspace:*",
     "@digital-autograph/config": "workspace:*",
     "@digital-autograph/domain": "workspace:*",
+    "@digital-autograph/walls": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "pg": "^8.16.0"
   },

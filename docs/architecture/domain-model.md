@@ -1,6 +1,6 @@
 # Foundational domain model
 
-This describes the foundational persistence model, including authentication additions. PostgreSQL is authoritative; Wall and placement product flows are not implemented yet.
+This describes the foundational persistence model, including authentication and Creator/Wall application rules. PostgreSQL is authoritative; Placement product flows are not implemented yet.
 
 ## Entities and relationships
 
@@ -34,7 +34,7 @@ All standalone entities use database-generated UUIDv4 via PostgreSQL `gen_random
 
 ## Lifecycle and deletion
 
-User status is `active`, `disabled`, or `anonymized`. Wall status is `draft`, `scheduled`, `live`, `paused`, `ended`, or `archived`. Placement source is `free_claim`, `takeover`, or `admin`. PostgreSQL enums reject values outside these sets; allowed Wall transitions are application rules for later services. Session lifecycle is create → active → rotated/revoked/expired: `revoked_at` records explicit termination, while expiry is derived from `expires_at` and the current time. Auth Core now creates a new row and revokes the old one transactionally during rotation; see [authentication.md](authentication.md).
+User status is `active`, `disabled`, or `anonymized`. Wall status is `draft`, `scheduled`, `live`, `paused`, `ended`, or `archived`. Placement source is `free_claim`, `takeover`, or `admin`. PostgreSQL enums reject values outside these sets; the Wall service enforces allowed transitions under a row lock. See [wall-domain.md](wall-domain.md). Session lifecycle is create → active → rotated/revoked/expired: `revoked_at` records explicit termination, while expiry is derived from `expires_at` and the current time. Auth Core now creates a new row and revokes the old one transactionally during rotation; see [authentication.md](authentication.md).
 
 `user_roles` is a small administrative-role assignment table. Its composite primary key enforces one assignment per User and role; its enum permits only moderator, finance, and admin. Creator ownership remains a relationship, not a role.
 
@@ -42,4 +42,4 @@ User deletion should be a status/anonymization process with a retention policy; 
 
 ## Deferred application rules
 
-The schema accepts lifecycle values but does not decide valid Wall transitions, scheduling eligibility, or who may change state. It does not require the number of Slot rows to equal `slot_count`, constrain every position to its intended range, or decide when Slot creation is allowed; the Wall service must manage those changes transactionally. Creator ownership proof, additional provider identity verification, session/attempt cleanup, and administrative authorization await later services. Autograph ownership linkage, free-claim eligibility, pricing, reservations, payment reconciliation, atomic takeover, and ledger entries await their respective domains.
+The schema accepts lifecycle values but does not itself decide valid Wall transitions or who may change state. It does not require the number of Slot rows to equal `slot_count` or constrain every position to its intended range; the Wall service manages these changes transactionally and checks for drift when reading. Creator ownership comes from `creators.owner_user_id`. Additional provider identity verification, session/attempt cleanup, and administrative authorization await later services. Autograph ownership linkage, free-claim eligibility, pricing, reservations, payment reconciliation, atomic takeover, and ledger entries await their respective domains.

@@ -5,6 +5,7 @@ export { eq, sql } from 'drizzle-orm';
 export { createPgSessionRepository } from './session-repository';
 export { createPgOAuthAttemptRepository } from './oauth-attempt-repository';
 export { createPgProviderIdentityRepository } from './provider-identity-repository';
+export { createPgWallRepository } from './wall-repository';
 
 export function createDatabase(databaseUrl: string) {
   const pool = new Pool({ connectionString: databaseUrl });

@@ -63,6 +63,23 @@ const apiSchema = databaseSchema
         return false;
       }
     }, 'must be an absolute HTTP(S) /auth/google/callback URL'),
+    TELEGRAM_CLIENT_ID: z.string().min(1),
+    TELEGRAM_CLIENT_SECRET: z.string().min(1),
+    TELEGRAM_REDIRECT_URI: z.url().refine((value) => {
+      try {
+        const url = new URL(value);
+        return (
+          ['http:', 'https:'].includes(url.protocol) &&
+          url.pathname === '/auth/telegram/callback' &&
+          !url.search &&
+          !url.hash &&
+          !url.username &&
+          !url.password
+        );
+      } catch {
+        return false;
+      }
+    }, 'must be an absolute HTTP(S) /auth/telegram/callback URL'),
   })
   .superRefine((config, context) => {
     if (!config.TRUSTED_WEB_ORIGINS.includes(config.WEB_ORIGIN)) {
@@ -73,6 +90,7 @@ const apiSchema = databaseSchema
       });
     }
     const redirect = new URL(config.GOOGLE_REDIRECT_URI);
+    const telegramRedirect = new URL(config.TELEGRAM_REDIRECT_URI);
     const webHost = new URL(config.WEB_ORIGIN).hostname;
     if (
       ['local', 'test', 'development'].includes(config.APP_ENV) &&
@@ -83,6 +101,18 @@ const apiSchema = databaseSchema
       context.addIssue({
         code: 'custom',
         path: ['GOOGLE_REDIRECT_URI'],
+        message: 'HTTP callback must use localhost or 127.0.0.1',
+      });
+    }
+    if (
+      ['local', 'test', 'development'].includes(config.APP_ENV) &&
+      telegramRedirect.protocol === 'http:' &&
+      (!['localhost', '127.0.0.1'].includes(telegramRedirect.hostname) ||
+        !['localhost', '127.0.0.1'].includes(webHost))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['TELEGRAM_REDIRECT_URI'],
         message: 'HTTP callback must use localhost or 127.0.0.1',
       });
     }
@@ -107,6 +137,13 @@ const apiSchema = databaseSchema
         path: ['GOOGLE_REDIRECT_URI'],
         message:
           'web origin and Google callback must use HTTPS in staging and production',
+      });
+    }
+    if (!config.TELEGRAM_REDIRECT_URI.startsWith('https://')) {
+      context.addIssue({
+        code: 'custom',
+        path: ['TELEGRAM_REDIRECT_URI'],
+        message: 'Telegram callback must use HTTPS in staging and production',
       });
     }
   });

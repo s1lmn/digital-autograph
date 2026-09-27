@@ -12,6 +12,11 @@ import {
 } from './auth/google-http';
 import type { GoogleLoginService } from './auth/google-login';
 import {
+  registerTelegramRoutes,
+  type TelegramHttpConfig,
+} from './auth/telegram-http';
+import type { TelegramLoginService } from './auth/telegram-login';
+import {
   invalidOrigin,
   registerAuthRoutes,
   sessionCookieName,
@@ -26,6 +31,7 @@ export function buildApi(
   sessions: HttpSessionService,
   authConfig: AuthHttpConfig,
   google?: { login: GoogleLoginService; config: GoogleHttpConfig },
+  telegram?: { login: TelegramLoginService; config: TelegramHttpConfig },
 ) {
   const app = Fastify({
     logger: {
@@ -83,6 +89,8 @@ export function buildApi(
   registerAuthRoutes(app, sessions, authConfig);
   if (google)
     registerGoogleRoutes(app, google.login, authConfig, google.config);
+  if (telegram)
+    registerTelegramRoutes(app, telegram.login, authConfig, telegram.config);
 
   return app;
 }

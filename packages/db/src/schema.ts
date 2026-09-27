@@ -123,6 +123,7 @@ export const oauthLoginAttempts = pgTable(
     stateHash: text('state_hash').notNull(),
     browserBindingHash: text('browser_binding_hash').notNull(),
     nonceHash: text('nonce_hash').notNull(),
+    pkceVerifierHash: text('pkce_verifier_hash'),
     returnPath: text('return_path').notNull(),
     createdAt: createdAt(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
@@ -142,6 +143,10 @@ export const oauthLoginAttempts = pgTable(
     check(
       'oauth_login_attempts_provider_nonblank',
       sql`length(btrim(${table.provider})) > 0`,
+    ),
+    check(
+      'oauth_login_attempts_pkce_hash_nonblank',
+      sql`${table.pkceVerifierHash} IS NULL OR length(btrim(${table.pkceVerifierHash})) > 0`,
     ),
     check(
       'oauth_login_attempts_return_path_local',

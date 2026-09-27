@@ -1,0 +1,2 @@
+ALTER TABLE "oauth_login_attempts" ADD COLUMN "pkce_verifier_hash" text;--> statement-breakpoint
+ALTER TABLE "oauth_login_attempts" ADD CONSTRAINT "oauth_login_attempts_pkce_hash_nonblank" CHECK ("oauth_login_attempts"."pkce_verifier_hash" IS NULL OR length(btrim("oauth_login_attempts"."pkce_verifier_hash")) > 0);

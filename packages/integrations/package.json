@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "google-auth-library": "^11.1.0"
+    "google-auth-library": "^11.1.0",
+    "openid-client": "^6.8.8"
   }
 }

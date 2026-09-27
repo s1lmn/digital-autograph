@@ -254,6 +254,7 @@ const webSchema = baseSchema.extend({
     .refine((value) => ['http:', 'https:'].includes(new URL(value).protocol), {
       message: 'must use an HTTP URL',
     }),
+  API_PUBLIC_ORIGIN: exactOrigin,
 });
 
 function parseConfig<T extends z.ZodType>(
@@ -282,7 +283,17 @@ export const loadApiConfig = (environment = process.env) =>
 export const loadWorkerConfig = (environment = process.env) =>
   parseConfig(workerSchema, environment);
 
-export const loadWebConfig = (environment = process.env) =>
-  parseConfig(webSchema, environment);
+export const loadWebConfig = (environment = process.env) => {
+  const config = parseConfig(webSchema, environment);
+  if (
+    ['production', 'staging'].includes(config.APP_ENV) &&
+    !config.API_PUBLIC_ORIGIN.startsWith('https://')
+  ) {
+    throw new Error(
+      'Invalid application configuration: API_PUBLIC_ORIGIN must use HTTPS',
+    );
+  }
+  return config;
+};
 
 export type AppEnvironment = z.infer<typeof appEnvironment>;

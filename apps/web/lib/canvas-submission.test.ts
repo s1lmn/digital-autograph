@@ -1,0 +1,130 @@
+import { describe, expect, it, vi } from 'vitest';
+import { AutographApiError, type Autograph } from './autograph-api';
+import { submitCanvas, type SubmissionApi } from './canvas-submission';
+
+const draft = {
+  id: 'autograph-1',
+  source: 'canvas',
+  status: 'draft',
+} as const satisfies Autograph;
+const processing = {
+  ...draft,
+  status: 'processing',
+} as const satisfies Autograph;
+const ready = {
+  ...draft,
+  status: 'awaiting_approval',
+} as const satisfies Autograph;
+
+function mockApi(): SubmissionApi {
+  return {
+    create: vi.fn(async () => draft),
+    get: vi.fn(async () => ready),
+    initiateUpload: vi.fn(async () => ({
+      method: 'PUT' as const,
+      url: 'https://storage.test/private',
+      headers: { 'If-None-Match': '*', 'Content-Type': 'image/png' },
+    })),
+    upload: vi.fn(async () => {}),
+    complete: vi.fn(async () => processing),
+    preview: vi.fn(async () => ({
+      url: 'https://storage.test/preview',
+      expiresAt: '2026-09-27T00:00:00Z',
+    })),
+  };
+}
+
+describe('canvas submission', () => {
+  it('creates, uploads, completes, polls, and fetches the private preview', async () => {
+    const api = mockApi();
+    const stages: string[] = [];
+    const created: string[] = [];
+    const result = await submitCanvas(
+      api,
+      new Blob(['png'], { type: 'image/png' }),
+      new AbortController().signal,
+      (stage) => stages.push(stage),
+      (id) => created.push(id),
+      undefined,
+      async () => {},
+    );
+    expect(created).toEqual(['autograph-1']);
+    expect(stages).toEqual([
+      'creating',
+      'requesting_upload',
+      'uploading',
+      'completing',
+      'processing',
+      'loading_preview',
+    ]);
+    expect(api.initiateUpload).toHaveBeenCalledWith(
+      'autograph-1',
+      3,
+      expect.any(AbortSignal),
+    );
+    expect(api.upload).toHaveBeenCalledOnce();
+    expect(result.previewUrl).toBe('https://storage.test/preview');
+  });
+
+  it('resumes an upload-pending draft by completing an already uploaded object', async () => {
+    const api = mockApi();
+    api.get = vi.fn(async () => ({
+      ...draft,
+      status: 'upload_pending' as const,
+    }));
+    api.complete = vi.fn(async () => ready);
+    await submitCanvas(
+      api,
+      new Blob(['png']),
+      new AbortController().signal,
+      () => {},
+      () => {},
+      draft.id,
+    );
+    expect(api.create).not.toHaveBeenCalled();
+    expect(api.initiateUpload).not.toHaveBeenCalled();
+    expect(api.upload).not.toHaveBeenCalled();
+  });
+
+  it('resumes a missing upload using a new signed URL', async () => {
+    const api = mockApi();
+    api.get = vi.fn(async () => ({
+      ...draft,
+      status: 'upload_pending' as const,
+    }));
+    api.complete = vi
+      .fn()
+      .mockRejectedValueOnce(new AutographApiError('UPLOAD_NOT_FOUND', 404))
+      .mockResolvedValueOnce(ready);
+    await submitCanvas(
+      api,
+      new Blob(['png']),
+      new AbortController().signal,
+      () => {},
+      () => {},
+      draft.id,
+    );
+    expect(api.initiateUpload).toHaveBeenCalledOnce();
+    expect(api.upload).toHaveBeenCalledOnce();
+  });
+
+  it('stops on worker failure without requesting a preview', async () => {
+    const api = mockApi();
+    api.get = vi.fn(async () => ({
+      ...draft,
+      status: 'processing_failed' as const,
+    }));
+    await expect(
+      submitCanvas(
+        api,
+        new Blob(['png']),
+        new AbortController().signal,
+        () => {},
+        () => {},
+        undefined,
+        async () => {},
+      ),
+    ).rejects.toThrow(/Processing failed/);
+    expect(api.preview).not.toHaveBeenCalled();
+  });
+});

@@ -31,6 +31,9 @@ export default async function HomePage() {
       <p>
         API health: <strong>{apiStatus}</strong>
       </p>
+      <p>
+        <a href="/autograph/create">Create a digital autograph</a>
+      </p>
     </main>
   );
 }

@@ -35,8 +35,26 @@ describe('typed configuration', () => {
       loadWebConfig({
         APP_ENV: 'preview',
         API_INTERNAL_URL: 'http://api:4000',
+        API_PUBLIC_ORIGIN: 'http://127.0.0.1:4000',
       }),
     ).toThrow(/APP_ENV/);
+  });
+
+  it('requires a browser API origin and HTTPS outside local environments', () => {
+    expect(() =>
+      loadWebConfig({
+        APP_ENV: 'local',
+        API_INTERNAL_URL: 'http://api:4000',
+        API_PUBLIC_ORIGIN: 'http://127.0.0.1:4000/path',
+      }),
+    ).toThrow(/API_PUBLIC_ORIGIN/);
+    expect(() =>
+      loadWebConfig({
+        APP_ENV: 'production',
+        API_INTERNAL_URL: 'http://api:4000',
+        API_PUBLIC_ORIGIN: 'http://127.0.0.1:4000',
+      }),
+    ).toThrow(/API_PUBLIC_ORIGIN/);
   });
 
   it('rejects wildcard or path-bearing credentialed origins and invalid session TTL', () => {

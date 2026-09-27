@@ -3,7 +3,7 @@ import './styles.css';
 
 export const metadata: Metadata = {
   title: 'Digital Autograph Platform',
-  description: 'Project bootstrap status',
+  description: 'Create and review a digital autograph.',
 };
 
 export default function RootLayout({

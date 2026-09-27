@@ -7,6 +7,8 @@ import {
   type WallStatus,
 } from '@digital-autograph/domain';
 
+export * from './free-claim';
+
 export type SlotStructure = { id: string; position: number };
 
 export type WallSnapshot = {

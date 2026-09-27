@@ -46,6 +46,17 @@ export type ModerationRejectionReason =
   (typeof moderationRejectionReasons)[number];
 export const isAutographPlacementEligible = (status: AutographStatus) =>
   status === 'ready';
+
+export function isWallFreeClaimEligible(
+  wall: { status: WallStatus; startAt: Date | null; endAt: Date | null },
+  now: Date,
+): boolean {
+  return (
+    wall.status === 'live' &&
+    (wall.startAt === null || wall.startAt <= now) &&
+    (wall.endAt === null || wall.endAt > now)
+  );
+}
 export type AutographAssetRole = (typeof autographAssetRoles)[number];
 export type AutographAssetStatus = (typeof autographAssetStatuses)[number];
 export {

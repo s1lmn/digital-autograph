@@ -10,6 +10,7 @@ import {
   createPgProviderIdentityRepository,
   createPgSessionRepository,
   createPgWallRepository,
+  createPgFreeClaimRepository,
   createPgAutographRepository,
   createPgAutographModerationRepository,
 } from '@digital-autograph/db';
@@ -17,7 +18,7 @@ import {
   AutographService,
   ModerationService,
 } from '@digital-autograph/autographs';
-import { WallService } from '@digital-autograph/walls';
+import { FreeClaimService, WallService } from '@digital-autograph/walls';
 import {
   createGoogleOidcClient,
   createTelegramOidcClient,
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
       storage,
       config.PREVIEW_URL_TTL_SECONDS,
     ),
+    new FreeClaimService(createPgFreeClaimRepository(database.pool)),
   );
   let closing = false;
 

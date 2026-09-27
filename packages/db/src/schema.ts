@@ -507,3 +507,36 @@ export const placements = pgTable(
     ),
   ],
 );
+
+export const wallFreeClaims = pgTable(
+  'wall_free_claims',
+  {
+    id: id(),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id, { onDelete: 'restrict' }),
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => slots.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id, { onDelete: 'restrict' }),
+    placementId: uuid('placement_id')
+      .notNull()
+      .references(() => placements.id, { onDelete: 'restrict' }),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('wall_free_claims_wall_user_uidx').on(
+      table.wallId,
+      table.userId,
+    ),
+    uniqueIndex('wall_free_claims_placement_uidx').on(table.placementId),
+    index('wall_free_claims_user_time_idx').on(table.userId, table.claimedAt),
+    index('wall_free_claims_slot_idx').on(table.slotId),
+    index('wall_free_claims_autograph_idx').on(table.autographId),
+  ],
+);

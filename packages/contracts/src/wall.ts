@@ -32,3 +32,10 @@ export const wallTransitionBody = z.strictObject({
     'archive',
   ]),
 });
+
+export const freeClaimParams = z.strictObject({
+  wallId: z.uuid(),
+  slotId: z.uuid(),
+});
+
+export const freeClaimBody = z.strictObject({ autographId: z.uuid() });

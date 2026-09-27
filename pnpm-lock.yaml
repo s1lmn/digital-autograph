@@ -164,6 +164,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@digital-autograph/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: ^4.1.0
         version: 4.6.5

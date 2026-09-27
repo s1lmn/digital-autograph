@@ -2,6 +2,8 @@ import {
   administrativeRoles,
   autographAssetRoles,
   autographAssetStatuses,
+  moderationDecisions,
+  moderationRejectionReasons,
   autographSources,
   autographStatuses,
   placementSources,
@@ -38,6 +40,14 @@ export const administrativeRole = pgEnum(
 );
 export const autographSource = pgEnum('autograph_source', autographSources);
 export const autographStatus = pgEnum('autograph_status', autographStatuses);
+export const autographModerationDecision = pgEnum(
+  'autograph_moderation_decision',
+  moderationDecisions,
+);
+export const autographModerationReason = pgEnum(
+  'autograph_moderation_reason',
+  moderationRejectionReasons,
+);
 export const autographAssetRole = pgEnum(
   'autograph_asset_role',
   autographAssetRoles,
@@ -383,6 +393,42 @@ export const autographUserApprovals = pgTable(
     index('autograph_user_approvals_user_idx').on(table.userId),
     index('autograph_user_approvals_cleaned_asset_idx').on(
       table.cleanedAssetId,
+    ),
+  ],
+);
+
+export const autographModerationDecisions = pgTable(
+  'autograph_moderation_decisions',
+  {
+    id: id(),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id, { onDelete: 'restrict' }),
+    moderatorUserId: uuid('moderator_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    userApprovalId: uuid('user_approval_id')
+      .notNull()
+      .references(() => autographUserApprovals.id, { onDelete: 'restrict' }),
+    cleanedAssetId: uuid('cleaned_asset_id')
+      .notNull()
+      .references(() => autographAssets.id, { onDelete: 'restrict' }),
+    decision: autographModerationDecision().notNull(),
+    reasonCode: autographModerationReason('reason_code'),
+    decidedAt: timestamp('decided_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('autograph_moderation_decisions_autograph_uidx').on(
+      table.autographId,
+    ),
+    index('autograph_moderation_decisions_moderator_idx').on(
+      table.moderatorUserId,
+    ),
+    check(
+      'autograph_moderation_decisions_reason_check',
+      sql`(${table.decision} = 'approved' AND ${table.reasonCode} IS NULL) OR (${table.decision} = 'rejected' AND ${table.reasonCode} IS NOT NULL)`,
     ),
   ],
 );

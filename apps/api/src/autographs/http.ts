@@ -40,6 +40,7 @@ function sendError(error: unknown, reply: FastifyReply): unknown {
                 'CLEANED_ASSET_NOT_AVAILABLE',
                 'REVIEWED_ASSET_MISMATCH',
                 'APPROVAL_STATE_INCONSISTENT',
+                'MODERATION_STATE_INCONSISTENT',
               ].includes(error.code)
             ? 409
             : 400;

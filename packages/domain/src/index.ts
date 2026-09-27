@@ -17,7 +17,20 @@ export const autographStatuses = [
   'processing',
   'awaiting_approval',
   'awaiting_moderation',
+  'ready',
+  'moderation_rejected',
   'processing_failed',
+] as const;
+export const moderationDecisions = ['approved', 'rejected'] as const;
+export const moderationRejectionReasons = [
+  'SEXUAL_CONTENT',
+  'HATE_OR_EXTREMISM',
+  'THREATS_OR_VIOLENCE',
+  'PERSONAL_DATA',
+  'IMPERSONATION_OR_DECEPTIVE',
+  'ILLEGAL_OR_PROHIBITED',
+  'NOT_AN_AUTOGRAPH',
+  'OTHER_POLICY_VIOLATION',
 ] as const;
 export const autographAssetRoles = ['original', 'cleaned'] as const;
 export const autographAssetStatuses = ['reserved', 'uploaded'] as const;
@@ -28,6 +41,11 @@ export type PlacementSource = (typeof placementSources)[number];
 export type AdministrativeRole = (typeof administrativeRoles)[number];
 export type AutographSource = (typeof autographSources)[number];
 export type AutographStatus = (typeof autographStatuses)[number];
+export type ModerationDecision = (typeof moderationDecisions)[number];
+export type ModerationRejectionReason =
+  (typeof moderationRejectionReasons)[number];
+export const isAutographPlacementEligible = (status: AutographStatus) =>
+  status === 'ready';
 export type AutographAssetRole = (typeof autographAssetRoles)[number];
 export type AutographAssetStatus = (typeof autographAssetStatuses)[number];
 export {

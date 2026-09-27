@@ -1,6 +1,6 @@
 # Digital Autograph Platform
 
-Modular monolith with a Next.js web shell, Fastify API, Node.js worker, PostgreSQL, and local MinIO. Foundational domain tables exist; product APIs and payment flows are still to come.
+Modular monolith with a Next.js web shell, Fastify API, Node.js worker, PostgreSQL, and local MinIO. The backend provides Creator/Wall and private Autograph upload APIs; claims, processing, and payment flows are still to come.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ pnpm dev
 
 The local MinIO image is a pinned community build of the upstream MinIO release because the upstream container registry did not allow pulling the release during bootstrap verification. It is used only for local development.
 
-The sample `.env` values are local-only. Provide real secrets through the deployment environment when that environment is designed. All server configuration is validated at startup; the web health check runs server-side so `API_INTERNAL_URL` is not bundled for the browser. Supported `APP_ENV` values are `local`, `test`, `development`, `staging`, and `production`.
+The sample `.env` values are local-only. Provide real secrets through the deployment environment when that environment is designed. All server configuration is validated at startup; the web health check runs server-side so `API_INTERNAL_URL` is not bundled for the browser. Supported `APP_ENV` values are `local`, `test`, `development`, `staging`, and `production`. Local MinIO uses the sample `S3_*` settings; production must supply a private bucket and storage credentials or an SDK role provider. See [autograph-domain.md](docs/architecture/autograph-domain.md).
 
 Auth Core requires `SESSION_TTL_SECONDS` and `TRUSTED_WEB_ORIGINS` in the API environment. The latter is a comma-separated list of exact web origins allowed to send credentialed requests. See [authentication.md](docs/architecture/authentication.md) for session and cookie behavior.
 
@@ -52,7 +52,7 @@ The integration suite requires the separate `autograph_test` PostgreSQL instance
 ## Workspace
 
 - `apps/web`: presentation and a server-side API health call.
-- `apps/api`: HTTP endpoints and future application orchestration.
+- `apps/api`: HTTP endpoints and application orchestration.
 - `apps/worker`: process lifecycle and future background tasks.
 - `packages/domain`: framework-independent rules.
 - `packages/auth`: provider-independent session lifecycle.

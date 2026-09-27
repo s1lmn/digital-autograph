@@ -1,5 +1,9 @@
 import {
   administrativeRoles,
+  autographAssetRoles,
+  autographAssetStatuses,
+  autographSources,
+  autographStatuses,
   placementSources,
   userStatuses,
   wallStatuses,
@@ -31,6 +35,16 @@ export const placementSource = pgEnum('placement_source', placementSources);
 export const administrativeRole = pgEnum(
   'administrative_role',
   administrativeRoles,
+);
+export const autographSource = pgEnum('autograph_source', autographSources);
+export const autographStatus = pgEnum('autograph_status', autographStatuses);
+export const autographAssetRole = pgEnum(
+  'autograph_asset_role',
+  autographAssetRoles,
+);
+export const autographAssetStatus = pgEnum(
+  'autograph_asset_status',
+  autographAssetStatuses,
 );
 
 export const users = pgTable('users', {
@@ -264,6 +278,77 @@ export const slots = pgTable(
   ],
 );
 
+export const autographs = pgTable(
+  'autographs',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    source: autographSource().notNull(),
+    status: autographStatus().notNull().default('draft'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index('autographs_user_created_idx').on(table.userId, table.createdAt),
+  ],
+);
+
+export const autographAssets = pgTable(
+  'autograph_assets',
+  {
+    id: id(),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id, { onDelete: 'restrict' }),
+    role: autographAssetRole().notNull(),
+    status: autographAssetStatus().notNull().default('reserved'),
+    storageKey: text('storage_key').notNull(),
+    expectedContentType: varchar('expected_content_type', {
+      length: 64,
+    }).notNull(),
+    expectedSizeBytes: integer('expected_size_bytes').notNull(),
+    verifiedSizeBytes: integer('verified_size_bytes'),
+    uploadExpiresAt: timestamp('upload_expires_at', {
+      withTimezone: true,
+    }).notNull(),
+    uploadedAt: timestamp('uploaded_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('autograph_assets_one_original_uidx')
+      .on(table.autographId)
+      .where(sql`${table.role} = 'original'`),
+    uniqueIndex('autograph_assets_storage_key_uidx').on(table.storageKey),
+    check(
+      'autograph_assets_storage_key_nonblank',
+      sql`length(btrim(${table.storageKey})) > 0`,
+    ),
+    check(
+      'autograph_assets_expected_size_valid',
+      sql`${table.expectedSizeBytes} BETWEEN 1 AND 10485760`,
+    ),
+    check(
+      'autograph_assets_verified_size_valid',
+      sql`${table.verifiedSizeBytes} IS NULL OR ${table.verifiedSizeBytes} BETWEEN 1 AND 10485760`,
+    ),
+    check(
+      'autograph_assets_expected_type_valid',
+      sql`${table.expectedContentType} IN ('image/png', 'image/jpeg')`,
+    ),
+    check(
+      'autograph_assets_expires_after_create',
+      sql`${table.uploadExpiresAt} > ${table.createdAt}`,
+    ),
+    check(
+      'autograph_assets_state_consistency',
+      sql`(${table.status} = 'reserved' AND ${table.uploadedAt} IS NULL AND ${table.verifiedSizeBytes} IS NULL) OR (${table.status} = 'uploaded' AND ${table.uploadedAt} IS NOT NULL AND ${table.verifiedSizeBytes} IS NOT NULL)`,
+    ),
+  ],
+);
+
 export const placements = pgTable(
   'placements',
   {
@@ -274,6 +359,9 @@ export const placements = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    autographId: uuid('autograph_id').references(() => autographs.id, {
+      onDelete: 'restrict',
+    }),
     source: placementSource().notNull(),
     startedAt: timestamp('started_at', { withTimezone: true })
       .notNull()
@@ -287,6 +375,7 @@ export const placements = pgTable(
       .where(sql`${table.endedAt} IS NULL`),
     index('placements_slot_history_idx').on(table.slotId, table.startedAt),
     index('placements_user_started_idx').on(table.userId, table.startedAt),
+    index('placements_autograph_idx').on(table.autographId),
     check(
       'placements_end_consistency',
       sql`(${table.endedAt} IS NULL AND ${table.endReason} IS NULL) OR (${table.endedAt} IS NOT NULL AND ${table.endReason} IS NOT NULL AND length(btrim(${table.endReason})) > 0 AND ${table.endedAt} >= ${table.startedAt})`,

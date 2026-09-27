@@ -43,6 +43,13 @@
       "when": 1790503053505,
       "tag": "0005_aromatic_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790508328006,
+      "tag": "0006_happy_guardsmen",
+      "breakpoints": true
     }
   ]
 }

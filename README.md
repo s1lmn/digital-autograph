@@ -20,7 +20,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-`pnpm dev` runs web (`http://127.0.0.1:3000`), API (`http://127.0.0.1:4000`), and worker. Check `GET http://127.0.0.1:4000/health/live` for process liveness and `GET http://127.0.0.1:4000/health/ready` for PostgreSQL readiness. MinIO's local console is at `http://127.0.0.1:9001`; no bucket or storage adapter is created yet.
+`pnpm dev` runs web (`http://127.0.0.1:3000`), API (`http://127.0.0.1:4000`), and worker. Check `GET http://127.0.0.1:4000/health/live` for process liveness and `GET http://127.0.0.1:4000/health/ready` for PostgreSQL readiness. MinIO's local console is at `http://127.0.0.1:9001`; API startup creates the private local autograph bucket automatically.
 
 The local MinIO image is a pinned community build of the upstream MinIO release because the upstream container registry did not allow pulling the release during bootstrap verification. It is used only for local development.
 
@@ -45,7 +45,7 @@ pnpm build
 pnpm test:build-smoke
 ```
 
-The integration suite requires the separate `autograph_test` PostgreSQL instance on port 5433. It rejects a database URL with another database name, applies committed migrations, and then runs against that schema. CI provisions this test database as an isolated service. `pnpm db:generate` generates Drizzle migrations after schema changes; custom SQL migrations capture database triggers.
+The integration suite requires the separate `autograph_test` PostgreSQL instance on port 5433 and local MinIO on port 9000. It rejects a database URL with another database name, applies committed migrations, and then runs against that schema and a private test bucket. CI provisions PostgreSQL and MinIO. `pnpm db:generate` generates Drizzle migrations after schema changes; custom SQL migrations capture database triggers.
 
 `pnpm infra:down` stops both regular and test-profile containers while preserving the named development volumes. The test database uses temporary container storage and is recreated on the next `pnpm infra:test:up`.
 
@@ -56,9 +56,11 @@ The integration suite requires the separate `autograph_test` PostgreSQL instance
 - `apps/worker`: process lifecycle and future background tasks.
 - `packages/domain`: framework-independent rules.
 - `packages/auth`: provider-independent session lifecycle.
+- `packages/walls`: Creator/Wall application rules.
+- `packages/autographs`: owner-scoped Autograph and private-upload application rules.
 - `packages/db`: PostgreSQL connection, domain schema, Drizzle migrations, transaction access.
 - `packages/contracts`: shared Zod API schemas.
-- `packages/integrations`: Google and Telegram OIDC adapters.
+- `packages/integrations`: Google and Telegram OIDC plus private S3-compatible storage adapters.
 - `packages/ui`: future shared UI primitives.
 - `packages/config`: typed server environment loading.
 

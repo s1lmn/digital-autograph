@@ -1,0 +1,42 @@
+.page {
+  max-width: 60rem;
+  margin: 4rem auto;
+  padding: 1.5rem;
+}
+.page h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin: 0.25rem 0 0.75rem;
+}
+.intro {
+  color: #53606d;
+  font-size: 1.05rem;
+}
+.warning {
+  border-left: 4px solid #bf7720;
+  background: #fff8ed;
+  padding: 0.85rem 1rem;
+  margin: 1.5rem 0 2rem;
+  line-height: 1.45;
+}
+.auth {
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid #d9dfe5;
+  border-radius: 0.75rem;
+}
+.auth h2 {
+  margin-top: 0;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.links a {
+  display: inline-block;
+  padding: 0.7rem 1rem;
+  color: white;
+  background: #17202a;
+  border-radius: 0.5rem;
+  text-decoration: none;
+}

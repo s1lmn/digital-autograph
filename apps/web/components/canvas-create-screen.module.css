@@ -1,0 +1,70 @@
+.flow {
+  display: grid;
+  gap: 1.25rem;
+}
+.primary {
+  justify-self: start;
+  border: 0;
+  border-radius: 0.6rem;
+  background: #17202a;
+  color: white;
+  padding: 0.85rem 1.2rem;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.status {
+  padding: 0.9rem;
+  background: #eaf3fc;
+  border-radius: 0.5rem;
+  margin: 0;
+}
+.error {
+  padding: 1rem;
+  background: #fff1ef;
+  border: 1px solid #eab3aa;
+  border-radius: 0.5rem;
+}
+.error p {
+  margin-top: 0;
+}
+.actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.actions button {
+  border: 1px solid #7b8793;
+  border-radius: 0.5rem;
+  background: white;
+  color: #17202a;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+}
+.actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.preview {
+  padding: 1.25rem;
+  border: 1px solid #d9dfe5;
+  border-radius: 0.75rem;
+  background: white;
+}
+.preview h2 {
+  margin-top: 0;
+}
+.preview img {
+  display: block;
+  max-width: 100%;
+  min-height: 4rem;
+  max-height: 24rem;
+  object-fit: contain;
+  margin: 1.25rem 0;
+  background: #f6f7f8;
+  border: 1px solid #d9dfe5;
+}

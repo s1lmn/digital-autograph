@@ -1,0 +1,58 @@
+.editor {
+  display: grid;
+  gap: 0.75rem;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.header h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
+}
+.header p,
+.help {
+  color: #53606d;
+  margin: 0;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.actions button {
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #7b8793;
+  border-radius: 0.5rem;
+  background: white;
+  color: #17202a;
+  cursor: pointer;
+}
+.actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.canvas {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  background: white;
+  border: 2px solid #7b8793;
+  border-radius: 0.75rem;
+  touch-action: none;
+  cursor: crosshair;
+}
+.help {
+  font-size: 0.875rem;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}

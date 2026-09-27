@@ -20,6 +20,24 @@ Storage keys are generated server-side from opaque Autograph and Asset UUIDs: `a
 
 ## Direct upload
 
+The canvas client at `/autograph/create` uses this same upload flow. It keeps
+strokes in browser memory, rasterizes a cropped transparent PNG no larger than
+1200 × 600, and submits only the PNG bytes. The frontend never sends stroke
+JSON or a base64 data URL. Login is checked by the browser through `/auth/me` and
+Google/Telegram start links return to that fixed local path. Browser API
+requests use the session cookie and the API's trusted-origin check; direct
+object-storage PUT uses only the signed method, URL, and headers, with no
+session credentials. `API_PUBLIC_ORIGIN` is the browser-visible API origin,
+distinct from the web server's `API_INTERNAL_URL`. The local MinIO CORS origin
+must match the web origin.
+
+After completion, the client polls the owner-only status endpoint with an
+abortable, bounded wait. On `awaiting_approval`, it fetches a short-lived
+owner-only preview capability. The UI can request a fresh preview after expiry.
+The signed preview URL is not logged by the client and is displayed with
+`referrerPolicy="no-referrer"`. A failed worker job asks the user to start a new
+drawing; it never marks an Autograph approved or public.
+
 1. `POST /autographs` creates a draft owned by the session User.
 2. `POST /autographs/:id/upload` reserves one original Asset under a PostgreSQL row lock. The request declares `image/png` or `image/jpeg` and 1–10 MiB. Repeating initiation with the same metadata refreshes the reservation and signs the same key; different metadata or an already completed upload is rejected.
 3. The response returns a short-lived signed PUT URL and the required `Content-Type` and `If-None-Match: *` headers. `UPLOAD_URL_TTL_SECONDS` defaults to 300 and is bounded to 60–600. Both headers are signed. Conditional PUT prevents a replayed URL from overwriting an already stored original. The client uploads directly to private object storage.

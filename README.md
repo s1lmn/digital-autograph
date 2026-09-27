@@ -24,7 +24,7 @@ pnpm dev
 
 The local MinIO image is a pinned community build of the upstream MinIO release because the upstream container registry did not allow pulling the release during bootstrap verification. It is used only for local development.
 
-The sample `.env` values are local-only. Provide real secrets through the deployment environment when that environment is designed. All server configuration is validated at startup; the web health check runs server-side so `API_INTERNAL_URL` is not bundled for the browser. Supported `APP_ENV` values are `local`, `test`, `development`, `staging`, and `production`. Local MinIO uses the sample `S3_*` settings; production must supply a private bucket and storage credentials or an SDK role provider. See [autograph-domain.md](docs/architecture/autograph-domain.md).
+The sample `.env` values are local-only. Provide real secrets through the deployment environment when that environment is designed. All server configuration is validated at startup; the web health check runs server-side so `API_INTERNAL_URL` is not bundled for the browser. `API_PUBLIC_ORIGIN` is the browser-visible API origin used by the canvas page. Supported `APP_ENV` values are `local`, `test`, `development`, `staging`, and `production`. Local MinIO uses the sample `S3_*` settings; production must supply a private bucket and storage credentials or an SDK role provider. See [autograph-domain.md](docs/architecture/autograph-domain.md).
 
 Auth Core requires `SESSION_TTL_SECONDS` and `TRUSTED_WEB_ORIGINS` in the API environment. The latter is a comma-separated list of exact web origins allowed to send credentialed requests. See [authentication.md](docs/architecture/authentication.md) for session and cookie behavior.
 

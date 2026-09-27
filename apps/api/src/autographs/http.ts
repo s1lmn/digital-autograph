@@ -32,11 +32,13 @@ function sendError(error: unknown, reply: FastifyReply): unknown {
         ? 403
         : error.code === 'UPLOAD_NOT_FOUND'
           ? 404
-          : error.code === 'INVALID_AUTOGRAPH_STATE'
+          : error.code === 'CLEANED_PREVIEW_NOT_AVAILABLE'
             ? 409
-            : error.code === 'UPLOAD_TOO_LARGE'
-              ? 413
-              : 400;
+            : error.code === 'INVALID_AUTOGRAPH_STATE'
+              ? 409
+              : error.code === 'UPLOAD_TOO_LARGE'
+                ? 413
+                : 400;
   return reply.code(status).send({ error: { code: error.code } });
 }
 
@@ -110,6 +112,24 @@ export function registerAutographRoutes(
       if (!params || !body) return reply;
       try {
         return await autographs.completeUpload(
+          authenticatedSession(request).user.id,
+          params.id,
+        );
+      } catch (error) {
+        return sendError(error, reply);
+      }
+    },
+  );
+
+  app.get(
+    '/autographs/:id/preview',
+    { preHandler: requireAuthenticatedUser },
+    async (request, reply) => {
+      const params = parse(autographIdParams, request.params, reply);
+      if (!params) return reply;
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return await autographs.preview(
           authenticatedSession(request).user.id,
           params.id,
         );

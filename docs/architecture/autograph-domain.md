@@ -5,14 +5,16 @@
 An authenticated User creates an Autograph with source `photo` or `canvas`. Its User ID comes only from the validated server session. The same owner may read it, initiate its original upload, and complete that upload. No public Autograph route exists. `autographs.id` is the logical identity; an object-storage key is private infrastructure data.
 
 ```text
-draft → upload_pending → uploaded_unverified
+draft → upload_pending → uploaded_unverified → processing → awaiting_approval
+                                              └──────────→ processing_failed
+upload_pending (expired and abandoned) → draft
 ```
 
-`uploaded_unverified` proves only that the backend found an object and checked its HEAD metadata against the reservation. It does not prove that the bytes are an image or safe for display. Neither this state nor any current state authorizes a Free Claim. A later processing worker must read the original privately, check magic bytes, decode with resource limits, enforce actual size and dimensions, handle malformed or polyglot data, remove EXIF and other metadata from derivatives, and pass moderation and user approval before any `ready` state is introduced.
+`uploaded_unverified` proves only that the backend found an object and checked its HEAD metadata against the reservation. The worker validates actual bytes and creates a private cleaned derivative. `awaiting_approval` does not imply user approval, moderation, public safety, or Placement eligibility. No current state authorizes a Free Claim; `ready` requires later approval/moderation rules.
 
 ## Asset model
 
-An original Asset belongs to one Autograph. A partial unique index allows at most one original Asset for each Autograph; the storage key is independently unique and nonblank. The Asset stores declared content type and size, a reservation expiry, actual HEAD size after completion, and timestamps. `reserved` and `uploaded` are storage states. Original Assets remain private even if a processed derivative is eventually published.
+An original Asset belongs to one Autograph. Partial unique indexes allow at most one original and one cleaned Asset per Autograph; the storage key is independently unique and nonblank. Original rows retain declared type/size, reservation expiry, HEAD size, and upload timestamps. Cleaned rows instead store verified PNG type/size/dimensions and creation/upload timestamps. Role-dependent checks prohibit meaningless original-upload fields on cleaned rows. Both objects are private; the cleaned derivative has a different key and never overwrites the original.
 
 Storage keys are generated server-side from opaque Autograph and Asset UUIDs: `autographs/<autograph-id>/original/<asset-id>`. They contain no filename, identity-provider information, username, email, or session material. The API never returns the key. The one signed PUT URL is an upload capability, not a public or permanent read URL; request/response logging must not record it or its query signature.
 
@@ -21,7 +23,7 @@ Storage keys are generated server-side from opaque Autograph and Asset UUIDs: `a
 1. `POST /autographs` creates a draft owned by the session User.
 2. `POST /autographs/:id/upload` reserves one original Asset under a PostgreSQL row lock. The request declares `image/png` or `image/jpeg` and 1–10 MiB. Repeating initiation with the same metadata refreshes the reservation and signs the same key; different metadata or an already completed upload is rejected.
 3. The response returns a short-lived signed PUT URL and the required `Content-Type` and `If-None-Match: *` headers. `UPLOAD_URL_TTL_SECONDS` defaults to 300 and is bounded to 60–600. Both headers are signed. Conditional PUT prevents a replayed URL from overwriting an already stored original. The client uploads directly to private object storage.
-4. `POST /autographs/:id/upload/complete` performs a backend HEAD. It rejects a missing, zero-length, oversized, mismatched-size, or mismatched-content-type object. A PostgreSQL transaction changes Asset and Autograph state together. Repeated completion returns the uploaded result; concurrent completion cannot create another original.
+4. `POST /autographs/:id/upload/complete` locks the Autograph, performs a backend HEAD, and rejects a missing, zero-length, oversized, mismatched-size, or mismatched-content-type object. Rejected oversized/mismatched objects are deleted best-effort while the lock is held; a failed deletion leaves the reserved row for eventual cleanup. A PostgreSQL transaction changes Asset and Autograph state and enqueues one processing job together. Repeated completion is idempotent.
 
 The declared MIME type and size, S3 Content-Type metadata, and a successful PUT are untrusted. The signed URL limits the upload route, key, headers, and time; it does not validate image bytes. Size is checked at HEAD and must be enforced again while reading bytes in the processing worker. SVG, PDF, and arbitrary binary types cannot be requested through the API.
 
@@ -31,7 +33,7 @@ The S3-compatible adapter signs writes and performs private HEAD/delete through 
 
 The pinned local MinIO build does not implement S3 `PutBucketCors`; local/CI CORS is configured with `MINIO_API_CORS_ALLOW_ORIGIN`. A production S3 bucket's CORS policy must allow the web origin, PUT, `Content-Type`, and `If-None-Match`. CORS enables browser upload but does not grant anonymous object reads.
 
-Expired reservations and orphan private objects remain identifiable by Asset status, `upload_expires_at`, and storage key. Cleanup and processing are separate future jobs; no cleanup worker is introduced here.
+The worker deletes abandoned reserved objects after `upload_expires_at` plus the configured grace period, while holding the Autograph row lock and rechecking state. Successful cleanup removes the reservation and returns the Autograph to `draft`; failed S3 deletion leaves it eligible for retry. See [autograph-processing.md](autograph-processing.md) for job leases, safety limits, and storage reconciliation.
 
 ## Placement relationship
 

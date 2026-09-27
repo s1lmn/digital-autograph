@@ -344,7 +344,7 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
       url: string;
       headers: Record<string, string>;
     };
-    await originalKey(upload.assetId);
+    const key = await originalKey(upload.assetId);
     const put = await fetch(upload.url, {
       method: 'PUT',
       headers: upload.headers,
@@ -354,6 +354,8 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
     const result = await complete(id, ownerToken);
     expect(result.statusCode).toBe(413);
     expect(result.json()).toEqual({ error: { code: 'UPLOAD_TOO_LARGE' } });
+    expect(await storage.statObject(key)).toBeNull();
+    expect((await initiate(id, ownerToken)).statusCode).toBe(200);
     expect(
       (
         await app.inject({
@@ -362,6 +364,31 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
         })
       ).json().status,
     ).toBe('upload_pending');
+  });
+
+  it('removes an uploaded object whose HEAD size does not match the reservation', async () => {
+    const { ownerToken } = await usersAndTokens();
+    const id = (await create(ownerToken)).json().id as string;
+    const upload = (await initiate(id, ownerToken)).json() as {
+      assetId: string;
+      url: string;
+      headers: Record<string, string>;
+    };
+    const key = await originalKey(upload.assetId);
+    expect(
+      (
+        await fetch(upload.url, {
+          method: 'PUT',
+          headers: upload.headers,
+          body: Buffer.from('five!'),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await complete(id, ownerToken)).json()).toEqual({
+      error: { code: 'UPLOAD_METADATA_MISMATCH' },
+    });
+    expect(await storage.statObject(key)).toBeNull();
+    expect((await initiate(id, ownerToken)).statusCode).toBe(200);
   });
 
   it('does not expose an original through public Wall or Creator reads', async () => {

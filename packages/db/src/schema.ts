@@ -46,6 +46,10 @@ export const autographAssetStatus = pgEnum(
   'autograph_asset_status',
   autographAssetStatuses,
 );
+export const autographProcessingJobStatus = pgEnum(
+  'autograph_processing_job_status',
+  ['queued', 'processing', 'succeeded', 'failed'],
+);
 
 export const users = pgTable('users', {
   id: id(),
@@ -307,13 +311,16 @@ export const autographAssets = pgTable(
     storageKey: text('storage_key').notNull(),
     expectedContentType: varchar('expected_content_type', {
       length: 64,
-    }).notNull(),
-    expectedSizeBytes: integer('expected_size_bytes').notNull(),
+    }),
+    expectedSizeBytes: integer('expected_size_bytes'),
     verifiedSizeBytes: integer('verified_size_bytes'),
     uploadExpiresAt: timestamp('upload_expires_at', {
       withTimezone: true,
-    }).notNull(),
+    }),
     uploadedAt: timestamp('uploaded_at', { withTimezone: true }),
+    actualContentType: varchar('actual_content_type', { length: 64 }),
+    width: integer('width'),
+    height: integer('height'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -321,6 +328,9 @@ export const autographAssets = pgTable(
     uniqueIndex('autograph_assets_one_original_uidx')
       .on(table.autographId)
       .where(sql`${table.role} = 'original'`),
+    uniqueIndex('autograph_assets_one_cleaned_uidx')
+      .on(table.autographId)
+      .where(sql`${table.role} <> 'original'`),
     uniqueIndex('autograph_assets_storage_key_uidx').on(table.storageKey),
     check(
       'autograph_assets_storage_key_nonblank',
@@ -328,7 +338,7 @@ export const autographAssets = pgTable(
     ),
     check(
       'autograph_assets_expected_size_valid',
-      sql`${table.expectedSizeBytes} BETWEEN 1 AND 10485760`,
+      sql`${table.expectedSizeBytes} IS NULL OR ${table.expectedSizeBytes} BETWEEN 1 AND 10485760`,
     ),
     check(
       'autograph_assets_verified_size_valid',
@@ -336,15 +346,56 @@ export const autographAssets = pgTable(
     ),
     check(
       'autograph_assets_expected_type_valid',
-      sql`${table.expectedContentType} IN ('image/png', 'image/jpeg')`,
+      sql`${table.expectedContentType} IS NULL OR ${table.expectedContentType} IN ('image/png', 'image/jpeg')`,
     ),
     check(
       'autograph_assets_expires_after_create',
-      sql`${table.uploadExpiresAt} > ${table.createdAt}`,
+      sql`${table.uploadExpiresAt} IS NULL OR ${table.uploadExpiresAt} > ${table.createdAt}`,
     ),
     check(
       'autograph_assets_state_consistency',
-      sql`(${table.status} = 'reserved' AND ${table.uploadedAt} IS NULL AND ${table.verifiedSizeBytes} IS NULL) OR (${table.status} = 'uploaded' AND ${table.uploadedAt} IS NOT NULL AND ${table.verifiedSizeBytes} IS NOT NULL)`,
+      sql`(${table.role} = 'original' AND ${table.expectedContentType} IS NOT NULL AND ${table.expectedSizeBytes} IS NOT NULL AND ${table.uploadExpiresAt} IS NOT NULL AND ${table.actualContentType} IS NULL AND ${table.width} IS NULL AND ${table.height} IS NULL AND ((${table.status} = 'reserved' AND ${table.uploadedAt} IS NULL AND ${table.verifiedSizeBytes} IS NULL) OR (${table.status} = 'uploaded' AND ${table.uploadedAt} IS NOT NULL AND ${table.verifiedSizeBytes} IS NOT NULL))) OR (${table.role} <> 'original' AND ${table.status} = 'uploaded' AND ${table.expectedContentType} IS NULL AND ${table.expectedSizeBytes} IS NULL AND ${table.uploadExpiresAt} IS NULL AND ${table.actualContentType} = 'image/png' AND ${table.verifiedSizeBytes} BETWEEN 1 AND 10485760 AND ${table.width} BETWEEN 1 AND 2048 AND ${table.height} BETWEEN 1 AND 2048 AND ${table.uploadedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const autographProcessingJobs = pgTable(
+  'autograph_processing_jobs',
+  {
+    id: id(),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id, { onDelete: 'restrict' }),
+    originalAssetId: uuid('original_asset_id')
+      .notNull()
+      .references(() => autographAssets.id, { onDelete: 'restrict' }),
+    status: autographProcessingJobStatus().notNull().default('queued'),
+    attempts: integer('attempts').notNull().default(0),
+    availableAt: timestamp('available_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    leaseToken: uuid('lease_token'),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    failureCode: varchar('failure_code', { length: 64 }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('autograph_processing_jobs_one_active_uidx')
+      .on(table.autographId)
+      .where(sql`${table.status} IN ('queued', 'processing')`),
+    index('autograph_processing_jobs_claim_idx').on(
+      table.status,
+      table.availableAt,
+    ),
+    check(
+      'autograph_processing_jobs_attempts_valid',
+      sql`${table.attempts} BETWEEN 0 AND 3`,
+    ),
+    check(
+      'autograph_processing_jobs_state_consistency',
+      sql`(${table.status} = 'queued' AND ${table.leaseToken} IS NULL AND ${table.claimedAt} IS NULL AND ${table.finishedAt} IS NULL) OR (${table.status} = 'processing' AND ${table.leaseToken} IS NOT NULL AND ${table.claimedAt} IS NOT NULL AND ${table.finishedAt} IS NULL) OR (${table.status} IN ('succeeded', 'failed') AND ${table.leaseToken} IS NULL AND ${table.claimedAt} IS NULL AND ${table.finishedAt} IS NOT NULL)`,
     ),
   ],
 );

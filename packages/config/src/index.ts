@@ -91,6 +91,12 @@ const apiSchema = databaseSchema
       .min(60)
       .max(600)
       .default(300),
+    PREVIEW_URL_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(60)
+      .max(300)
+      .default(120),
   })
   .superRefine((config, context) => {
     if (
@@ -192,7 +198,55 @@ const apiSchema = databaseSchema
     }
   });
 
-const workerSchema = databaseSchema;
+const workerSchema = databaseSchema
+  .extend({
+    S3_ENDPOINT: z.url().optional(),
+    S3_REGION: z.string().min(1),
+    S3_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/),
+    S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    WORKER_POLL_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(250)
+      .max(10000)
+      .default(1000),
+    WORKER_LEASE_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
+    UPLOAD_CLEANUP_GRACE_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(60)
+      .max(86400)
+      .default(600),
+  })
+  .superRefine((config, context) => {
+    if (
+      Boolean(config.S3_ACCESS_KEY_ID) !== Boolean(config.S3_SECRET_ACCESS_KEY)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['S3_ACCESS_KEY_ID'],
+        message: 'S3 access key and secret must be supplied together',
+      });
+    }
+    if (config.S3_ENDPOINT) {
+      const endpoint = new URL(config.S3_ENDPOINT);
+      if (
+        !['http:', 'https:'].includes(endpoint.protocol) ||
+        endpoint.username ||
+        endpoint.password ||
+        (['production', 'staging'].includes(config.APP_ENV) &&
+          endpoint.protocol !== 'https:')
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['S3_ENDPOINT'],
+          message:
+            'must use a safe HTTP(S) endpoint, HTTPS outside local development',
+        });
+      }
+    }
+  });
 
 const webSchema = baseSchema.extend({
   API_INTERNAL_URL: z

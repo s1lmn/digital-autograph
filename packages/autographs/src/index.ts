@@ -56,9 +56,9 @@ export interface AutographRepository {
   completeOriginal(
     userId: string,
     autographId: string,
-    assetId: string,
-    actualSizeBytes: number,
+    verify: (asset: ReservedOriginal) => Promise<number>,
   ): Promise<AutographView>;
+  cleanedAssetKey(userId: string, autographId: string): Promise<string | null>;
 }
 
 export interface PrivateOriginalStorage {
@@ -71,7 +71,12 @@ export interface PrivateOriginalStorage {
     key: string,
   ): Promise<{ sizeBytes: number; contentType: string | null } | null>;
   deleteObject(key: string): Promise<void>;
+  signPrivateRead(key: string, expiresInSeconds: number): Promise<string>;
+  getPrivateObject(key: string, maxBytes: number): Promise<Buffer>;
+  putPrivateObject(key: string, bytes: Buffer): Promise<void>;
 }
+
+export class PrivateObjectTooLargeError extends Error {}
 
 export type AutographErrorCode =
   | 'AUTOGRAPH_NOT_FOUND'
@@ -80,7 +85,8 @@ export type AutographErrorCode =
   | 'INVALID_UPLOAD'
   | 'UPLOAD_NOT_FOUND'
   | 'UPLOAD_TOO_LARGE'
-  | 'UPLOAD_METADATA_MISMATCH';
+  | 'UPLOAD_METADATA_MISMATCH'
+  | 'CLEANED_PREVIEW_NOT_AVAILABLE';
 
 export class AutographError extends Error {
   constructor(readonly code: AutographErrorCode) {
@@ -94,6 +100,7 @@ export class AutographService {
     private readonly storage: PrivateOriginalStorage,
     private readonly uploadTtlSeconds: number,
     private readonly clock: () => Date = () => new Date(),
+    private readonly previewTtlSeconds = 120,
   ) {
     if (
       !Number.isInteger(uploadTtlSeconds) ||
@@ -101,6 +108,13 @@ export class AutographService {
       uploadTtlSeconds > 600
     ) {
       throw new Error('Invalid upload URL lifetime');
+    }
+    if (
+      !Number.isInteger(previewTtlSeconds) ||
+      previewTtlSeconds < 60 ||
+      previewTtlSeconds > 300
+    ) {
+      throw new Error('Invalid preview URL lifetime');
     }
   }
 
@@ -157,25 +171,45 @@ export class AutographService {
     userId: string,
     autographId: string,
   ): Promise<AutographView> {
-    const target = await this.repository.completionTarget(userId, autographId);
-    if (target.status === 'uploaded')
-      return this.repository.findOwned(userId, autographId);
-    const object = await this.storage.statObject(target.storageKey);
-    if (!object) throw new AutographError('UPLOAD_NOT_FOUND');
-    if (object.sizeBytes < 1 || object.sizeBytes > maxOriginalBytes) {
-      throw new AutographError('UPLOAD_TOO_LARGE');
-    }
-    if (
-      object.sizeBytes !== target.expectedSizeBytes ||
-      object.contentType !== target.expectedContentType
-    ) {
-      throw new AutographError('UPLOAD_METADATA_MISMATCH');
-    }
     return this.repository.completeOriginal(
       userId,
       autographId,
-      target.id,
-      object.sizeBytes,
+      async (target) => {
+        const object = await this.storage.statObject(target.storageKey);
+        if (!object) throw new AutographError('UPLOAD_NOT_FOUND');
+        let failure: AutographErrorCode | null = null;
+        if (object.sizeBytes < 1 || object.sizeBytes > maxOriginalBytes) {
+          failure = 'UPLOAD_TOO_LARGE';
+        } else if (
+          object.sizeBytes !== target.expectedSizeBytes ||
+          object.contentType !== target.expectedContentType
+        ) {
+          failure = 'UPLOAD_METADATA_MISMATCH';
+        }
+        if (failure) {
+          try {
+            await this.storage.deleteObject(target.storageKey);
+          } catch {
+            console.warn('Rejected private upload cleanup failed', {
+              autographId,
+              assetId: target.id,
+            });
+          }
+          throw new AutographError(failure);
+        }
+        return object.sizeBytes;
+      },
     );
+  }
+
+  async preview(userId: string, autographId: string) {
+    const key = await this.repository.cleanedAssetKey(userId, autographId);
+    if (!key) throw new AutographError('CLEANED_PREVIEW_NOT_AVAILABLE');
+    return {
+      url: await this.storage.signPrivateRead(key, this.previewTtlSeconds),
+      expiresAt: new Date(
+        this.clock().getTime() + this.previewTtlSeconds * 1000,
+      ),
+    };
   }
 }

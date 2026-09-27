@@ -1,0 +1,31 @@
+# Autograph image processing and cleanup
+
+## Trust and lifecycle
+
+The API's upload reservation checks client-declared MIME type and size; completion checks S3 HEAD metadata. Neither proves image safety. Completion locks the Autograph and atomically marks the original uploaded, moves it to `uploaded_unverified`, and inserts one PostgreSQL processing job. The worker alone validates bytes and moves the Autograph through `processing` to either `awaiting_approval` or `processing_failed`. Neither outcome makes an Autograph public or usable for Placement.
+
+## PostgreSQL jobs
+
+`autograph_processing_jobs` is the queue. A partial unique index limits each Autograph to one `queued` or `processing` job. A worker claims one available or stale job in a transaction using `FOR UPDATE SKIP LOCKED`, increments attempts, assigns a random lease token, and moves the Autograph to `processing`. Success and failure updates require the same token and an unexpired lease. A claim older than `WORKER_LEASE_SECONDS` (default 300, bounded 60–900) can be reclaimed. A worker whose token was replaced cannot commit success or failure. At most three attempts are made; transient failures are delayed by 5, then 10 seconds. A stale third attempt becomes terminal on the next claim. Permanent validation failures are terminal immediately.
+
+Worker polling defaults to 1000 ms (bounded 250–10000). One job and at most one abandoned upload are handled per cycle. SIGINT/SIGTERM stops new claims, wakes idle polling, and waits for the current operation before closing the database. A process killed abruptly is recovered by the lease. The lease bounds assume a 10 MB input and one concurrent image per process; tune only after measured workloads show a need.
+
+Stable failure codes include `INVALID_IMAGE`, `UNSUPPORTED_IMAGE_FORMAT`, `IMAGE_TOO_LARGE`, `IMAGE_DIMENSIONS_EXCEEDED`, `EMPTY_AUTOGRAPH`, `STORAGE_FAILURE`, and `PROCESSING_FAILURE`. Raw exception text is not stored as user-visible state. S3 and database outages retry; malformed/unsupported/empty images do not.
+
+## Image boundary
+
+The worker reads private objects as a stream and enforces 10 MiB while consuming chunks, independently of HEAD and client metadata. It accepts only JPEG and PNG signatures, verifies Sharp's decoded format and declared MIME agreement, decodes one static page with warning failure, disables unlimited mode, and limits input to 20 million pixels, 10,000 pixels per side, and four channels. The dedicated worker blocks other libvips foreign loaders and unblocks JPEG, PNG, and trusted raw pixel input used internally.
+
+EXIF orientation is applied before geometry work; decoded pixels are converted to sRGB. The photo path computes luminance, maps dark ink to alpha and white/light paper to transparent pixels, finds an ink bounding box, adds 16 transparent pixels of padding, and resizes down to at most 2048 pixels per side. The canvas path preserves RGB and alpha, crops by nontransparent pixels, pads, and resizes without the paper threshold. A minimum of eight foreground pixels or 0.001% of input pixels, whichever is larger, rejects blank input. These deterministic MVP thresholds live in `apps/worker/src/image-processing.ts`; faint pencil and uneven paper may need user review in a later editor.
+
+Output is an 8-bit PNG, at most 2048 pixels per side and 10 MiB. Sharp's default output strips source EXIF, GPS, XMP, IPTC, and ICC metadata; no metadata-preservation call is made. The cleaned object stays in the private bucket under `autographs/<autograph-id>/cleaned/<job-id>.png`. The original has a separate immutable key and is never copied into a public bucket.
+
+## S3 and database consistency
+
+S3 and PostgreSQL cannot commit together. The job's stable ID determines the cleaned key. The worker uploads privately, then transactionally inserts the one cleaned Asset, marks the job succeeded, and sets `awaiting_approval`. A retry after an uncertain database response overwrites/adopts the same private key. A failed PUT is best-effort deleted only while the same unexpired lease is locked; otherwise the object remains private for operational reconciliation. A lost lease cannot create a duplicate cleaned Asset. Succeeded jobs are not claimed again.
+
+Owner preview is `GET /autographs/:id/preview`. The authenticated owner receives a short-lived signed GET URL only when a cleaned Asset exists and status is `awaiting_approval`. Default lifetime is 120 seconds, bounded 60–300; the response uses `Cache-Control: no-store`. The signed URL is a temporary credential and must not be logged. No original read URL or public Wall field exists.
+
+## Invalid and abandoned uploads
+
+For `UPLOAD_TOO_LARGE` or `UPLOAD_METADATA_MISMATCH`, completion rejects the object and attempts deletion while holding the Autograph lock. If S3 deletion fails, the reserved Asset remains so the worker can retry cleanup. The worker selects reservations with `upload_expires_at` older than the configured grace period (default 600 seconds, bounded 60–86400), locks the Autograph, rechecks status, deletes the private object, removes the reserved Asset, and resets the Autograph to `draft`. A successful concurrent completion wins the row lock and prevents deletion. Deletion failure rolls back the cleanup transaction and is retried later.

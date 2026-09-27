@@ -9,7 +9,9 @@ import {
   createPgOAuthAttemptRepository,
   createPgProviderIdentityRepository,
   createPgSessionRepository,
+  createPgWallRepository,
 } from '@digital-autograph/db';
+import { WallService } from '@digital-autograph/walls';
 import {
   createGoogleOidcClient,
   createTelegramOidcClient,
@@ -71,6 +73,7 @@ async function main(): Promise<void> {
       login: telegramLogin,
       config: { appEnvironment: config.APP_ENV, webOrigin: config.WEB_ORIGIN },
     },
+    new WallService(createPgWallRepository(database.pool)),
   );
   let closing = false;
 

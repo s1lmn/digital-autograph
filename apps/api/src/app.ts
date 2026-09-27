@@ -16,6 +16,8 @@ import {
   type TelegramHttpConfig,
 } from './auth/telegram-http';
 import type { TelegramLoginService } from './auth/telegram-login';
+import type { WallService } from '@digital-autograph/walls';
+import { registerWallRoutes } from './walls/http';
 import {
   invalidOrigin,
   registerAuthRoutes,
@@ -32,6 +34,7 @@ export function buildApi(
   authConfig: AuthHttpConfig,
   google?: { login: GoogleLoginService; config: GoogleHttpConfig },
   telegram?: { login: TelegramLoginService; config: TelegramHttpConfig },
+  walls?: WallService,
 ) {
   const app = Fastify({
     logger: {
@@ -91,6 +94,7 @@ export function buildApi(
     registerGoogleRoutes(app, google.login, authConfig, google.config);
   if (telegram)
     registerTelegramRoutes(app, telegram.login, authConfig, telegram.config);
+  if (walls) registerWallRoutes(app, walls);
 
   return app;
 }

@@ -14,3 +14,13 @@ export type UserStatus = (typeof userStatuses)[number];
 export type WallStatus = (typeof wallStatuses)[number];
 export type PlacementSource = (typeof placementSources)[number];
 export type AdministrativeRole = (typeof administrativeRoles)[number];
+export {
+  wallActions,
+  transitionWall,
+  validateWallConfiguration,
+  validateScheduledConfiguration,
+  isPublicWall,
+  WallRuleError,
+  type WallAction,
+  type WallConfiguration,
+} from './wall';

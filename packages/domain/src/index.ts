@@ -9,11 +9,23 @@ export const wallStatuses = [
 ] as const;
 export const placementSources = ['free_claim', 'takeover', 'admin'] as const;
 export const administrativeRoles = ['moderator', 'finance', 'admin'] as const;
+export const autographSources = ['photo', 'canvas'] as const;
+export const autographStatuses = [
+  'draft',
+  'upload_pending',
+  'uploaded_unverified',
+] as const;
+export const autographAssetRoles = ['original'] as const;
+export const autographAssetStatuses = ['reserved', 'uploaded'] as const;
 
 export type UserStatus = (typeof userStatuses)[number];
 export type WallStatus = (typeof wallStatuses)[number];
 export type PlacementSource = (typeof placementSources)[number];
 export type AdministrativeRole = (typeof administrativeRoles)[number];
+export type AutographSource = (typeof autographSources)[number];
+export type AutographStatus = (typeof autographStatuses)[number];
+export type AutographAssetRole = (typeof autographAssetRoles)[number];
+export type AutographAssetStatus = (typeof autographAssetStatuses)[number];
 export {
   wallActions,
   transitionWall,

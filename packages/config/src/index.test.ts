@@ -18,6 +18,8 @@ describe('typed configuration', () => {
         TELEGRAM_CLIENT_ID: 'test-telegram-client',
         TELEGRAM_CLIENT_SECRET: 'test-telegram-secret',
         TELEGRAM_REDIRECT_URI: 'http://127.0.0.1:4000/auth/telegram/callback',
+        S3_REGION: 'us-east-1',
+        S3_BUCKET: 'autographs-test',
       }),
     ).toMatchObject({ API_PORT: 4000, APP_ENV: 'local' });
   });
@@ -52,6 +54,8 @@ describe('typed configuration', () => {
       TELEGRAM_CLIENT_ID: 'test-telegram-client',
       TELEGRAM_CLIENT_SECRET: 'test-telegram-secret',
       TELEGRAM_REDIRECT_URI: 'https://api.example.test/auth/telegram/callback',
+      S3_REGION: 'us-east-1',
+      S3_BUCKET: 'autographs-test',
     };
     expect(() => loadApiConfig({ ...base, TRUSTED_WEB_ORIGINS: '*' })).toThrow(
       /TRUSTED_WEB_ORIGINS/,
@@ -88,6 +92,8 @@ describe('typed configuration', () => {
       TELEGRAM_CLIENT_ID: 'test-telegram-client',
       TELEGRAM_CLIENT_SECRET: 'test-telegram-secret',
       TELEGRAM_REDIRECT_URI: 'https://api.example.test/auth/telegram/callback',
+      S3_REGION: 'us-east-1',
+      S3_BUCKET: 'autographs-test',
     };
     expect(() =>
       loadApiConfig({ ...base, WEB_ORIGIN: 'https://other.example.test' }),

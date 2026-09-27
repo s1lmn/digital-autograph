@@ -80,8 +80,52 @@ const apiSchema = databaseSchema
         return false;
       }
     }, 'must be an absolute HTTP(S) /auth/telegram/callback URL'),
+    S3_ENDPOINT: z.url().optional(),
+    S3_REGION: z.string().min(1),
+    S3_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/),
+    S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    UPLOAD_URL_TTL_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(60)
+      .max(600)
+      .default(300),
   })
   .superRefine((config, context) => {
+    if (
+      Boolean(config.S3_ACCESS_KEY_ID) !== Boolean(config.S3_SECRET_ACCESS_KEY)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['S3_ACCESS_KEY_ID'],
+        message: 'S3 access key and secret must be supplied together',
+      });
+    }
+    if (config.S3_ENDPOINT) {
+      const endpoint = new URL(config.S3_ENDPOINT);
+      if (
+        !['http:', 'https:'].includes(endpoint.protocol) ||
+        endpoint.username ||
+        endpoint.password
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['S3_ENDPOINT'],
+          message: 'must be an HTTP(S) URL without credentials',
+        });
+      }
+      if (
+        ['production', 'staging'].includes(config.APP_ENV) &&
+        endpoint.protocol !== 'https:'
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['S3_ENDPOINT'],
+          message: 'must use HTTPS outside local development',
+        });
+      }
+    }
     if (!config.TRUSTED_WEB_ORIGINS.includes(config.WEB_ORIGIN)) {
       context.addIssue({
         code: 'custom',

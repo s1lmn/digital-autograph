@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@digital-autograph/autographs": "workspace:*",
     "@digital-autograph/auth": "workspace:*",
     "@digital-autograph/config": "workspace:*",
     "@digital-autograph/domain": "workspace:*",

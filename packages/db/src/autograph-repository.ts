@@ -205,7 +205,7 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
       return toReserved(asset);
     },
 
-    async completeOriginal(userId, autographId, assetId, actualSizeBytes) {
+    async completeOriginal(userId, autographId, verify) {
       return withTransaction(pool, async (client) => {
         const autograph = await ownedAutograph(
           client,
@@ -214,12 +214,8 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
           true,
         );
         const asset = await originalAsset(client, autographId);
-        if (!asset || asset.id !== assetId)
-          throw new AutographError('INVALID_AUTOGRAPH_STATE');
-        if (
-          autograph.status === 'uploaded_unverified' &&
-          asset.status === 'uploaded'
-        ) {
+        if (!asset) throw new AutographError('INVALID_AUTOGRAPH_STATE');
+        if (asset.status === 'uploaded') {
           return view(client, autograph);
         }
         if (
@@ -228,11 +224,12 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
         ) {
           throw new AutographError('INVALID_AUTOGRAPH_STATE');
         }
+        const actualSizeBytes = await verify(toReserved(asset));
         await client.query(
           `UPDATE autograph_assets SET status = 'uploaded',
              verified_size_bytes = $2::integer, uploaded_at = now()
            WHERE id = $1::uuid`,
-          [assetId, actualSizeBytes],
+          [asset.id, actualSizeBytes],
         );
         const updated = await client.query<AutographRow>(
           `UPDATE autographs SET status = 'uploaded_unverified' WHERE id = $1::uuid
@@ -241,8 +238,24 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
         );
         const row = updated.rows[0];
         if (!row) throw new Error('Autograph update returned no row');
+        await client.query(
+          `INSERT INTO autograph_processing_jobs (autograph_id, original_asset_id)
+           VALUES ($1::uuid, $2::uuid)`,
+          [autographId, asset.id],
+        );
         return view(client, row);
       });
+    },
+
+    async cleanedAssetKey(userId, autographId) {
+      const autograph = await ownedAutograph(pool, userId, autographId);
+      if (autograph.status !== 'awaiting_approval') return null;
+      const result = await pool.query<{ storage_key: string }>(
+        `SELECT storage_key FROM autograph_assets
+         WHERE autograph_id = $1::uuid AND role = 'cleaned' AND status = 'uploaded'`,
+        [autographId],
+      );
+      return result.rows[0]?.storage_key ?? null;
     },
   };
 }

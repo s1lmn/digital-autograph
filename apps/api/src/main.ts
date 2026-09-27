@@ -91,6 +91,8 @@ async function main(): Promise<void> {
       createPgAutographRepository(database.pool),
       storage,
       config.UPLOAD_URL_TTL_SECONDS,
+      undefined,
+      config.PREVIEW_URL_TTL_SECONDS,
     ),
   );
   let closing = false;

@@ -2,13 +2,17 @@ import {
   CreateBucketCommand,
   DeleteBucketPolicyCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { PrivateOriginalStorage } from '@digital-autograph/autographs';
+import {
+  PrivateObjectTooLargeError,
+  type PrivateOriginalStorage,
+} from '@digital-autograph/autographs';
 
 export type PrivateS3Config = {
   endpoint?: string;
@@ -79,6 +83,57 @@ export function createPrivateS3Storage(
     async deleteObject(key) {
       await client.send(
         new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
+      );
+    },
+
+    async getPrivateObject(key, maxBytes) {
+      const controller = new AbortController();
+      const result = await client.send(
+        new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+        { abortSignal: controller.signal },
+      );
+      if (!result.Body) throw new Error('Private object has no body');
+      const reader = result.Body.transformToWebStream().getReader();
+      const chunks: Buffer[] = [];
+      let size = 0;
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          const bytes = Buffer.from(next.value);
+          size += bytes.length;
+          if (size > maxBytes)
+            throw new PrivateObjectTooLargeError(
+              'Private object exceeds byte limit',
+            );
+          chunks.push(bytes);
+        }
+      } catch (error) {
+        controller.abort();
+        await reader.cancel().catch(() => {});
+        throw error;
+      } finally {
+        reader.releaseLock();
+      }
+      return Buffer.concat(chunks, size);
+    },
+
+    async putPrivateObject(key, bytes) {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: bytes,
+          ContentType: 'image/png',
+        }),
+      );
+    },
+
+    async signPrivateRead(key, expiresInSeconds) {
+      return getSignedUrl(
+        client,
+        new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+        { expiresIn: expiresInSeconds },
       );
     },
 

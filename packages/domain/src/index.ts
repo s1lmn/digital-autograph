@@ -14,8 +14,11 @@ export const autographStatuses = [
   'draft',
   'upload_pending',
   'uploaded_unverified',
+  'processing',
+  'awaiting_approval',
+  'processing_failed',
 ] as const;
-export const autographAssetRoles = ['original'] as const;
+export const autographAssetRoles = ['original', 'cleaned'] as const;
 export const autographAssetStatuses = ['reserved', 'uploaded'] as const;
 
 export type UserStatus = (typeof userStatuses)[number];

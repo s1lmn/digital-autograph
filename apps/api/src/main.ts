@@ -11,8 +11,12 @@ import {
   createPgSessionRepository,
   createPgWallRepository,
   createPgAutographRepository,
+  createPgAutographModerationRepository,
 } from '@digital-autograph/db';
-import { AutographService } from '@digital-autograph/autographs';
+import {
+  AutographService,
+  ModerationService,
+} from '@digital-autograph/autographs';
 import { WallService } from '@digital-autograph/walls';
 import {
   createGoogleOidcClient,
@@ -92,6 +96,11 @@ async function main(): Promise<void> {
       storage,
       config.UPLOAD_URL_TTL_SECONDS,
       undefined,
+      config.PREVIEW_URL_TTL_SECONDS,
+    ),
+    new ModerationService(
+      createPgAutographModerationRepository(database.pool),
+      storage,
       config.PREVIEW_URL_TTL_SECONDS,
     ),
   );

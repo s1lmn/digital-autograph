@@ -6,11 +6,13 @@ An authenticated User creates an Autograph with source `photo` or `canvas`. Its 
 
 ```text
 draft → upload_pending → uploaded_unverified → processing → awaiting_approval → awaiting_moderation
+                                                                          ├→ ready
+                                                                          └→ moderation_rejected
                                               └──────────→ processing_failed
 upload_pending (expired and abandoned) → draft
 ```
 
-`uploaded_unverified` proves only that the backend found an object and checked its HEAD metadata against the reservation. The worker validates actual bytes and creates a private cleaned derivative. `awaiting_approval` does not imply user approval, moderation, public safety, or Placement eligibility. `awaiting_moderation` means the owner approved one specific cleaned derivative and submitted it for later moderation. It does not imply platform approval, public safety, public visibility, legal validity, or Placement eligibility. No current state authorizes a Free Claim; `ready` requires later moderation rules.
+`uploaded_unverified` proves only that the backend found an object and checked its HEAD metadata against the reservation. The worker validates actual bytes and creates a private cleaned derivative. `awaiting_approval` does not imply user approval, moderation, public safety, or Placement eligibility. `awaiting_moderation` means the owner approved one specific cleaned derivative and submitted it for human moderation. It does not imply platform approval or Placement eligibility. `ready` means that same derivative passed human content moderation and is eligible for future placement workflows. It is still private, unplaced, and is not an identity or legal-signature verification. `moderation_rejected` is final for this MVP lifecycle; the owner may create a new Autograph.
 
 ## Owner approval gate
 
@@ -18,7 +20,7 @@ upload_pending (expired and abandoned) → draft
 
 The approval row stores `autograph_id`, `user_id`, `cleaned_asset_id`, and `approved_at`. Foreign keys use restrictive deletion and a unique Autograph index limits this MVP lifecycle to one approval. A database trigger rejects approval-row UPDATE/DELETE; another rejects mutation of an already approved cleaned Asset. The approval binds to Asset identity and cannot silently transfer to a replacement derivative. If future reprocessing produces a new cleaned Asset, it needs a deliberately new approval workflow. This PR provides no such workflow. Existing `awaiting_approval` records remain private without automatic retention cleanup.
 
-After approval, the owner may still request a private preview. Original upload initiation and completion are rejected, and the succeeded processing job is not requeued. User approval alone never makes an image public or creates a Placement. Separate legal consent, if required by product policy, is outside this technical approval gate.
+After approval and after either moderation outcome, the owner may still request a private preview. Original upload initiation and completion are rejected, and the succeeded processing job is not requeued. User approval or moderator approval alone never makes an image public or creates a Placement. See [autograph-moderation.md](autograph-moderation.md) for the moderation evidence chain and final-state checks. Separate legal consent, if required by product policy, is outside this technical approval gate.
 
 ## Asset model
 
@@ -63,4 +65,4 @@ The worker deletes abandoned reserved objects after `upload_expires_at` plus the
 
 ## Placement relationship
 
-`placements.autograph_id` now has a nullable foreign key. Existing history remains valid. Future Placement creation must verify `placements.user_id = autographs.user_id` and a genuinely approved, safe `ready` state in the same authoritative workflow. This PR does not create or update Placements through the API. Public Wall and Creator reads remain unchanged and expose no original Asset data.
+`placements.autograph_id` has a nullable foreign key. Existing history remains valid. Future Placement creation must verify `placements.user_id = autographs.user_id`, `isAutographPlacementEligible(status)`, and live Wall/time/eligibility rules in the same authoritative workflow. Only `ready` satisfies the status predicate. This PR does not create or update Placements through the API. Public Wall and Creator reads remain unchanged and expose no Autograph images or original Asset data.

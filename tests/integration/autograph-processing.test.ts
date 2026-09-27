@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   AutographService,
+  ModerationService,
   PrivateObjectTooLargeError,
 } from '../../packages/autographs/src/index';
 import { buildApi } from '../../apps/api/src/app';
@@ -15,9 +16,10 @@ import {
   createDatabase,
   createPgAutographProcessingRepository,
   createPgAutographRepository,
+  createPgAutographModerationRepository,
   createPgSessionRepository,
 } from '../../packages/db/src/index';
-import { users } from '../../packages/db/src/schema';
+import { userRoles, users } from '../../packages/db/src/schema';
 import { createPrivateS3Storage } from '../../packages/integrations/src/index';
 import { userFixture } from './fixtures';
 
@@ -42,6 +44,10 @@ const storage = createPrivateS3Storage({
 const repo = createPgAutographRepository(database.pool);
 const jobs = createPgAutographProcessingRepository(database.pool);
 const service = new AutographService(repo, storage, 300);
+const moderation = new ModerationService(
+  createPgAutographModerationRepository(database.pool),
+  storage,
+);
 const sessions = new SessionService(
   createPgSessionRepository(database.pool),
   1209600,
@@ -58,6 +64,7 @@ const app = buildApi(
   undefined,
   undefined,
   service,
+  moderation,
 );
 const keys: string[] = [];
 const operations: WorkerOperations = {
@@ -205,6 +212,50 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     expect((await fetch(approvedPreview.json().url as string)).status).toBe(
       200,
     );
+    const moderatorId = randomUUID();
+    await database.db.insert(users).values({ id: moderatorId });
+    await database.db
+      .insert(userRoles)
+      .values({ userId: moderatorId, role: 'moderator' });
+    const moderatorToken = (await sessions.createSession(moderatorId)).token;
+    const moderatorPreview = await app.inject({
+      url: `/moderation/autographs/${f.draft.id}/preview`,
+      headers: { cookie: `da_session=${moderatorToken}` },
+    });
+    expect(moderatorPreview.statusCode).toBe(200);
+    expect(moderatorPreview.headers['cache-control']).toBe('no-store');
+    expect(moderatorPreview.body).not.toContain(f.originalKey);
+    expect(
+      new URL(moderatorPreview.json().url).searchParams.get('X-Amz-Expires'),
+    ).toBe('120');
+    expect((await fetch(moderatorPreview.json().url as string)).status).toBe(
+      200,
+    );
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/moderation/autographs/${f.draft.id}/decision`,
+          headers: {
+            cookie: `da_session=${moderatorToken}`,
+            origin: 'http://127.0.0.1:3000',
+          },
+          payload: { decision: 'approved' },
+        })
+      ).json().status,
+    ).toBe('ready');
+    expect(await processOneAutographJob(operations)).toBe(false);
+    expect((await service.get(f.userId, f.draft.id)).status).toBe('ready');
+    const readyPreview = await app.inject({
+      url: `/autographs/${f.draft.id}/preview`,
+      headers: { cookie: `da_session=${f.token}` },
+    });
+    expect(readyPreview.statusCode).toBe(200);
+    expect(readyPreview.json().assetId).toBe(preview.json().assetId);
+    expect((await fetch(readyPreview.json().url as string)).status).toBe(200);
+    expect(
+      (await fetch(`${s3Endpoint}/${s3Bucket}/${cleaned.storage_key}`)).status,
+    ).toBeGreaterThanOrEqual(400);
   });
 
   it('fails invalid uploaded bytes without a cleaned asset', async () => {

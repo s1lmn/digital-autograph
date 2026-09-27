@@ -1,0 +1,54 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(14rem, 20rem) 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+.queue {
+  padding: 1rem;
+  border: 1px solid #ccd5df;
+  border-radius: 0.6rem;
+}
+.queue ul {
+  list-style: none;
+  padding: 0;
+}
+.queue li {
+  margin: 0.4rem 0;
+}
+.queue button {
+  width: 100%;
+  padding: 0.6rem;
+  text-align: left;
+}
+.review {
+  padding: 1rem;
+  border: 1px solid #ccd5df;
+  border-radius: 0.6rem;
+  min-width: 0;
+}
+.review img {
+  display: block;
+  max-width: 100%;
+  max-height: 22rem;
+  margin: 1rem 0;
+  background: #f7f8f9;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.actions button,
+.actions select {
+  padding: 0.6rem;
+}
+.error {
+  color: #a32525;
+}
+@media (max-width: 45rem) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

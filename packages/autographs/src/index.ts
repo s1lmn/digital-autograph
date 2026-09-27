@@ -15,6 +15,11 @@ export type AutographView = {
   createdAt: Date;
   updatedAt: Date;
   approvedAt: Date | null;
+  moderation: null | {
+    decision: 'approved' | 'rejected';
+    reasonCode: string | null;
+    decidedAt: Date;
+  };
   original: null | {
     id: string;
     status: 'reserved' | 'uploaded';
@@ -86,6 +91,13 @@ export interface PrivateOriginalStorage {
 }
 
 export class PrivateObjectTooLargeError extends Error {}
+export {
+  ModerationService,
+  type ModerationRepository,
+  type ModerationRequest,
+  type ModerationResult,
+  type ModerationQueueItem,
+} from './moderation';
 
 export type AutographErrorCode =
   | 'AUTOGRAPH_NOT_FOUND'
@@ -99,7 +111,11 @@ export type AutographErrorCode =
   | 'AUTOGRAPH_NOT_AWAITING_APPROVAL'
   | 'CLEANED_ASSET_NOT_AVAILABLE'
   | 'REVIEWED_ASSET_MISMATCH'
-  | 'APPROVAL_STATE_INCONSISTENT';
+  | 'APPROVAL_STATE_INCONSISTENT'
+  | 'MODERATION_STATE_INCONSISTENT'
+  | 'MODERATION_ALREADY_DECIDED'
+  | 'MODERATION_NOT_AWAITING'
+  | 'INVALID_CURSOR';
 
 export class AutographError extends Error {
   constructor(readonly code: AutographErrorCode) {

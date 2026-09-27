@@ -10,6 +10,11 @@ import type {
   AutographStatus,
 } from '@digital-autograph/domain';
 import type { Pool, PoolClient } from 'pg';
+import {
+  readApproval,
+  readCleaned,
+  verifyAutographEvidence,
+} from './autograph-evidence';
 
 type AutographRow = {
   id: string;
@@ -30,14 +35,6 @@ type AssetRow = {
   verified_size_bytes: number | null;
   upload_expires_at: Date;
   uploaded_at: Date | null;
-};
-
-type CleanedAssetRow = { id: string; storage_key: string };
-type ApprovalRow = {
-  autograph_id: string;
-  user_id: string;
-  cleaned_asset_id: string;
-  approved_at: Date;
 };
 
 async function withTransaction<T>(
@@ -88,32 +85,6 @@ async function originalAsset(
   return found.rows[0] ?? null;
 }
 
-async function cleanedAsset(
-  db: Pool | PoolClient,
-  autographId: string,
-  lock = false,
-): Promise<CleanedAssetRow | null> {
-  const found = await db.query<CleanedAssetRow>(
-    `SELECT id, storage_key FROM autograph_assets
-     WHERE autograph_id = $1::uuid AND role = 'cleaned' AND status = 'uploaded'
-     ${lock ? 'FOR SHARE' : ''}`,
-    [autographId],
-  );
-  return found.rows[0] ?? null;
-}
-
-async function approval(
-  db: Pool | PoolClient,
-  autographId: string,
-): Promise<ApprovalRow | null> {
-  const found = await db.query<ApprovalRow>(
-    `SELECT autograph_id, user_id, cleaned_asset_id, approved_at
-     FROM autograph_user_approvals WHERE autograph_id = $1::uuid`,
-    [autographId],
-  );
-  return found.rows[0] ?? null;
-}
-
 function toReserved(asset: AssetRow): ReservedOriginal {
   return {
     id: asset.id,
@@ -131,19 +102,10 @@ async function view(
   row: AutographRow,
 ): Promise<AutographView> {
   const asset = await originalAsset(db, row.id);
-  const approved = await approval(db, row.id);
-  if (row.status === 'awaiting_moderation') {
-    const cleaned = await cleanedAsset(db, row.id);
-    if (
-      !approved ||
-      approved.user_id !== row.user_id ||
-      approved.cleaned_asset_id !== cleaned?.id
-    ) {
-      throw new AutographError('APPROVAL_STATE_INCONSISTENT');
-    }
-  } else if (approved) {
-    throw new AutographError('APPROVAL_STATE_INCONSISTENT');
-  }
+  const { approval: approved, moderation } = await verifyAutographEvidence(
+    db,
+    row,
+  );
   return {
     id: row.id,
     source: row.source,
@@ -151,6 +113,13 @@ async function view(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     approvedAt: approved?.approved_at ?? null,
+    moderation: moderation
+      ? {
+          decision: moderation.decision,
+          reasonCode: moderation.reason_code,
+          decidedAt: moderation.decided_at,
+        }
+      : null,
     original: asset
       ? {
           id: asset.id,
@@ -266,7 +235,11 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
         const asset = await originalAsset(client, autographId);
         if (!asset) throw new AutographError('INVALID_AUTOGRAPH_STATE');
         if (asset.status === 'uploaded') {
-          if (autograph.status === 'awaiting_moderation') {
+          if (
+            ['awaiting_moderation', 'ready', 'moderation_rejected'].includes(
+              autograph.status,
+            )
+          ) {
             throw new AutographError('INVALID_AUTOGRAPH_STATE');
           }
           return view(client, autograph);
@@ -309,25 +282,24 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
           true,
         );
         if (
-          !['awaiting_approval', 'awaiting_moderation'].includes(
-            autograph.status,
-          )
+          ![
+            'awaiting_approval',
+            'awaiting_moderation',
+            'ready',
+            'moderation_rejected',
+          ].includes(autograph.status)
         ) {
           return null;
         }
-        const cleaned = await cleanedAsset(client, autographId, true);
-        const approved = await approval(client, autographId);
-        if (autograph.status === 'awaiting_moderation') {
-          if (
-            !approved ||
-            approved.user_id !== userId ||
-            approved.cleaned_asset_id !== cleaned?.id
-          ) {
-            throw new AutographError('APPROVAL_STATE_INCONSISTENT');
-          }
-        } else if (approved) {
-          throw new AutographError('APPROVAL_STATE_INCONSISTENT');
-        }
+        const { cleaned: approvedCleaned } = await verifyAutographEvidence(
+          client,
+          autograph,
+          true,
+        );
+        const cleaned =
+          autograph.status === 'awaiting_approval'
+            ? await readCleaned(client, autographId, true)
+            : approvedCleaned;
         return cleaned
           ? { assetId: cleaned.id, key: cleaned.storage_key }
           : null;
@@ -342,9 +314,10 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
           autographId,
           true,
         );
-        const approved = await approval(client, autographId);
+        const approved = await readApproval(client, autographId);
         if (autograph.status === 'awaiting_moderation') {
-          const cleaned = await cleanedAsset(client, autographId, true);
+          await verifyAutographEvidence(client, autograph, true);
+          const cleaned = await readCleaned(client, autographId, true);
           if (
             !approved ||
             approved.user_id !== userId ||
@@ -361,11 +334,18 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
             approvedAt: approved.approved_at,
           };
         }
+        if (
+          autograph.status === 'ready' ||
+          autograph.status === 'moderation_rejected'
+        ) {
+          await verifyAutographEvidence(client, autograph, true);
+          throw new AutographError('AUTOGRAPH_NOT_AWAITING_APPROVAL');
+        }
         if (approved) throw new AutographError('APPROVAL_STATE_INCONSISTENT');
         if (autograph.status !== 'awaiting_approval') {
           throw new AutographError('AUTOGRAPH_NOT_AWAITING_APPROVAL');
         }
-        const cleaned = await cleanedAsset(client, autographId, true);
+        const cleaned = await readCleaned(client, autographId, true);
         if (!cleaned) throw new AutographError('CLEANED_ASSET_NOT_AVAILABLE');
         if (reviewedAssetId !== cleaned.id) {
           throw new AutographError('REVIEWED_ASSET_MISMATCH');

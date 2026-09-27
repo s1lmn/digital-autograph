@@ -18,7 +18,9 @@ import {
 import type { TelegramLoginService } from './auth/telegram-login';
 import type { WallService } from '@digital-autograph/walls';
 import type { AutographService } from '@digital-autograph/autographs';
+import type { ModerationService } from '@digital-autograph/autographs';
 import { registerAutographRoutes } from './autographs/http';
+import { registerModerationRoutes } from './autographs/moderation-http';
 import { registerWallRoutes } from './walls/http';
 import {
   invalidOrigin,
@@ -38,6 +40,7 @@ export function buildApi(
   telegram?: { login: TelegramLoginService; config: TelegramHttpConfig },
   walls?: WallService,
   autographs?: AutographService,
+  moderation?: ModerationService,
 ) {
   const app = Fastify({
     logger: {
@@ -99,6 +102,7 @@ export function buildApi(
     registerTelegramRoutes(app, telegram.login, authConfig, telegram.config);
   if (walls) registerWallRoutes(app, walls);
   if (autographs) registerAutographRoutes(app, autographs);
+  if (moderation) registerModerationRoutes(app, moderation);
 
   return app;
 }

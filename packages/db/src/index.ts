@@ -7,6 +7,7 @@ export { createPgOAuthAttemptRepository } from './oauth-attempt-repository';
 export { createPgProviderIdentityRepository } from './provider-identity-repository';
 export { createPgWallRepository } from './wall-repository';
 export { createPgAutographRepository } from './autograph-repository';
+export { createPgAutographModerationRepository } from './autograph-moderation-repository';
 export {
   createPgAutographProcessingRepository,
   type ClaimedAutographJob,

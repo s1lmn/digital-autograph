@@ -15,3 +15,8 @@ export {
   type GoogleOidcClient,
   type GoogleOidcConfig,
 } from './google';
+export {
+  createTelegramOidcClient,
+  type TelegramOidcClient,
+  type TelegramOidcConfig,
+} from './telegram';

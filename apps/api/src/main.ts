@@ -10,12 +10,16 @@ import {
   createPgProviderIdentityRepository,
   createPgSessionRepository,
 } from '@digital-autograph/db';
-import { createGoogleOidcClient } from '@digital-autograph/integrations';
+import {
+  createGoogleOidcClient,
+  createTelegramOidcClient,
+} from '@digital-autograph/integrations';
 import { buildApi } from './app';
 import {
   GoogleLoginService,
   googleLoginAttemptTtlSeconds,
 } from './auth/google-login';
+import { TelegramLoginService } from './auth/telegram-login';
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
@@ -24,17 +28,31 @@ async function main(): Promise<void> {
     createPgSessionRepository(database.pool),
     config.SESSION_TTL_SECONDS,
   );
+  const attempts = new OAuthAttemptService(
+    createPgOAuthAttemptRepository(database.pool),
+    googleLoginAttemptTtlSeconds,
+  );
+  const identities = new IdentityService(
+    createPgProviderIdentityRepository(database.pool),
+  );
   const googleLogin = new GoogleLoginService(
-    new OAuthAttemptService(
-      createPgOAuthAttemptRepository(database.pool),
-      googleLoginAttemptTtlSeconds,
-    ),
+    attempts,
     createGoogleOidcClient({
       clientId: config.GOOGLE_CLIENT_ID,
       clientSecret: config.GOOGLE_CLIENT_SECRET,
       redirectUri: config.GOOGLE_REDIRECT_URI,
     }),
-    new IdentityService(createPgProviderIdentityRepository(database.pool)),
+    identities,
+    sessions,
+  );
+  const telegramLogin = new TelegramLoginService(
+    attempts,
+    createTelegramOidcClient({
+      clientId: config.TELEGRAM_CLIENT_ID,
+      clientSecret: config.TELEGRAM_CLIENT_SECRET,
+      redirectUri: config.TELEGRAM_REDIRECT_URI,
+    }),
+    identities,
     sessions,
   );
   const app = buildApi(
@@ -47,6 +65,10 @@ async function main(): Promise<void> {
     },
     {
       login: googleLogin,
+      config: { appEnvironment: config.APP_ENV, webOrigin: config.WEB_ORIGIN },
+    },
+    {
+      login: telegramLogin,
       config: { appEnvironment: config.APP_ENV, webOrigin: config.WEB_ORIGIN },
     },
   );

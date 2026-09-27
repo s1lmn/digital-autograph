@@ -6,12 +6,17 @@ export default async function AuthErrorPage({
   searchParams,
 }: AuthErrorPageProps) {
   const { code } = await searchParams;
+  const messages: Record<string, string> = {
+    GOOGLE_AUTH_CANCELLED: 'Google sign-in was cancelled.',
+    GOOGLE_AUTH_FAILED: 'Google sign-in could not be completed.',
+    TELEGRAM_AUTH_CANCELLED: 'Telegram sign-in was cancelled.',
+    TELEGRAM_AUTH_FAILED: 'Telegram sign-in could not be completed.',
+    ALREADY_AUTHENTICATED: 'You are already signed in.',
+  };
   const message =
-    code === 'GOOGLE_AUTH_CANCELLED'
-      ? 'Google sign-in was cancelled.'
-      : code === 'ALREADY_AUTHENTICATED'
-        ? 'You are already signed in.'
-        : 'Google sign-in could not be completed.';
+    typeof code === 'string'
+      ? (messages[code] ?? 'Sign-in could not be completed.')
+      : 'Sign-in could not be completed.';
 
   return (
     <main>

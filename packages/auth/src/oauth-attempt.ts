@@ -4,6 +4,7 @@ export type StoredOAuthAttempt = {
   id: string;
   browserBindingHash: string;
   nonceHash: string;
+  pkceVerifierHash: string | null;
   returnPath: string;
 };
 
@@ -13,6 +14,7 @@ export interface OAuthAttemptRepository {
     stateHash: string;
     browserBindingHash: string;
     nonceHash: string;
+    pkceVerifierHash: string | null;
     returnPath: string;
     ttlSeconds: number;
   }): Promise<void>;
@@ -27,6 +29,10 @@ export type NewOAuthAttempt = {
   state: string;
   browserBinding: string;
   nonce: string;
+};
+
+export type NewPkceOAuthAttempt = NewOAuthAttempt & {
+  codeVerifier: string;
 };
 
 export type ClaimedOAuthAttempt = {
@@ -61,6 +67,27 @@ export class OAuthAttemptService {
   }
 
   async create(provider: string, returnPath: string): Promise<NewOAuthAttempt> {
+    return this.createAttempt(provider, returnPath, null);
+  }
+
+  async createPkce(
+    provider: string,
+    returnPath: string,
+  ): Promise<NewPkceOAuthAttempt> {
+    const codeVerifier = newSecret();
+    const attempt = await this.createAttempt(
+      provider,
+      returnPath,
+      codeVerifier,
+    );
+    return { ...attempt, codeVerifier };
+  }
+
+  private async createAttempt(
+    provider: string,
+    returnPath: string,
+    codeVerifier: string | null,
+  ): Promise<NewOAuthAttempt> {
     const state = newSecret();
     const browserBinding = newSecret();
     const nonce = newSecret();
@@ -69,6 +96,7 @@ export class OAuthAttemptService {
       stateHash: hashSecret(state),
       browserBindingHash: hashSecret(browserBinding),
       nonceHash: hashSecret(nonce),
+      pkceVerifierHash: codeVerifier ? hashSecret(codeVerifier) : null,
       returnPath,
       ttlSeconds: this.ttlSeconds,
     });
@@ -79,6 +107,36 @@ export class OAuthAttemptService {
     provider: string,
     state: string | undefined,
     browserBinding: string | undefined,
+  ): Promise<ClaimedOAuthAttempt | null> {
+    return this.claimAttempt(provider, state, browserBinding);
+  }
+
+  async claimPkce(
+    provider: string,
+    state: string | undefined,
+    browserBinding: string | undefined,
+    codeVerifier: string | undefined,
+    nonce: string | undefined,
+  ): Promise<ClaimedOAuthAttempt | null> {
+    if (
+      !codeVerifier ||
+      !nonce ||
+      !secretPattern.test(codeVerifier) ||
+      !secretPattern.test(nonce)
+    ) {
+      return null;
+    }
+    return this.claimAttempt(provider, state, browserBinding, {
+      codeVerifier,
+      nonce,
+    });
+  }
+
+  private async claimAttempt(
+    provider: string,
+    state: string | undefined,
+    browserBinding: string | undefined,
+    pkce?: { codeVerifier: string; nonce: string },
   ): Promise<ClaimedOAuthAttempt | null> {
     if (
       !state ||
@@ -94,7 +152,12 @@ export class OAuthAttemptService {
     );
     if (
       !attempt ||
-      !sameHash(attempt.browserBindingHash, hashSecret(browserBinding))
+      !sameHash(attempt.browserBindingHash, hashSecret(browserBinding)) ||
+      (pkce
+        ? !attempt.pkceVerifierHash ||
+          !sameHash(attempt.pkceVerifierHash, hashSecret(pkce.codeVerifier)) ||
+          !sameHash(attempt.nonceHash, hashSecret(pkce.nonce))
+        : attempt.pkceVerifierHash !== null)
     ) {
       return null;
     }

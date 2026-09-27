@@ -30,6 +30,8 @@ Auth Core requires `SESSION_TTL_SECONDS` and `TRUSTED_WEB_ORIGINS` in the API en
 
 Google sign-in additionally requires server-only `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, and `WEB_ORIGIN`. Create a Google OAuth **Web application** client and register `http://127.0.0.1:4000/auth/google/callback` as an exact authorized redirect URI for the sample local configuration. Replace the `.env` placeholders with that client's credentials; do not commit them. Keep the API start URL and callback on the same host so the short-lived browser-binding cookie reaches the callback. Open `http://127.0.0.1:4000/auth/google/start` to begin login, optionally with a local `returnTo` path. Staging and production require HTTPS callback and web origins. The web shell currently provides only a small failure page; the main product sign-in UI will follow later.
 
+Telegram sign-in requires server-only `TELEGRAM_CLIENT_ID`, `TELEGRAM_CLIENT_SECRET`, and `TELEGRAM_REDIRECT_URI`. In @BotFather, create or select the application bot, open **Login Widget / Login**, add the website origin and the exact OIDC redirect URI to **Allowed URLs**, and obtain the Client ID and Client Secret shown there. For the sample local configuration, register `http://127.0.0.1:4000/auth/telegram/callback` exactly. The Client Secret is an OIDC credential, distinct from the bot's Bot API token. Replace the placeholders in your ignored `.env` or deployment secrets; do not commit credentials. Open `http://127.0.0.1:4000/auth/telegram/start` to begin login, optionally with a local `returnTo` path. Keep the start URL and callback on the same API host for the temporary cookies. Staging and production callbacks require HTTPS. The web shell currently has no login button.
+
 ## Checks
 
 ```sh
@@ -56,7 +58,7 @@ The integration suite requires the separate `autograph_test` PostgreSQL instance
 - `packages/auth`: provider-independent session lifecycle.
 - `packages/db`: PostgreSQL connection, domain schema, Drizzle migrations, transaction access.
 - `packages/contracts`: shared Zod API schemas.
-- `packages/integrations`: Google OIDC adapter and future provider adapters.
+- `packages/integrations`: Google and Telegram OIDC adapters.
 - `packages/ui`: future shared UI primitives.
 - `packages/config`: typed server environment loading.
 

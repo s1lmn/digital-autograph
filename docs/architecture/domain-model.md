@@ -4,18 +4,18 @@ This describes the foundational persistence model, including authentication addi
 
 ## Entities and relationships
 
-| Entity            | Relationship                                                                              | Purpose                                                                                                                        |
-| ----------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| User              | One to many SocialIdentity, Session, ConsentRecord, Placement; zero to many owned Creator | Stable internal account, independent of social providers.                                                                      |
-| SocialIdentity    | Many to one User                                                                          | Provider identity; `(provider, provider_user_id)` identifies one account globally.                                             |
-| Session           | Many to one User                                                                          | Server-side session with a hashed secret and expiry/revocation.                                                                |
-| OAuthLoginAttempt | Standalone, short-lived provider transaction                                              | One-time browser-bound state and nonce hashes for Google login; no provider tokens.                                            |
-| ConsentRecord     | Many to one User                                                                          | Append-only evidence of the accepted document type, version, source, and time.                                                 |
-| Creator           | Optional many to one User owner; one to zero or one CreatorProfile; one to many Wall      | Creator exists before account claim or verification. Ownership of several creators by one user is allowed at the schema level. |
-| CreatorProfile    | One to one Creator                                                                        | Public slug and display name without adding presentation fields to Creator identity.                                           |
-| Wall              | Many to one Creator; one to many Slot                                                     | Wall lifecycle and intended slot count.                                                                                        |
-| Slot              | Many to one Wall; one to many Placement over time                                         | Stable position and identity through ownership changes.                                                                        |
-| Placement         | Many to one Slot and User                                                                 | Current holder when `ended_at IS NULL`; completed rows form history.                                                           |
+| Entity            | Relationship                                                                              | Purpose                                                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| User              | One to many SocialIdentity, Session, ConsentRecord, Placement; zero to many owned Creator | Stable internal account, independent of social providers.                                                                            |
+| SocialIdentity    | Many to one User                                                                          | Provider identity; `(provider, provider_user_id)` identifies one account globally.                                                   |
+| Session           | Many to one User                                                                          | Server-side session with a hashed secret and expiry/revocation.                                                                      |
+| OAuthLoginAttempt | Standalone, short-lived provider transaction                                              | One-time browser-bound state and nonce hashes for Google and Telegram login, plus a nullable PKCE verifier hash; no provider tokens. |
+| ConsentRecord     | Many to one User                                                                          | Append-only evidence of the accepted document type, version, source, and time.                                                       |
+| Creator           | Optional many to one User owner; one to zero or one CreatorProfile; one to many Wall      | Creator exists before account claim or verification. Ownership of several creators by one user is allowed at the schema level.       |
+| CreatorProfile    | One to one Creator                                                                        | Public slug and display name without adding presentation fields to Creator identity.                                                 |
+| Wall              | Many to one Creator; one to many Slot                                                     | Wall lifecycle and intended slot count.                                                                                              |
+| Slot              | Many to one Wall; one to many Placement over time                                         | Stable position and identity through ownership changes.                                                                              |
+| Placement         | Many to one Slot and User                                                                 | Current holder when `ended_at IS NULL`; completed rows form history.                                                                 |
 
 `Placement → Autograph` is deferred until the Autograph domain exists. There is no placeholder ID or FK.
 

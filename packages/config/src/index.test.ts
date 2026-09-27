@@ -15,6 +15,9 @@ describe('typed configuration', () => {
         GOOGLE_CLIENT_ID: 'test-client',
         GOOGLE_CLIENT_SECRET: 'test-secret',
         GOOGLE_REDIRECT_URI: 'http://127.0.0.1:4000/auth/google/callback',
+        TELEGRAM_CLIENT_ID: 'test-telegram-client',
+        TELEGRAM_CLIENT_SECRET: 'test-telegram-secret',
+        TELEGRAM_REDIRECT_URI: 'http://127.0.0.1:4000/auth/telegram/callback',
       }),
     ).toMatchObject({ API_PORT: 4000, APP_ENV: 'local' });
   });
@@ -46,6 +49,9 @@ describe('typed configuration', () => {
       GOOGLE_CLIENT_ID: 'test-client',
       GOOGLE_CLIENT_SECRET: 'test-secret',
       GOOGLE_REDIRECT_URI: 'https://api.example.test/auth/google/callback',
+      TELEGRAM_CLIENT_ID: 'test-telegram-client',
+      TELEGRAM_CLIENT_SECRET: 'test-telegram-secret',
+      TELEGRAM_REDIRECT_URI: 'https://api.example.test/auth/telegram/callback',
     };
     expect(() => loadApiConfig({ ...base, TRUSTED_WEB_ORIGINS: '*' })).toThrow(
       /TRUSTED_WEB_ORIGINS/,
@@ -79,6 +85,9 @@ describe('typed configuration', () => {
       GOOGLE_CLIENT_ID: 'test-client',
       GOOGLE_CLIENT_SECRET: 'test-secret',
       GOOGLE_REDIRECT_URI: 'https://api.example.test/auth/google/callback',
+      TELEGRAM_CLIENT_ID: 'test-telegram-client',
+      TELEGRAM_CLIENT_SECRET: 'test-telegram-secret',
+      TELEGRAM_REDIRECT_URI: 'https://api.example.test/auth/telegram/callback',
     };
     expect(() =>
       loadApiConfig({ ...base, WEB_ORIGIN: 'https://other.example.test' }),
@@ -96,5 +105,18 @@ describe('typed configuration', () => {
           'https://api.example.test/auth/google/callback?x=1',
       }),
     ).toThrow(/GOOGLE_REDIRECT_URI/);
+    expect(() =>
+      loadApiConfig({
+        ...base,
+        TELEGRAM_REDIRECT_URI: 'http://api.example.test/auth/telegram/callback',
+      }),
+    ).toThrow(/TELEGRAM_REDIRECT_URI/);
+    expect(() =>
+      loadApiConfig({
+        ...base,
+        TELEGRAM_REDIRECT_URI:
+          'https://api.example.test/auth/telegram/callback?x=1',
+      }),
+    ).toThrow(/TELEGRAM_REDIRECT_URI/);
   });
 });

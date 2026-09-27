@@ -16,6 +16,7 @@ export const autographStatuses = [
   'uploaded_unverified',
   'processing',
   'awaiting_approval',
+  'awaiting_moderation',
   'processing_failed',
 ] as const;
 export const autographAssetRoles = ['original', 'cleaned'] as const;

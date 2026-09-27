@@ -28,6 +28,7 @@ function mockApi(): SubmissionApi {
     upload: vi.fn(async () => {}),
     complete: vi.fn(async () => processing),
     preview: vi.fn(async () => ({
+      assetId: 'cleaned-1',
       url: 'https://storage.test/preview',
       expiresAt: '2026-09-27T00:00:00Z',
     })),

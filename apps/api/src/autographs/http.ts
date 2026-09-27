@@ -1,5 +1,6 @@
 import {
   autographIdParams,
+  approveAutographBody,
   completeOriginalUploadBody,
   createAutographBody,
   initiateOriginalUploadBody,
@@ -26,19 +27,22 @@ function parse<T extends z.ZodType>(
 function sendError(error: unknown, reply: FastifyReply): unknown {
   if (!(error instanceof AutographError)) throw error;
   const status =
-    error.code === 'AUTOGRAPH_NOT_FOUND'
+    error.code === 'AUTOGRAPH_NOT_FOUND' || error.code === 'UPLOAD_NOT_FOUND'
       ? 404
       : error.code === 'FORBIDDEN'
         ? 403
-        : error.code === 'UPLOAD_NOT_FOUND'
-          ? 404
-          : error.code === 'CLEANED_PREVIEW_NOT_AVAILABLE'
+        : error.code === 'UPLOAD_TOO_LARGE'
+          ? 413
+          : [
+                'CLEANED_PREVIEW_NOT_AVAILABLE',
+                'INVALID_AUTOGRAPH_STATE',
+                'AUTOGRAPH_NOT_AWAITING_APPROVAL',
+                'CLEANED_ASSET_NOT_AVAILABLE',
+                'REVIEWED_ASSET_MISMATCH',
+                'APPROVAL_STATE_INCONSISTENT',
+              ].includes(error.code)
             ? 409
-            : error.code === 'INVALID_AUTOGRAPH_STATE'
-              ? 409
-              : error.code === 'UPLOAD_TOO_LARGE'
-                ? 413
-                : 400;
+            : 400;
   return reply.code(status).send({ error: { code: error.code } });
 }
 
@@ -132,6 +136,26 @@ export function registerAutographRoutes(
         return await autographs.preview(
           authenticatedSession(request).user.id,
           params.id,
+        );
+      } catch (error) {
+        return sendError(error, reply);
+      }
+    },
+  );
+
+  app.post(
+    '/autographs/:id/approve',
+    { preHandler: requireAuthenticatedUser },
+    async (request, reply) => {
+      const params = parse(autographIdParams, request.params, reply);
+      const body = parse(approveAutographBody, request.body, reply);
+      if (!params || !body) return reply;
+      reply.header('Cache-Control', 'no-store');
+      try {
+        return await autographs.approveCleanedAutograph(
+          authenticatedSession(request).user.id,
+          params.id,
+          body.reviewedAssetId,
         );
       } catch (error) {
         return sendError(error, reply);

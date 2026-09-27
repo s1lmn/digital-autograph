@@ -11,7 +11,14 @@ describe('browser autograph API', () => {
         ok: true,
         json: async () => ({ id: 'a', status: 'draft' }),
       })
-      .mockResolvedValueOnce({ ok: true });
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'awaiting_moderation',
+          approvedAt: 'now',
+        }),
+      });
     vi.stubGlobal('fetch', fetchMock);
     const api = autographApi('http://127.0.0.1:4000');
     const signal = new AbortController().signal;
@@ -25,6 +32,7 @@ describe('browser autograph API', () => {
       new Blob(['png']),
       signal,
     );
+    await api.approve('autograph-id', 'reviewed-asset-id', signal);
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       'http://127.0.0.1:4000/autographs',
     );
@@ -38,6 +46,14 @@ describe('browser autograph API', () => {
       credentials: 'omit',
       method: 'PUT',
       headers: { 'Content-Type': 'image/png', 'If-None-Match': '*' },
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      'http://127.0.0.1:4000/autographs/autograph-id/approve',
+    );
+    expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+      credentials: 'include',
+      method: 'POST',
+      body: JSON.stringify({ reviewedAssetId: 'reviewed-asset-id' }),
     });
   });
 });

@@ -5,13 +5,14 @@ import { autographApi, AutographApiError } from '../lib/autograph-api';
 import { submitCanvas, type SubmissionStage } from '../lib/canvas-submission';
 import { exportPng, type Stroke } from '../lib/drawing';
 import { CanvasEditor } from './canvas-editor';
+import { CleanedAutographReview } from './cleaned-autograph-review';
 import styles from './canvas-create-screen.module.css';
 
 type ScreenState =
   | { kind: 'editing' }
   | { kind: 'working'; stage: SubmissionStage }
   | { kind: 'error'; message: string }
-  | { kind: 'preview'; url: string; expiresAt: string };
+  | { kind: 'preview'; assetId: string; url: string; expiresAt: string };
 
 const stageLabels: Record<SubmissionStage, string> = {
   creating: 'Creating your private draft…',
@@ -70,6 +71,7 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
       );
       setState({
         kind: 'preview',
+        assetId: result.previewAssetId,
         url: result.previewUrl,
         expiresAt: result.expiresAt,
       });
@@ -105,6 +107,7 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
       );
       setState({
         kind: 'preview',
+        assetId: preview.assetId,
         url: preview.url,
         expiresAt: preview.expiresAt,
       });
@@ -168,26 +171,12 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
         </div>
       )}
       {state.kind === 'preview' && (
-        <section className={styles.preview} aria-labelledby="preview-heading">
-          <h2 id="preview-heading">Your cleaned preview</h2>
-          <p>
-            The worker has cleaned your image. This is private and awaiting a
-            later approval step.
-          </p>
-          <img
-            src={state.url}
-            alt="Cleaned digital autograph preview"
-            referrerPolicy="no-referrer"
-          />
-          <div className={styles.actions}>
-            <button type="button" onClick={refreshPreview}>
-              Refresh private preview
-            </button>
-            <button type="button" onClick={startOver}>
-              Start a new drawing
-            </button>
-          </div>
-        </section>
+        <CleanedAutographReview
+          api={api.current}
+          autographId={autographId.current!}
+          initialPreview={state}
+          onStartOver={startOver}
+        />
       )}
     </div>
   );

@@ -13,3 +13,7 @@ export const initiateOriginalUploadBody = z.strictObject({
     .max(10 * 1024 * 1024),
 });
 export const completeOriginalUploadBody = z.strictObject({});
+// A precondition from the owner-only preview, never authority to choose an asset.
+export const approveAutographBody = z.strictObject({
+  reviewedAssetId: z.uuid(),
+});

@@ -4,12 +4,14 @@ export type AutographStatus =
   | 'uploaded_unverified'
   | 'processing'
   | 'awaiting_approval'
+  | 'awaiting_moderation'
   | 'processing_failed';
 
 export type Autograph = {
   id: string;
   source: 'canvas' | 'photo';
   status: AutographStatus;
+  approvedAt?: string | null;
 };
 
 export class AutographApiError extends Error {
@@ -93,10 +95,18 @@ export function autographApi(origin: string) {
         {},
       ),
     preview: (id: string, signal: AbortSignal) =>
-      apiJson<{ url: string; expiresAt: string }>(
+      apiJson<{ assetId: string; url: string; expiresAt: string }>(
         origin,
         `/autographs/${encodeURIComponent(id)}/preview`,
         signal,
       ),
+    approve: (id: string, reviewedAssetId: string, signal: AbortSignal) =>
+      apiJson<{
+        id: string;
+        status: 'awaiting_moderation';
+        approvedAt: string;
+      }>(origin, `/autographs/${encodeURIComponent(id)}/approve`, signal, {
+        reviewedAssetId,
+      }),
   };
 }

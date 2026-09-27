@@ -64,6 +64,13 @@
       "when": 1790522755636,
       "tag": "0008_autograph_processing",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790539354344,
+      "tag": "0009_goofy_mysterio",
+      "breakpoints": true
     }
   ]
 }

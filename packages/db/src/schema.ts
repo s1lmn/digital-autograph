@@ -359,6 +359,34 @@ export const autographAssets = pgTable(
   ],
 );
 
+export const autographUserApprovals = pgTable(
+  'autograph_user_approvals',
+  {
+    id: id(),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    cleanedAssetId: uuid('cleaned_asset_id')
+      .notNull()
+      .references(() => autographAssets.id, { onDelete: 'restrict' }),
+    approvedAt: timestamp('approved_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('autograph_user_approvals_autograph_uidx').on(
+      table.autographId,
+    ),
+    index('autograph_user_approvals_user_idx').on(table.userId),
+    index('autograph_user_approvals_cleaned_asset_idx').on(
+      table.cleanedAssetId,
+    ),
+  ],
+);
+
 export const autographProcessingJobs = pgTable(
   'autograph_processing_jobs',
   {

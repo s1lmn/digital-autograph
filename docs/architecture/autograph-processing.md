@@ -24,7 +24,7 @@ Output is an 8-bit PNG, at most 2048 pixels per side and 10 MiB. Sharp's default
 
 S3 and PostgreSQL cannot commit together. The job's stable ID determines the cleaned key. The worker uploads privately, then transactionally inserts the one cleaned Asset, marks the job succeeded, and sets `awaiting_approval`. A retry after an uncertain database response overwrites/adopts the same private key. A failed PUT is best-effort deleted only while the same unexpired lease is locked; otherwise the object remains private for operational reconciliation. A lost lease cannot create a duplicate cleaned Asset. Succeeded jobs are not claimed again.
 
-Owner preview is `GET /autographs/:id/preview`. The authenticated owner receives a short-lived signed GET URL only when a cleaned Asset exists and status is `awaiting_approval`. Default lifetime is 120 seconds, bounded 60–300; the response uses `Cache-Control: no-store`. The signed URL is a temporary credential and must not be logged. No original read URL or public Wall field exists.
+Owner preview is `GET /autographs/:id/preview`. The authenticated owner receives a short-lived signed GET URL only when an uploaded cleaned Asset exists and status is `awaiting_approval` or `awaiting_moderation`. Default lifetime is 120 seconds, bounded 60–300; the response uses `Cache-Control: no-store`. The signed URL is a temporary credential and must not be logged. No original read URL or public Wall field exists. The preview response includes the owner-only cleaned Asset ID so approval can reject a derivative that differs from the one reviewed.
 
 ## Invalid and abandoned uploads
 

@@ -9,5 +9,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   noExternal: [/^@digital-autograph\//],
-  external: ['pg'],
+  external: ['pg', 'google-auth-library'],
 });

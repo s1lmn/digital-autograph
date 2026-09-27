@@ -11,6 +11,10 @@ describe('typed configuration', () => {
         API_PORT: '4000',
         SESSION_TTL_SECONDS: '1209600',
         TRUSTED_WEB_ORIGINS: 'http://127.0.0.1:3000',
+        WEB_ORIGIN: 'http://127.0.0.1:3000',
+        GOOGLE_CLIENT_ID: 'test-client',
+        GOOGLE_CLIENT_SECRET: 'test-secret',
+        GOOGLE_REDIRECT_URI: 'http://127.0.0.1:4000/auth/google/callback',
       }),
     ).toMatchObject({ API_PORT: 4000, APP_ENV: 'local' });
   });
@@ -38,6 +42,10 @@ describe('typed configuration', () => {
       API_PORT: '4000',
       SESSION_TTL_SECONDS: '1209600',
       TRUSTED_WEB_ORIGINS: 'https://app.example.test',
+      WEB_ORIGIN: 'https://app.example.test',
+      GOOGLE_CLIENT_ID: 'test-client',
+      GOOGLE_CLIENT_SECRET: 'test-secret',
+      GOOGLE_REDIRECT_URI: 'https://api.example.test/auth/google/callback',
     };
     expect(() => loadApiConfig({ ...base, TRUSTED_WEB_ORIGINS: '*' })).toThrow(
       /TRUSTED_WEB_ORIGINS/,
@@ -57,5 +65,36 @@ describe('typed configuration', () => {
         TRUSTED_WEB_ORIGINS: 'http://app.example.test',
       }),
     ).toThrow(/TRUSTED_WEB_ORIGINS/);
+  });
+
+  it('requires a trusted web destination and exact HTTPS Google callback in production', () => {
+    const base = {
+      APP_ENV: 'production',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/app',
+      API_HOST: '127.0.0.1',
+      API_PORT: '4000',
+      SESSION_TTL_SECONDS: '1209600',
+      TRUSTED_WEB_ORIGINS: 'https://app.example.test',
+      WEB_ORIGIN: 'https://app.example.test',
+      GOOGLE_CLIENT_ID: 'test-client',
+      GOOGLE_CLIENT_SECRET: 'test-secret',
+      GOOGLE_REDIRECT_URI: 'https://api.example.test/auth/google/callback',
+    };
+    expect(() =>
+      loadApiConfig({ ...base, WEB_ORIGIN: 'https://other.example.test' }),
+    ).toThrow(/WEB_ORIGIN/);
+    expect(() =>
+      loadApiConfig({
+        ...base,
+        GOOGLE_REDIRECT_URI: 'http://api.example.test/auth/google/callback',
+      }),
+    ).toThrow(/GOOGLE_REDIRECT_URI/);
+    expect(() =>
+      loadApiConfig({
+        ...base,
+        GOOGLE_REDIRECT_URI:
+          'https://api.example.test/auth/google/callback?x=1',
+      }),
+    ).toThrow(/GOOGLE_REDIRECT_URI/);
   });
 });

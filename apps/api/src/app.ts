@@ -7,6 +7,11 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import {
+  registerGoogleRoutes,
+  type GoogleHttpConfig,
+} from './auth/google-http';
+import type { GoogleLoginService } from './auth/google-login';
+import {
   invalidOrigin,
   registerAuthRoutes,
   sessionCookieName,
@@ -20,9 +25,20 @@ export function buildApi(
   database: DatabaseProbe,
   sessions: HttpSessionService,
   authConfig: AuthHttpConfig,
+  google?: { login: GoogleLoginService; config: GoogleHttpConfig },
 ) {
   const app = Fastify({
     logger: {
+      serializers: {
+        req(request) {
+          return {
+            method: request.method,
+            url: request.url?.split('?')[0],
+            host: request.headers.host,
+            remoteAddress: request.ip,
+          };
+        },
+      },
       redact: {
         paths: ['req.headers.cookie', 'req.headers.authorization'],
         censor: '[REDACTED]',
@@ -65,6 +81,8 @@ export function buildApi(
   });
 
   registerAuthRoutes(app, sessions, authConfig);
+  if (google)
+    registerGoogleRoutes(app, google.login, authConfig, google.config);
 
   return app;
 }

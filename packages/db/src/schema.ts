@@ -115,6 +115,41 @@ export const sessions = pgTable(
   ],
 );
 
+export const oauthLoginAttempts = pgTable(
+  'oauth_login_attempts',
+  {
+    id: id(),
+    provider: varchar('provider', { length: 64 }).notNull(),
+    stateHash: text('state_hash').notNull(),
+    browserBindingHash: text('browser_binding_hash').notNull(),
+    nonceHash: text('nonce_hash').notNull(),
+    returnPath: text('return_path').notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('oauth_login_attempts_state_hash_uidx').on(table.stateHash),
+    index('oauth_login_attempts_expires_idx').on(table.expiresAt),
+    check(
+      'oauth_login_attempts_expires_after_create',
+      sql`${table.expiresAt} > ${table.createdAt}`,
+    ),
+    check(
+      'oauth_login_attempts_consumed_after_create',
+      sql`${table.consumedAt} IS NULL OR ${table.consumedAt} >= ${table.createdAt}`,
+    ),
+    check(
+      'oauth_login_attempts_provider_nonblank',
+      sql`length(btrim(${table.provider})) > 0`,
+    ),
+    check(
+      'oauth_login_attempts_return_path_local',
+      sql`left(${table.returnPath}, 1) = '/' AND left(${table.returnPath}, 2) <> '//'`,
+    ),
+  ],
+);
+
 export const consentRecords = pgTable(
   'consent_records',
   {

@@ -21,6 +21,20 @@ const databaseSchema = baseSchema.extend({
     ),
 });
 
+const exactOrigin = z.string().refine((value) => {
+  try {
+    const url = new URL(value);
+    return (
+      ['http:', 'https:'].includes(url.protocol) &&
+      url.origin === value &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}, 'must be an exact HTTP(S) origin');
+
 const apiSchema = databaseSchema
   .extend({
     API_HOST: z.string().min(1),
@@ -30,27 +44,48 @@ const apiSchema = databaseSchema
       .string()
       .min(1)
       .transform((value) => value.split(',').map((origin) => origin.trim()))
-      .pipe(
-        z
-          .array(
-            z.string().refine((value) => {
-              try {
-                const url = new URL(value);
-                return (
-                  ['http:', 'https:'].includes(url.protocol) &&
-                  url.origin === value &&
-                  !url.username &&
-                  !url.password
-                );
-              } catch {
-                return false;
-              }
-            }, 'must be an exact HTTP(S) origin'),
-          )
-          .min(1),
-      ),
+      .pipe(z.array(exactOrigin).min(1)),
+    WEB_ORIGIN: exactOrigin,
+    GOOGLE_CLIENT_ID: z.string().min(1),
+    GOOGLE_CLIENT_SECRET: z.string().min(1),
+    GOOGLE_REDIRECT_URI: z.url().refine((value) => {
+      try {
+        const url = new URL(value);
+        return (
+          ['http:', 'https:'].includes(url.protocol) &&
+          url.pathname === '/auth/google/callback' &&
+          !url.search &&
+          !url.hash &&
+          !url.username &&
+          !url.password
+        );
+      } catch {
+        return false;
+      }
+    }, 'must be an absolute HTTP(S) /auth/google/callback URL'),
   })
   .superRefine((config, context) => {
+    if (!config.TRUSTED_WEB_ORIGINS.includes(config.WEB_ORIGIN)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['WEB_ORIGIN'],
+        message: 'must be included in TRUSTED_WEB_ORIGINS',
+      });
+    }
+    const redirect = new URL(config.GOOGLE_REDIRECT_URI);
+    const webHost = new URL(config.WEB_ORIGIN).hostname;
+    if (
+      ['local', 'test', 'development'].includes(config.APP_ENV) &&
+      redirect.protocol === 'http:' &&
+      (!['localhost', '127.0.0.1'].includes(redirect.hostname) ||
+        !['localhost', '127.0.0.1'].includes(webHost))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GOOGLE_REDIRECT_URI'],
+        message: 'HTTP callback must use localhost or 127.0.0.1',
+      });
+    }
     if (!['production', 'staging'].includes(config.APP_ENV)) return;
     if (
       config.TRUSTED_WEB_ORIGINS.some(
@@ -61,6 +96,17 @@ const apiSchema = databaseSchema
         code: 'custom',
         path: ['TRUSTED_WEB_ORIGINS'],
         message: 'must use HTTPS origins in staging and production',
+      });
+    }
+    if (
+      !config.WEB_ORIGIN.startsWith('https://') ||
+      !config.GOOGLE_REDIRECT_URI.startsWith('https://')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GOOGLE_REDIRECT_URI'],
+        message:
+          'web origin and Google callback must use HTTPS in staging and production',
       });
     }
   });

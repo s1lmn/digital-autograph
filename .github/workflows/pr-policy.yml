@@ -1,0 +1,68 @@
+name: PR Policy
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+jobs:
+  policy:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Validate pull request metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const title = pr.title || '';
+            const branch = pr.head.ref || '';
+
+            const errors = [];
+
+            if (!/\bEGO-\d+\b/i.test(body) && !/\bEGO-\d+\b/i.test(title)) {
+              errors.push('PR must reference a Linear issue such as EGO-130 in the title or body.');
+            }
+
+            const requiredHeadings = [
+              '## Summary',
+              '## Scope',
+              '## Non-goals',
+              '## Invariants / risks',
+              '## Validation',
+              '## Reviewer checklist',
+            ];
+            for (const heading of requiredHeadings) {
+              if (!body.toLowerCase().includes(heading.toLowerCase())) {
+                errors.push(`Missing required PR section: ${heading}`);
+              }
+            }
+
+            if (pr.base.ref !== 'main') {
+              errors.push(`PR base must normally be main; current base is ${pr.base.ref}. Use stacked PRs only when explicitly documented.`);
+            }
+
+            const allowedBranch = /^(ego-\d+-[a-z0-9-]+|codex\/[a-z0-9._/-]+|chore\/[a-z0-9._/-]+|fix\/[a-z0-9._/-]+)$/;
+            if (!allowedBranch.test(branch)) {
+              errors.push(`Branch '${branch}' does not match the repository workflow. Prefer ego-<NUMBER>-<slug>.`);
+            }
+
+            const forbiddenBodyPatterns = [
+              /BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY/i,
+              /AWS_SECRET_ACCESS_KEY\s*=/i,
+              /GOOGLE_CLIENT_SECRET\s*=\s*[^<\s]/i,
+              /TELEGRAM_CLIENT_SECRET\s*=\s*[^<\s]/i,
+              /S3_SECRET_ACCESS_KEY\s*=\s*[^<\s]/i,
+            ];
+            if (forbiddenBodyPatterns.some((pattern) => pattern.test(body))) {
+              errors.push('PR body appears to contain a secret. Remove it and rotate the credential if it is real.');
+            }
+
+            if (errors.length > 0) {
+              core.setFailed(errors.join('\n'));
+            } else {
+              core.info('PR metadata follows the pair-development policy.');
+            }

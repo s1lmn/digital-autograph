@@ -2,7 +2,7 @@
 
 ## Boundary
 
-PostgreSQL and the backend determine the takeover price. A Quote is an immutable offer snapshot, not a Reservation, Order, payment, or transfer of ownership. Quote creation never mutates Wall, Slot, Placement, or Autograph. Multiple users may quote the same active Placement. EGO-98 will consume an existing unexpired Quote and validate its target Placement; it must not recompute the Quote's amount.
+PostgreSQL and the backend determine the takeover price. A Quote is an immutable offer snapshot, not a Reservation, Order, payment, or transfer of ownership. Quote creation never mutates Wall, Slot, Placement, or Autograph. Multiple users may quote the same active Placement. The EGO-98 Reservation flow consumes an existing unexpired Quote and validates its target Placement without recomputing the Quote's amount.
 
 The only supported currency is `RUB`. Amounts are integer kopecks in PostgreSQL `BIGINT` and domain `bigint`; the HTTP API serializes every monetary amount as a decimal string. No production amount is seeded by migrations. Without a pinned config, the quote endpoint returns `PRICING_NOT_CONFIGURED`; Free Claim and Wall reads continue normally.
 
@@ -28,7 +28,7 @@ finalAmountMinor = max(effectiveFloor, ladder - decayIntervals × decayAmountMin
 
 The dynamic limit caps the number of ladder increments, so rising behavior stops after roughly `takeoverStepSize × dynamicTakeoverLimit` successful paid takeovers. It is configuration, never a hardcoded product count. The configured minimum, maximum, floor, and integer/time bounds are checked by the domain and PostgreSQL. A Wall without a previous takeover never decays below its starting ladder amount. The effective floor cannot raise a ladder amount. Negative or future-timestamp history fails closed as inconsistent state. This version's semantics must not change; a material future change requires a new algorithm identifier.
 
-Decay is computed from history and one authoritative PostgreSQL time. No cron rewrites current prices. Quote TTL is 120 seconds by default and constrained to 30–300 seconds in the service; it is separate from any future Reservation TTL. Expired Quotes remain immutable historical rows.
+Decay is computed from history and one authoritative PostgreSQL time. No cron rewrites current prices. Quote TTL is 120 seconds by default and constrained to 30–300 seconds in the service; it is separate from the Reservation TTL. Expired Quotes remain immutable historical rows.
 
 ## Config versions and Wall pinning
 
@@ -44,4 +44,4 @@ The Wall must be `live`, with `start_at <= now` and `end_at > now` when those bo
 
 `takeover_quotes` binds the User, Wall, Slot, exact active target Placement, pinned config, algorithm, currency, amount, Wall takeover count, last takeover timestamp, ladder step, ladder amount, applied decay intervals, quote time, and expiry. Its append-only trigger rejects UPDATE and DELETE. The config version plus stored input and output snapshot explain historical prices even if the global default later changes. HTTP returns no private User IDs, storage keys, provider fields, or payment data. It uses `Cache-Control: no-store`.
 
-The Quote does not lock a Slot beyond its short transaction. A later Placement change can stale it; EGO-98 must reject a Quote whose target is no longer the active Placement, whose expiry is not strictly after its authoritative time, or whose other Reservation conditions fail.
+The Quote does not lock a Slot beyond its short transaction. A later Placement change can stale it. EGO-98's [Reservation flow](takeover-reservation.md) consumes the immutable Quote, rejects an expired or displaced target, and snapshots its amount without recalculation.

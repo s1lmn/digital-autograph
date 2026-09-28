@@ -1,6 +1,6 @@
 # Foundational domain model
 
-This describes the foundational persistence model, including authentication and Creator/Wall application rules. PostgreSQL is authoritative; Placement product flows are not implemented yet.
+This describes the persistence model, including authentication, Creator/Wall rules, and Free Claim. PostgreSQL is authoritative.
 
 ## Entities and relationships
 
@@ -21,8 +21,9 @@ This describes the foundational persistence model, including authentication and 
 | AutographModerationDecision | One per Autograph; many to one moderator User, User approval, and cleaned Asset                      | Immutable final human content decision tied to the owner's exact approved derivative.                                                |
 | AutographProcessingJob      | Many to one Autograph and original Asset                                                             | PostgreSQL-backed processing lease, retry, and terminal outcome.                                                                     |
 | Placement                   | Many to one Slot and User; optional many to one Autograph                                            | Current holder when `ended_at IS NULL`; completed rows form history.                                                                 |
+| WallFreeClaim               | One per `(Wall, User)`; references the exact Slot, Autograph, and Placement                          | Append-only evidence that a User consumed their one free claim on a Wall.                                                            |
 
-`placements.autograph_id` is nullable for existing historical/admin fixtures. A future Placement writer must require the referenced Autograph to be ready and owned by `placements.user_id`; this PR creates no Placements through product APIs.
+`placements.autograph_id` is nullable for existing historical/admin fixtures. Free Claim always supplies the User-owned `ready` Autograph after checking the complete approval and approved moderation evidence chain. The same Autograph may be used on different Walls.
 
 ## IDs and time
 
@@ -34,6 +35,7 @@ All standalone entities use database-generated UUIDv4 via PostgreSQL `gen_random
 - Unique `(provider, provider_user_id)` supports login lookup. A User may link multiple identities. Session secret hashes are unique; raw reusable session secrets are never stored. Unique OAuth attempt state hashes and atomic consumption prevent callback replay.
 - Unique CreatorProfile slug supports public creator lookup. Unique `(wall_id, position)` makes Slot positions deterministic within one Wall. Positions and intended `slot_count` are nonnegative.
 - Placement's partial unique index on `slot_id WHERE ended_at IS NULL` prevents two active holders even under concurrent inserts. `ended_at` and nonblank `end_reason` must appear together, and end cannot precede start. A trigger allows an active Placement only to transition to completed, then rejects later updates and all deletes. Completed rows provide the full Slot/User/source/start/end/reason history; there is no duplicate history table.
+- WallFreeClaim has restrictive foreign keys, unique `(wall_id, user_id)` and unique `placement_id`. A trigger rejects UPDATE/DELETE. The claim writer checks the Slot-to-Wall relationship under row locks, then inserts Placement and claim evidence in one transaction. A future takeover may end the Placement, but the claim remains consumed.
 - Indexes support User→identities/sessions/consent, Creator→Walls, Wall→Slots via its unique position index, Slot→Placement history and active lookup, User→Placements, and Wall status/start scheduling. Indexes do not assume future payment or reservation queries.
 - ConsentRecord UPDATE/DELETE is blocked by a trigger. A new acceptance creates a new versioned row.
 - Autograph, Asset, and processing Job have restrictive foreign keys. PostgreSQL enums constrain source, lifecycle, role, and job status. Partial unique indexes permit one original, one cleaned Asset, and one active processing Job per Autograph. Role-dependent checks require upload metadata only on originals and verified PNG metadata only on cleaned rows. Storage keys are unique; `updated_at` triggers cover mutable Autograph and Asset rows. Placement's nullable Autograph FK remains indexed.
@@ -50,4 +52,4 @@ User deletion should be a status/anonymization process with a retention policy; 
 
 ## Deferred application rules
 
-The schema accepts lifecycle values but does not itself decide valid Wall transitions or who may change state. It does not require the number of Slot rows to equal `slot_count` or constrain every position to its intended range; the Wall service manages these changes transactionally and checks for drift when reading. Creator ownership comes from `creators.owner_user_id`. Autograph ownership, processing, approval, and moderation are described in [autograph-domain.md](autograph-domain.md), [autograph-processing.md](autograph-processing.md), and [autograph-moderation.md](autograph-moderation.md). Free-claim eligibility, pricing, reservations, payment reconciliation, atomic takeover, and ledger entries await later services. Only `ready` satisfies the domain placement-status predicate, but no current public endpoint or Placement writer uses it.
+The schema accepts lifecycle values but does not itself decide valid Wall transitions or who may change state. It does not require the number of Slot rows to equal `slot_count` or constrain every position to its intended range; the Wall service manages these changes transactionally and checks for drift when reading. Creator ownership comes from `creators.owner_user_id`. Autograph ownership, processing, approval, and moderation are described in [autograph-domain.md](autograph-domain.md), [autograph-processing.md](autograph-processing.md), and [autograph-moderation.md](autograph-moderation.md). [Free Claim](free-claim.md) is implemented; pricing, reservations, payment reconciliation, atomic takeover, and ledger entries await later services.

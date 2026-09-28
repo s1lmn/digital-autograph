@@ -136,6 +136,35 @@ async function view(
 
 export function createPgAutographRepository(pool: Pool): AutographRepository {
   return {
+    async listReadyOwned(userId) {
+      const found = await pool.query<AutographRow>(
+        `SELECT id, user_id, source, status, created_at, updated_at
+         FROM autographs
+         WHERE user_id = $1::uuid AND status = 'ready'
+         ORDER BY created_at DESC, id DESC LIMIT 50`,
+        [userId],
+      );
+      const choices = [];
+      for (const row of found.rows) {
+        try {
+          const { moderation } = await verifyAutographEvidence(pool, row);
+          if (moderation?.decision !== 'approved') continue;
+          choices.push({
+            id: row.id,
+            source: row.source,
+            createdAt: row.created_at,
+            moderatedAt: moderation.decided_at,
+          });
+          if (choices.length === 30) break;
+        } catch (error) {
+          if (!(error instanceof AutographError)) throw error;
+          console.warn('Ineligible ready Autograph excluded from owner list', {
+            autographId: row.id,
+          });
+        }
+      }
+      return choices;
+    },
     async create(userId, source) {
       const result = await pool.query<AutographRow>(
         `INSERT INTO autographs (user_id, source) VALUES ($1::uuid, $2::autograph_source)

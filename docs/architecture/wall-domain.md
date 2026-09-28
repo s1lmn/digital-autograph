@@ -34,7 +34,7 @@ Precisely: `draft → scheduled/live`, `scheduled → draft/live`, `live → pau
 | ended     | Readable, historical state | Included               |
 | archived  | 404                        | Omitted                |
 
-Public Wall data includes ordered Slot IDs and positions, an occupied flag derived from an active Placement, and an active Placement ID/source/start time where present. It excludes User IDs and all Placement mutation. The public read joins Wall, Slots, and active Placements in one query.
+Public Wall data includes ordered Slot IDs and positions, an occupied flag derived from an active Placement, and an active Placement ID/source/start time where present. A valid active Placement with a ready, approved Autograph also receives a relative `mediaPath` based on Placement ID; inconsistent evidence leaves it `null` without changing occupancy. It excludes User IDs, Autograph IDs, storage keys, and all Placement mutation. The public read uses one joined query without fetching object bytes. See [public-wall-media.md](public-wall-media.md).
 
 ## Slot structure and consistency
 

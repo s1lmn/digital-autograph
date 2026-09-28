@@ -8,6 +8,7 @@ import {
 } from '@digital-autograph/domain';
 
 export * from './free-claim';
+export * from './public-media';
 
 export type SlotStructure = { id: string; position: number };
 
@@ -56,6 +57,7 @@ export type PublicWall = {
       id: string;
       source: 'free_claim' | 'takeover' | 'admin';
       startedAt: Date;
+      mediaPath: string | null;
     } | null;
   }>;
 };

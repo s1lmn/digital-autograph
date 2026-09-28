@@ -61,6 +61,11 @@ export const autographProcessingJobStatus = pgEnum(
   'autograph_processing_job_status',
   ['queued', 'processing', 'succeeded', 'failed'],
 );
+export const takeoverReservationStatus = pgEnum('takeover_reservation_status', [
+  'active',
+  'expired',
+  'cancelled',
+]);
 
 export const users = pgTable('users', {
   id: id(),
@@ -669,6 +674,72 @@ export const takeoverQuotes = pgTable(
     check(
       'takeover_quotes_expiry_valid',
       sql`${table.expiresAt} > ${table.quotedAt}`,
+    ),
+  ],
+);
+
+export const takeoverReservations = pgTable(
+  'takeover_reservations',
+  {
+    id: id(),
+    quoteId: uuid('quote_id')
+      .notNull()
+      .references(() => takeoverQuotes.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id, { onDelete: 'restrict' }),
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => slots.id, { onDelete: 'restrict' }),
+    targetPlacementId: uuid('target_placement_id')
+      .notNull()
+      .references(() => placements.id, { onDelete: 'restrict' }),
+    pricingConfigId: uuid('pricing_config_id')
+      .notNull()
+      .references(() => pricingConfigVersions.id, { onDelete: 'restrict' }),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    idempotencyKeyHash: varchar('idempotency_key_hash', {
+      length: 64,
+    }).notNull(),
+    status: takeoverReservationStatus().notNull().default('active'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    expiredAt: timestamp('expired_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('takeover_reservations_quote_uidx').on(table.quoteId),
+    uniqueIndex('takeover_reservations_user_key_uidx').on(
+      table.userId,
+      table.idempotencyKeyHash,
+    ),
+    uniqueIndex('takeover_reservations_one_active_slot_uidx')
+      .on(table.slotId)
+      .where(sql`${table.status} = 'active'`),
+    index('takeover_reservations_user_created_idx').on(
+      table.userId,
+      table.createdAt,
+    ),
+    check('takeover_reservations_currency_rub', sql`${table.currency} = 'RUB'`),
+    check(
+      'takeover_reservations_amount_valid',
+      sql`${table.amountMinor} BETWEEN 1 AND 100000000000`,
+    ),
+    check(
+      'takeover_reservations_hash_valid',
+      sql`${table.idempotencyKeyHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'takeover_reservations_expiry_valid',
+      sql`${table.expiresAt} > ${table.createdAt}`,
+    ),
+    check(
+      'takeover_reservations_state_valid',
+      sql`(${table.status} = 'active' AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'cancelled' AND ${table.cancelledAt} IS NOT NULL AND ${table.expiredAt} IS NULL AND ${table.cancelledAt} >= ${table.createdAt}) OR (${table.status} = 'expired' AND ${table.expiredAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} >= ${table.createdAt})`,
     ),
   ],
 );

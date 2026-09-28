@@ -21,6 +21,7 @@ import type {
   PublicPlacementMediaService,
   WallService,
   TakeoverQuoteService,
+  TakeoverReservationService,
 } from '@digital-autograph/walls';
 import type { AutographService } from '@digital-autograph/autographs';
 import type { ModerationService } from '@digital-autograph/autographs';
@@ -30,6 +31,7 @@ import { registerWallRoutes } from './walls/http';
 import { registerFreeClaimRoutes } from './walls/free-claim-http';
 import { registerPublicPlacementMediaRoutes } from './walls/public-media-http';
 import { registerPricingRoutes } from './walls/pricing-http';
+import { registerTakeoverReservationRoutes } from './walls/reservation-http';
 import {
   invalidOrigin,
   registerAuthRoutes,
@@ -52,6 +54,7 @@ export function buildApi(
   claims?: FreeClaimService,
   publicMedia?: PublicPlacementMediaService,
   pricing?: TakeoverQuoteService,
+  reservations?: TakeoverReservationService,
 ) {
   const app = Fastify({
     logger: {
@@ -77,7 +80,7 @@ export function buildApi(
     origin: [...authConfig.trustedWebOrigins],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type'],
+    allowedHeaders: ['Content-Type', 'Idempotency-Key'],
     strictPreflight: true,
   });
   app.decorateRequest('authContext', null);
@@ -115,6 +118,7 @@ export function buildApi(
   if (claims) registerFreeClaimRoutes(app, claims);
   if (publicMedia) registerPublicPlacementMediaRoutes(app, publicMedia);
   if (pricing) registerPricingRoutes(app, pricing);
+  if (reservations) registerTakeoverReservationRoutes(app, reservations);
   if (autographs) registerAutographRoutes(app, autographs);
   if (moderation) registerModerationRoutes(app, moderation);
 

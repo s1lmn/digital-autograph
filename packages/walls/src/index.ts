@@ -10,6 +10,7 @@ import {
 export * from './free-claim';
 export * from './public-media';
 export * from './pricing';
+export * from './reservation';
 
 export type SlotStructure = { id: string; position: number };
 

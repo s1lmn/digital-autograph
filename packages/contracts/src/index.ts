@@ -7,3 +7,4 @@ export * from './wall';
 export * from './autograph';
 export * from './moderation';
 export * from './pricing';
+export * from './reservation';

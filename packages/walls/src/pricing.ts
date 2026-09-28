@@ -1,6 +1,6 @@
 import {
   calculateTakeoverPrice,
-  isWallFreeClaimEligible,
+  isWallTakeoverEligible,
   PricingRuleError,
   validatePricingConfiguration,
   type PricingCalculation,
@@ -106,7 +106,7 @@ function calculateEligibleQuote(
   context: QuoteContext,
 ): PricingCalculation {
   if (!context.pricing) throw new PricingError('PRICING_NOT_CONFIGURED');
-  if (!isWallFreeClaimEligible(context.wall, context.now)) {
+  if (!isWallTakeoverEligible(context.wall, context.now)) {
     throw new PricingError('WALL_NOT_TAKEOVER_ELIGIBLE');
   }
   const placement = context.targetPlacement;

@@ -5,3 +5,8 @@ dist/
 coverage/
 apps/web/next-env.d.ts
 packages/db/drizzle/meta/
+
+# Repository process files are validated by GitHub/PR policy rather than source formatting.
+CONTRIBUTING.md
+.github/pull_request_template.md
+.github/workflows/pr-policy.yml

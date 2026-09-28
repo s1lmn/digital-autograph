@@ -38,6 +38,8 @@ Public Wall data includes ordered Slot IDs and positions, an occupied flag deriv
 
 ## Slot structure and consistency
 
+New Walls pin the explicitly activated platform pricing version when one exists; existing Walls retain their pin. An unpriced Wall still supports Free Claim. See [pricing.md](pricing.md).
+
 Wall creation inserts the draft Wall and positions `0..slotCount-1` in one transaction. The API accepts 1–1000 Slots. `slots.id` is stable identity; `position` is ordering. Draft resize adds or removes only trailing positions, retaining every surviving Slot ID. Any Placement history blocks all structural changes, including removal of a completed Slot. Once scheduled or later, structure is locked. A read or mutation detects mismatched `slot_count`, row count, or positions and fails rather than silently returning a partial structure. PostgreSQL's unique `(wall_id, position)` index also prevents duplicate positions.
 
 Wall mutations lock the Wall and Creator rows, then Slot rows, evaluate the rule against the locked snapshot, and update in the same transaction. Competing lifecycle actions therefore observe serial states. Free Claim locks the Wall `FOR SHARE` and the selected Slot `FOR UPDATE` in the same order. Independent Slot claims can run concurrently while Wall lifecycle updates wait. The partial unique active Placement index remains the final database guard against duplicate active placements. See [free-claim.md](free-claim.md).

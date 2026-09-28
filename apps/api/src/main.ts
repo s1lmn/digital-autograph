@@ -12,6 +12,7 @@ import {
   createPgWallRepository,
   createPgFreeClaimRepository,
   createPgPublicPlacementMediaRepository,
+  createPgPricingRepository,
   createPgAutographRepository,
   createPgAutographModerationRepository,
 } from '@digital-autograph/db';
@@ -23,6 +24,7 @@ import {
   FreeClaimService,
   PublicPlacementMediaService,
   WallService,
+  TakeoverQuoteService,
 } from '@digital-autograph/walls';
 import {
   createGoogleOidcClient,
@@ -114,6 +116,7 @@ async function main(): Promise<void> {
       createPgPublicPlacementMediaRepository(database.pool),
       storage,
     ),
+    new TakeoverQuoteService(createPgPricingRepository(database.pool)),
   );
   let closing = false;
 

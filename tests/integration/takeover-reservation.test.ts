@@ -383,6 +383,67 @@ describe('Takeover Reservation / Slot locking', () => {
     ).toBe('QUOTE_ALREADY_RESERVED');
   });
 
+  it('uses strict Quote and inclusive Reservation expiry at the exact PostgreSQL boundary', async () => {
+    const f = await fixture();
+    const buyer = await person();
+    const source = await quote(f.wallId, f.slots[0]!.slotId, buyer.token);
+    const boundary = new Date('2030-01-01T00:00:00.000Z');
+    const fixed = await database.pool.query<{ id: string }>(
+      `INSERT INTO takeover_quotes
+         (user_id, wall_id, slot_id, target_placement_id, pricing_config_id,
+          algorithm_version, currency, amount_minor, wall_takeover_count,
+          last_takeover_at, step_index, ladder_amount_minor,
+          decay_intervals_applied, quoted_at, expires_at)
+       SELECT user_id, wall_id, slot_id, target_placement_id, pricing_config_id,
+              algorithm_version, currency, amount_minor, wall_takeover_count,
+              last_takeover_at, step_index, ladder_amount_minor,
+              decay_intervals_applied, $2::timestamptz - interval '2 minutes',
+              $2::timestamptz
+       FROM takeover_quotes WHERE id = $1::uuid RETURNING id`,
+      [source.id, boundary],
+    );
+    const quoteId = fixed.rows[0]!.id;
+    const comparisons = await database.pool.query<{
+      before: boolean;
+      equal: boolean;
+      after: boolean;
+    }>(
+      `SELECT expires_at > $2::timestamptz - interval '1 millisecond' AS before,
+              expires_at > $2::timestamptz AS equal,
+              expires_at > $2::timestamptz + interval '1 millisecond' AS after
+       FROM takeover_quotes WHERE id = $1::uuid`,
+      [quoteId, boundary],
+    );
+    expect(comparisons.rows[0]).toEqual({
+      before: true,
+      equal: false,
+      after: false,
+    });
+    const inserted = await database.pool.query<{ id: string }>(
+      `INSERT INTO takeover_reservations
+         (quote_id, user_id, wall_id, slot_id, target_placement_id,
+          pricing_config_id, currency, amount_minor, idempotency_key_hash,
+          created_at, expires_at)
+       SELECT id, user_id, wall_id, slot_id, target_placement_id,
+              pricing_config_id, currency, amount_minor, repeat('c', 64),
+              $2::timestamptz - interval '4 minutes', $2::timestamptz
+       FROM takeover_quotes WHERE id = $1::uuid RETURNING id`,
+      [quoteId, boundary],
+    );
+    const id = inserted.rows[0]!.id;
+    const expireAt = (now: Date) =>
+      database.pool.query(
+        `UPDATE takeover_reservations
+         SET status = 'expired', expired_at = $2::timestamptz
+         WHERE id = $1::uuid AND status = 'active'
+           AND expires_at <= $2::timestamptz`,
+        [id, now],
+      );
+    expect((await expireAt(new Date(boundary.getTime() - 1))).rowCount).toBe(0);
+    expect((await expireAt(boundary)).rowCount).toBe(1);
+    expect((await read(id, buyer.token)).json().status).toBe('expired');
+  });
+
   it('rejects expired Quote, stale target, paused Wall, and cooldown', async () => {
     const f = await fixture();
     const buyer = await person();

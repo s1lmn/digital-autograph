@@ -8,6 +8,7 @@ export { createPgProviderIdentityRepository } from './provider-identity-reposito
 export { createPgWallRepository } from './wall-repository';
 export { createPgFreeClaimRepository } from './free-claim-repository';
 export { createPgPublicPlacementMediaRepository } from './public-placement-media-repository';
+export { createPgPricingRepository } from './pricing-repository';
 export { createPgAutographRepository } from './autograph-repository';
 export { createPgAutographModerationRepository } from './autograph-moderation-repository';
 export {

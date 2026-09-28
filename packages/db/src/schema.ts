@@ -13,6 +13,7 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   check,
+  bigint,
   index,
   integer,
   pgEnum,
@@ -251,6 +252,73 @@ export const creatorProfiles = pgTable(
   ],
 );
 
+export const pricingConfigVersions = pgTable(
+  'pricing_config_versions',
+  {
+    id: id(),
+    algorithmVersion: varchar('algorithm_version', { length: 64 }).notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    baseAmountMinor: bigint('base_amount_minor', { mode: 'bigint' }).notNull(),
+    minimumAmountMinor: bigint('minimum_amount_minor', {
+      mode: 'bigint',
+    }).notNull(),
+    maximumAmountMinor: bigint('maximum_amount_minor', {
+      mode: 'bigint',
+    }).notNull(),
+    dynamicTakeoverLimit: integer('dynamic_takeover_limit').notNull(),
+    takeoverStepSize: integer('takeover_step_size').notNull(),
+    stepAmountMinor: bigint('step_amount_minor', { mode: 'bigint' }).notNull(),
+    decayIntervalSeconds: integer('decay_interval_seconds').notNull(),
+    decayAmountMinor: bigint('decay_amount_minor', {
+      mode: 'bigint',
+    }).notNull(),
+    decayFloorAmountMinor: bigint('decay_floor_amount_minor', {
+      mode: 'bigint',
+    }).notNull(),
+    guaranteedVisibilitySeconds: integer(
+      'guaranteed_visibility_seconds',
+    ).notNull(),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('pricing_config_versions_created_idx').on(table.createdAt),
+    check(
+      'pricing_config_algorithm_v1',
+      sql`${table.algorithmVersion} = 'takeover_ladder_v1'`,
+    ),
+    check('pricing_config_currency_rub', sql`${table.currency} = 'RUB'`),
+    check(
+      'pricing_config_amounts_valid',
+      sql`${table.minimumAmountMinor} BETWEEN 1 AND 100000000000 AND ${table.baseAmountMinor} BETWEEN ${table.minimumAmountMinor} AND ${table.maximumAmountMinor} AND ${table.maximumAmountMinor} <= 100000000000 AND ${table.stepAmountMinor} BETWEEN 0 AND 100000000000 AND ${table.decayAmountMinor} BETWEEN 0 AND 100000000000 AND ${table.decayFloorAmountMinor} BETWEEN ${table.minimumAmountMinor} AND ${table.maximumAmountMinor}`,
+    ),
+    check(
+      'pricing_config_steps_valid',
+      sql`${table.dynamicTakeoverLimit} BETWEEN 0 AND 1000000 AND ${table.takeoverStepSize} BETWEEN 1 AND 1000000`,
+    ),
+    check(
+      'pricing_config_time_valid',
+      sql`${table.decayIntervalSeconds} BETWEEN 1 AND 2592000 AND ${table.guaranteedVisibilitySeconds} BETWEEN 0 AND 2592000`,
+    ),
+  ],
+);
+
+export const platformPricingDefault = pgTable(
+  'platform_pricing_default',
+  {
+    singletonId: integer('singleton_id').primaryKey().default(1),
+    pricingConfigId: uuid('pricing_config_id')
+      .notNull()
+      .references(() => pricingConfigVersions.id, { onDelete: 'restrict' }),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check('platform_pricing_default_singleton', sql`${table.singletonId} = 1`),
+  ],
+);
+
 export const walls = pgTable(
   'walls',
   {
@@ -258,6 +326,10 @@ export const walls = pgTable(
     creatorId: uuid('creator_id')
       .notNull()
       .references(() => creators.id, { onDelete: 'restrict' }),
+    pricingConfigId: uuid('pricing_config_id').references(
+      () => pricingConfigVersions.id,
+      { onDelete: 'restrict' },
+    ),
     status: wallStatus().notNull().default('draft'),
     startAt: timestamp('start_at', { withTimezone: true }),
     endAt: timestamp('end_at', { withTimezone: true }),
@@ -538,5 +610,65 @@ export const wallFreeClaims = pgTable(
     index('wall_free_claims_user_time_idx').on(table.userId, table.claimedAt),
     index('wall_free_claims_slot_idx').on(table.slotId),
     index('wall_free_claims_autograph_idx').on(table.autographId),
+  ],
+);
+
+export const takeoverQuotes = pgTable(
+  'takeover_quotes',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id, { onDelete: 'restrict' }),
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => slots.id, { onDelete: 'restrict' }),
+    targetPlacementId: uuid('target_placement_id')
+      .notNull()
+      .references(() => placements.id, { onDelete: 'restrict' }),
+    pricingConfigId: uuid('pricing_config_id')
+      .notNull()
+      .references(() => pricingConfigVersions.id, { onDelete: 'restrict' }),
+    algorithmVersion: varchar('algorithm_version', { length: 64 }).notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    wallTakeoverCount: bigint('wall_takeover_count', {
+      mode: 'bigint',
+    }).notNull(),
+    lastTakeoverAt: timestamp('last_takeover_at', { withTimezone: true }),
+    stepIndex: bigint('step_index', { mode: 'bigint' }).notNull(),
+    ladderAmountMinor: bigint('ladder_amount_minor', {
+      mode: 'bigint',
+    }).notNull(),
+    decayIntervalsApplied: bigint('decay_intervals_applied', {
+      mode: 'bigint',
+    }).notNull(),
+    quotedAt: timestamp('quoted_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('takeover_quotes_user_time_idx').on(table.userId, table.quotedAt),
+    index('takeover_quotes_slot_time_idx').on(table.slotId, table.quotedAt),
+    index('takeover_quotes_target_idx').on(table.targetPlacementId),
+    check(
+      'takeover_quotes_algorithm_v1',
+      sql`${table.algorithmVersion} = 'takeover_ladder_v1'`,
+    ),
+    check('takeover_quotes_currency_rub', sql`${table.currency} = 'RUB'`),
+    check(
+      'takeover_quotes_amount_valid',
+      sql`${table.amountMinor} BETWEEN 1 AND 100000000000 AND ${table.ladderAmountMinor} BETWEEN ${table.amountMinor} AND 100000000000`,
+    ),
+    check(
+      'takeover_quotes_snapshot_valid',
+      sql`${table.wallTakeoverCount} >= 0 AND ${table.stepIndex} >= 0 AND ${table.decayIntervalsApplied} >= 0 AND ((${table.wallTakeoverCount} = 0 AND ${table.lastTakeoverAt} IS NULL) OR (${table.wallTakeoverCount} > 0 AND ${table.lastTakeoverAt} IS NOT NULL))`,
+    ),
+    check(
+      'takeover_quotes_expiry_valid',
+      sql`${table.expiresAt} > ${table.quotedAt}`,
+    ),
   ],
 );

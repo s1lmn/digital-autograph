@@ -9,6 +9,7 @@ import {
 
 export * from './free-claim';
 export * from './public-media';
+export * from './pricing';
 
 export type SlotStructure = { id: string; position: number };
 

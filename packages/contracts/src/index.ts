@@ -6,3 +6,4 @@ export const readyHealthResponse = z.object({ status: z.literal('ready') });
 export * from './wall';
 export * from './autograph';
 export * from './moderation';
+export * from './pricing';

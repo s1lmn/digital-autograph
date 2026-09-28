@@ -243,8 +243,9 @@ export function createPgWallRepository(pool: Pool): WallRepository {
       return withTransaction(pool, async (client) => {
         await ownerForCreator(client, creatorId, actorUserId);
         const created = await client.query<WallRow>(
-          `INSERT INTO walls (creator_id, status, slot_count, start_at, end_at)
-           VALUES ($1::uuid, 'draft', $2::integer, $3::timestamptz, $4::timestamptz)
+          `INSERT INTO walls (creator_id, status, slot_count, start_at, end_at, pricing_config_id)
+           VALUES ($1::uuid, 'draft', $2::integer, $3::timestamptz, $4::timestamptz,
+                   (SELECT pricing_config_id FROM platform_pricing_default WHERE singleton_id = 1))
            RETURNING id, creator_id, status, slot_count, start_at, end_at`,
           [creatorId, input.slotCount, input.startAt, input.endAt],
         );

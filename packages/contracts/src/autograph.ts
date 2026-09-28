@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 export const autographIdParams = z.strictObject({ id: z.uuid() });
+export const readyAutographListQuery = z.strictObject({
+  status: z.literal('ready'),
+});
 export const createAutographBody = z.strictObject({
   source: z.enum(['photo', 'canvas']),
 });

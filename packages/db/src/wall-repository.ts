@@ -36,6 +36,7 @@ type PublicWallRow = {
   placement_id: string | null;
   placement_source: 'free_claim' | 'takeover' | 'admin' | null;
   placement_started_at: Date | null;
+  media_available: boolean;
 };
 
 function assertSlotStructure(
@@ -166,12 +167,31 @@ export function createPgWallRepository(pool: Pool): WallRepository {
                 c.id AS creator_id, cp.slug, cp.display_name,
                 s.id AS slot_id, s.position,
                 p.id AS placement_id, p.source AS placement_source,
-                p.started_at AS placement_started_at
+                p.started_at AS placement_started_at,
+                CASE WHEN p.id IS NOT NULL
+                  AND p.autograph_id IS NOT NULL
+                  AND p.user_id = a.user_id
+                  AND a.status = 'ready'
+                  AND ua.user_id = a.user_id
+                  AND ua.cleaned_asset_id = ca.id
+                  AND md.user_approval_id = ua.id
+                  AND md.cleaned_asset_id = ca.id
+                  AND md.decision = 'approved'
+                  AND ca.actual_content_type = 'image/png'
+                  AND ca.verified_size_bytes BETWEEN 1 AND 10485760
+                  AND ca.width BETWEEN 1 AND 2048
+                  AND ca.height BETWEEN 1 AND 2048
+                  THEN true ELSE false END AS media_available
          FROM walls w
          JOIN creators c ON c.id = w.creator_id
          JOIN creator_profiles cp ON cp.creator_id = c.id
          LEFT JOIN slots s ON s.wall_id = w.id
          LEFT JOIN placements p ON p.slot_id = s.id AND p.ended_at IS NULL
+         LEFT JOIN autographs a ON a.id = p.autograph_id
+         LEFT JOIN autograph_user_approvals ua ON ua.autograph_id = a.id
+         LEFT JOIN autograph_assets ca ON ca.autograph_id = a.id
+           AND ca.role = 'cleaned' AND ca.status = 'uploaded'
+         LEFT JOIN autograph_moderation_decisions md ON md.autograph_id = a.id
          WHERE w.id = $1::uuid
            AND w.status IN ('scheduled', 'live', 'paused', 'ended')
          ORDER BY s.position`,
@@ -195,6 +215,9 @@ export function createPgWallRepository(pool: Pool): WallRepository {
                         id: row.placement_id,
                         source: row.placement_source,
                         startedAt: row.placement_started_at,
+                        mediaPath: row.media_available
+                          ? `/public/placements/${row.placement_id}/autograph`
+                          : null,
                       }
                     : null,
               },

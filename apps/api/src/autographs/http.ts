@@ -4,6 +4,7 @@ import {
   completeOriginalUploadBody,
   createAutographBody,
   initiateOriginalUploadBody,
+  readyAutographListQuery,
 } from '@digital-autograph/contracts';
 import {
   AutographError,
@@ -51,6 +52,17 @@ export function registerAutographRoutes(
   app: FastifyInstance,
   autographs: AutographService,
 ): void {
+  app.get(
+    '/autographs',
+    { preHandler: requireAuthenticatedUser },
+    async (request, reply) => {
+      const query = parse(readyAutographListQuery, request.query, reply);
+      if (!query) return reply;
+      reply.header('Cache-Control', 'no-store');
+      return autographs.listReadyOwned(authenticatedSession(request).user.id);
+    },
+  );
+
   app.post(
     '/autographs',
     { preHandler: requireAuthenticatedUser },

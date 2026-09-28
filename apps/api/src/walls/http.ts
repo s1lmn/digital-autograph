@@ -69,6 +69,7 @@ export function registerWallRoutes(
   app.get('/walls/:id', async (request, reply) => {
     const params = parse(wallIdParams, request.params, reply);
     if (!params) return reply;
+    reply.header('Cache-Control', 'no-store');
     try {
       return await walls.getWall(params.id);
     } catch (error) {

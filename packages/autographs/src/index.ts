@@ -31,6 +31,13 @@ export type AutographView = {
   };
 };
 
+export type ReadyAutographChoice = {
+  id: string;
+  source: AutographSource;
+  createdAt: Date;
+  moderatedAt: Date;
+};
+
 export type ReservedOriginal = {
   id: string;
   autographId: string;
@@ -42,6 +49,7 @@ export type ReservedOriginal = {
 };
 
 export interface AutographRepository {
+  listReadyOwned(userId: string): Promise<ReadyAutographChoice[]>;
   create(userId: string, source: AutographSource): Promise<AutographView>;
   findOwned(userId: string, autographId: string): Promise<AutographView>;
   reserveOriginal(
@@ -149,6 +157,10 @@ export class AutographService {
 
   create(userId: string, source: AutographSource): Promise<AutographView> {
     return this.repository.create(userId, source);
+  }
+
+  async listReadyOwned(userId: string) {
+    return { items: await this.repository.listReadyOwned(userId) };
   }
 
   get(userId: string, autographId: string): Promise<AutographView> {

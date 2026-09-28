@@ -39,3 +39,7 @@ export const freeClaimParams = z.strictObject({
 });
 
 export const freeClaimBody = z.strictObject({ autographId: z.uuid() });
+
+export const publicPlacementMediaParams = z.strictObject({
+  placementId: z.uuid(),
+});

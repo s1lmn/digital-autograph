@@ -1,0 +1,144 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+  }
+  
+  .header h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+  }
+  
+  .header p {
+    color: #666;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+  
+  .hiddenInput {
+    display: none;
+  }
+  
+  .uploadBox {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 3rem 1.5rem;
+    background-color: #fafafa;
+    gap: 1rem;
+  }
+  
+  .buttonGroup {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .primaryButton,
+  .secondaryButton {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  
+  .primaryButton {
+    background-color: #000;
+    color: #fff;
+    border: none;
+  }
+  
+  .secondaryButton {
+    background-color: #fff;
+    color: #333;
+    border: 1px solid #ccc;
+  }
+  
+  .hint {
+    font-size: 0.8rem;
+    color: #888;
+  }
+  
+  .cropSection {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+  }
+  
+  .canvasWrapper {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    aspect-ratio: 2 / 1;
+    border: 1px solid #333;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: #fff;
+    touch-action: none;
+  }
+  
+  .canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+  }
+  
+  .canvas:active {
+    cursor: grabbing;
+  }
+  
+  .cropOverlayHint {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+  
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 600px;
+  }
+  
+  .zoomControl {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+  }
+  
+  .zoomControl input[type='range'] {
+    flex: 1;
+  }
+  
+  .actionButtons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+  
+  .actionButtons button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+  }

@@ -106,4 +106,29 @@ describe('photo autograph editor', () => {
     expect(onPhotoChange).toHaveBeenLastCalledWith(null);
     expect(screen.queryByAltText('Edited autograph photo preview')).toBeNull();
   });
+
+  it('rejects a photo larger than 10 MB before attempting to decode it', async () => {
+    const createObjectURL = vi.fn(() => 'blob:should-not-be-created');
+    class MockURL extends URL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = vi.fn();
+    }
+    vi.stubGlobal('URL', MockURL);
+    const onPhotoChange = vi.fn();
+    render(<PhotoUploadEditor onPhotoChange={onPhotoChange} />);
+    const oversized = new File(
+      [new Uint8Array(10 * 1024 * 1024 + 1)],
+      'large.jpg',
+      { type: 'image/jpeg' },
+    );
+
+    fireEvent.change(screen.getByLabelText('Choose a photo'), {
+      target: { files: [oversized] },
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Choose a photo no larger than 10 MB.',
+    );
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(onPhotoChange).toHaveBeenLastCalledWith(null);
+  });
 });

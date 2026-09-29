@@ -84,6 +84,13 @@ function installApi(failFirstUpload = false) {
           expiresAt: 'later',
         });
       }
+      if (url.endsWith('/autographs/autograph-1/approve')) {
+        return response({
+          id: 'autograph-1',
+          status: 'awaiting_moderation',
+          approvedAt: 'later',
+        });
+      }
       throw new Error(`Unexpected API request: ${url}`);
     },
   );
@@ -173,6 +180,16 @@ describe('autograph creation method selection', () => {
       headers: { 'Content-Type': 'image/jpeg' },
       sentBody: expect.objectContaining({ type: 'image/jpeg', size: 12 }),
     });
+    fireEvent.load(screen.getByAltText('Cleaned digital autograph preview'));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Approve and submit for moderation',
+      }),
+    );
+    expect(await screen.findByText('Submitted for moderation')).toBeTruthy();
+    expect(
+      calls.some(({ url }) => url.endsWith('/autographs/autograph-1/approve')),
+    ).toBe(true);
   });
 
   it('retries a failed photo upload with the same draft and edited blob', async () => {

@@ -2,6 +2,37 @@
   display: grid;
   gap: 1.25rem;
 }
+.modeTabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #d9dfe5;
+  padding-bottom: 0.5rem;
+}
+.tab,
+.activeTab {
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.65rem 1rem;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.tab {
+  color: #53606d;
+  background: transparent;
+}
+.tab:hover:not(:disabled) {
+  background: #f2f4f6;
+}
+.activeTab {
+  color: white;
+  background: #17202a;
+}
+.tab:disabled,
+.activeTab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .primary {
   justify-self: start;
   border: 0;
@@ -18,10 +49,18 @@
   cursor: not-allowed;
 }
 .status {
+  display: grid;
+  gap: 0.6rem;
   padding: 0.9rem;
   background: #eaf3fc;
   border-radius: 0.5rem;
   margin: 0;
+}
+.status p {
+  margin: 0;
+}
+.status progress {
+  width: 100%;
 }
 .error {
   padding: 1rem;
@@ -81,66 +120,4 @@
 .approval [role='alert'] {
   color: #9a3027;
   font-weight: 600;
-}
-.modeTabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 1px solid #eaeaea;
-  padding-bottom: 0.5rem;
-}
-
-.tab,
-.activeTab {
-  padding: 0.5rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.tab {
-  color: #666;
-}
-
-.tab:hover:not(:disabled) {
-  background-color: #f5f5f5;
-  color: #000;
-}
-
-.activeTab {
-  background-color: #000;
-  color: #fff;
-}
-
-.tab:disabled,
-.activeTab:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.statusBox,
-.errorBox {
-  margin-top: 1rem;
-  padding: 1rem;
-  border-radius: 6px;
-}
-
-.statusBox {
-  background: #f0f7ff;
-  color: #0056b3;
-}
-
-.errorBox {
-  background: #fff0f0;
-  color: #c00;
-}
-
-.errorActions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
 }

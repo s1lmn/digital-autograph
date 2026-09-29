@@ -1,6 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  drawingHeight,
+  drawingWidth,
+  maxCanvasUploadBytes,
+} from '../lib/drawing';
 import styles from './photo-upload-editor.module.css';
 
 type PhotoUploadEditorProps = {
@@ -8,249 +13,319 @@ type PhotoUploadEditorProps = {
   disabled?: boolean;
 };
 
+function isSupportedType(type: string): type is 'image/jpeg' | 'image/png' {
+  return type === 'image/jpeg' || type === 'image/png';
+}
+
 export function PhotoUploadEditor({
   onPhotoChange,
   disabled = false,
 }: PhotoUploadEditorProps) {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [rotation, setRotation] = useState<number>(0); // 0, 90, 180, 270
-  const [zoom, setZoom] = useState<number>(1);
-  const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [format, setFormat] = useState<'image/jpeg' | 'image/png'>(
+    'image/jpeg',
+  );
+  const [rotation, setRotation] = useState(0);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const loadedImageRef = useRef<HTMLImageElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const dragStart = useRef<{
+    clientX: number;
+    clientY: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const onPhotoChangeRef = useRef(onPhotoChange);
+  const renderGeneration = useRef(0);
+  onPhotoChangeRef.current = onPhotoChange;
 
-  // Очистка при смене фото
-  const handleFile = (file?: File) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageSrc(reader.result as string);
-      setRotation(0);
-      setZoom(1);
-      setOffset({ x: 0, y: 0 });
-    };
-    reader.readAsDataURL(file);
+  const clearPreview = () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
   };
 
-  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    handleFile(file);
-    e.target.value = '';
-  };
-
-  // Загрузка Image объекта
   useEffect(() => {
-    if (!imageSrc) {
-      loadedImageRef.current = null;
-      onPhotoChange(null);
+    if (!sourceUrl) {
+      setImage(null);
       return;
     }
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      loadedImageRef.current = img;
-      renderCropped();
+    const loadedImage = new Image();
+    loadedImage.onload = () => {
+      setImage(loadedImage);
+      setError(null);
     };
-    img.src = imageSrc;
-  }, [imageSrc]);
-
-  // Отрисовка на canvas с учетом поворота, зума и смещения
-  const renderCropped = useCallback(() => {
-    const canvas = canvasRef.current;
-    const img = loadedImageRef.current;
-    if (!canvas || !img) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Фиксированный размер целевого холста для автографа
-    const targetWidth = 600;
-    const targetHeight = 300;
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-
-    ctx.clearRect(0, 0, targetWidth, targetHeight);
-    ctx.save();
-
-    // 1. Центрируем
-    ctx.translate(targetWidth / 2 + offset.x, targetHeight / 2 + offset.y);
-    // 2. Поворот
-    ctx.rotate((rotation * Math.PI) / 180);
-    // 3. Зум
-    ctx.scale(zoom, zoom);
-
-    // Подгоняем начальный масштаб по размеру
-    const isRotated90or270 = rotation % 180 !== 0;
-    const naturalW = isRotated90or270 ? img.height : img.width;
-    const naturalH = isRotated90or270 ? img.width : img.height;
-    const baseScale = Math.max(targetWidth / naturalW, targetHeight / naturalH);
-
-    const drawW = img.width * baseScale;
-    const drawH = img.height * baseScale;
-
-    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-    ctx.restore();
-
-    // Генерируем PNG Blob для отправки
-    canvas.toBlob((blob) => {
-      onPhotoChange(blob);
-    }, 'image/png');
-  }, [rotation, zoom, offset, onPhotoChange]);
+    loadedImage.onerror = () => {
+      setImage(null);
+      setError('This image could not be opened. Choose a PNG or JPEG photo.');
+      onPhotoChangeRef.current(null);
+    };
+    loadedImage.src = sourceUrl;
+    return () => {
+      URL.revokeObjectURL(sourceUrl);
+      loadedImage.onload = null;
+      loadedImage.onerror = null;
+    };
+  }, [sourceUrl]);
 
   useEffect(() => {
-    if (loadedImageRef.current) {
-      renderCropped();
+    if (!image) return;
+    const generation = ++renderGeneration.current;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context) {
+      setError('Photo editing is unavailable in this browser.');
+      onPhotoChangeRef.current(null);
+      return;
     }
-  }, [renderCropped]);
 
-  // Управление жестами панорамирования (Pointer Events для мыши и тачскрина)
-  const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled || !imageSrc) return;
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
+    onPhotoChangeRef.current(null);
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
+    setError(null);
+    canvas.width = drawingWidth;
+    canvas.height = drawingHeight;
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, drawingWidth, drawingHeight);
+    const rotated = rotation % 180 !== 0;
+    const naturalWidth = rotated ? image.height : image.width;
+    const naturalHeight = rotated ? image.width : image.height;
+    const scale =
+      Math.max(drawingWidth / naturalWidth, drawingHeight / naturalHeight) *
+      zoom;
+    const imageWidth = image.width * scale;
+    const imageHeight = image.height * scale;
+    const rotatedWidth = naturalWidth * scale;
+    const rotatedHeight = naturalHeight * scale;
+    const x = Math.max(
+      -Math.max(0, (rotatedWidth - drawingWidth) / 2),
+      Math.min(Math.max(0, (rotatedWidth - drawingWidth) / 2), offset.x),
+    );
+    const y = Math.max(
+      -Math.max(0, (rotatedHeight - drawingHeight) / 2),
+      Math.min(Math.max(0, (rotatedHeight - drawingHeight) / 2), offset.y),
+    );
 
-  const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
-    setOffset({
-      x: e.clientX - dragStart.current.x,
-      y: e.clientY - dragStart.current.y,
-    });
-  };
+    context.save();
+    context.translate(drawingWidth / 2 + x, drawingHeight / 2 + y);
+    context.rotate((rotation * Math.PI) / 180);
+    context.drawImage(
+      image,
+      -imageWidth / 2,
+      -imageHeight / 2,
+      imageWidth,
+      imageHeight,
+    );
+    context.restore();
 
-  const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
+    const timer = window.setTimeout(() => {
+      canvas.toBlob(
+        (blob) => {
+          if (generation !== renderGeneration.current) return;
+          if (!blob || blob.type !== format || blob.size === 0) {
+            setError(
+              'Could not prepare this photo. Adjust it or choose another.',
+            );
+            return;
+          }
+          if (blob.size > maxCanvasUploadBytes) {
+            setError(
+              'The edited photo is too large. Zoom in or choose another.',
+            );
+            return;
+          }
+          const nextUrl = URL.createObjectURL(blob);
+          previewUrlRef.current = nextUrl;
+          setPreviewUrl(nextUrl);
+          onPhotoChangeRef.current(blob);
+        },
+        format,
+        format === 'image/jpeg' ? 0.92 : undefined,
+      );
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+      renderGeneration.current += 1;
+    };
+  }, [format, image, offset, rotation, zoom]);
+
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      onPhotoChangeRef.current(null);
+    },
+    [],
+  );
+
+  const chooseFile = (file?: File) => {
+    if (!file) return;
+    renderGeneration.current += 1;
+    clearPreview();
+    setImage(null);
+    onPhotoChangeRef.current(null);
+    const fileType = file.type;
+    if (!isSupportedType(fileType)) {
+      setSourceUrl(null);
+      setError('Choose a PNG or JPEG photo.');
+      return;
     }
-  };
-
-  const rotateClockwise = () => {
-    setRotation((prev) => (prev + 90) % 360);
-  };
-
-  const resetAdjustments = () => {
+    if (file.size === 0 || file.size > maxCanvasUploadBytes) {
+      setSourceUrl(null);
+      setError('Choose a photo no larger than 10 MB.');
+      return;
+    }
+    const nextUrl = URL.createObjectURL(file);
+    setSourceUrl(nextUrl);
+    setFormat(fileType);
     setRotation(0);
     setZoom(1);
     setOffset({ x: 0, y: 0 });
+    setError(null);
+  };
+
+  const readFileInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    chooseFile(event.currentTarget.files?.[0]);
+    event.currentTarget.value = '';
   };
 
   return (
-    <section aria-labelledby="photo-upload-heading" className={styles.container}>
-      <div className={styles.header}>
-        <div>
-          <h2 id="photo-upload-heading">Upload autograph photo</h2>
-          <p>
-            Take a picture of your paper signature or upload an existing photo.
-            The photo stays private while you edit.
-          </p>
-        </div>
+    <section aria-labelledby="photo-upload-heading" className={styles.editor}>
+      <div>
+        <h2 id="photo-upload-heading">Use a photo</h2>
+        <p>
+          Choose a photo or take one with your phone. Crop and rotate it here;
+          only the edited image is uploaded.
+        </p>
       </div>
-
-      {!imageSrc ? (
-        <div className={styles.uploadBox}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className={styles.hiddenInput}
-            onChange={onFileInputChange}
-            disabled={disabled}
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className={styles.hiddenInput}
-            onChange={onFileInputChange}
-            disabled={disabled}
-          />
-          <div className={styles.buttonGroup}>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              onClick={() => cameraInputRef.current?.click()}
-              disabled={disabled}
-            >
-              📷 Take Photo
-            </button>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={disabled}
-            >
-              📁 Choose from Gallery
-            </button>
-          </div>
-          <p className={styles.hint}>
-            Tips: Good lighting, flat surface, dark ink on white paper.
-          </p>
-        </div>
-      ) : (
-        <div className={styles.cropSection}>
-          <div className={styles.canvasWrapper}>
+      <input
+        ref={imageInputRef}
+        className={styles.fileInput}
+        type="file"
+        accept="image/jpeg,image/png"
+        aria-label="Choose a photo"
+        onChange={readFileInput}
+        disabled={disabled}
+      />
+      <input
+        ref={cameraInputRef}
+        className={styles.fileInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        aria-label="Take a photo"
+        onChange={readFileInput}
+        disabled={disabled}
+      />
+      <div className={styles.actions}>
+        <button
+          type="button"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={disabled}
+        >
+          Take a photo
+        </button>
+        <button
+          type="button"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={disabled}
+        >
+          Choose a photo
+        </button>
+      </div>
+      {sourceUrl && (
+        <>
+          <div className={styles.cropArea}>
             <canvas
               ref={canvasRef}
+              aria-label="Crop preview"
               className={styles.canvas}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
+              onPointerDown={(event) => {
+                if (disabled) return;
+                dragStart.current = {
+                  clientX: event.clientX,
+                  clientY: event.clientY,
+                  ...offset,
+                };
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (!dragStart.current || disabled) return;
+                const rect = event.currentTarget.getBoundingClientRect();
+                setOffset({
+                  x:
+                    dragStart.current.x +
+                    ((event.clientX - dragStart.current.clientX) /
+                      Math.max(rect.width, 1)) *
+                      drawingWidth,
+                  y:
+                    dragStart.current.y +
+                    ((event.clientY - dragStart.current.clientY) /
+                      Math.max(rect.height, 1)) *
+                      drawingHeight,
+                });
+              }}
+              onPointerUp={(event) => {
+                dragStart.current = null;
+                if (event.currentTarget.hasPointerCapture(event.pointerId))
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+              }}
+              onPointerCancel={() => {
+                dragStart.current = null;
+              }}
             />
-            <div className={styles.cropOverlayHint}>
-              Drag to pan • Use zoom slider below
-            </div>
+            <p>Drag the photo to crop it inside the frame.</p>
           </div>
-
           <div className={styles.controls}>
-            <div className={styles.zoomControl}>
-              <label htmlFor="zoom-slider">Zoom:</label>
-              <input
-                id="zoom-slider"
-                type="range"
-                min="0.5"
-                max="3"
-                step="0.05"
-                value={zoom}
-                disabled={disabled}
-                onChange={(e) => setZoom(parseFloat(e.target.value))}
-              />
-            </div>
-
-            <div className={styles.actionButtons}>
+            <label htmlFor="photo-zoom">Zoom</label>
+            <input
+              id="photo-zoom"
+              type="range"
+              min="1"
+              max="3"
+              step="0.05"
+              value={zoom}
+              onChange={(event) => setZoom(Number(event.currentTarget.value))}
+              disabled={disabled}
+            />
+            <div className={styles.actions}>
               <button
                 type="button"
-                onClick={rotateClockwise}
+                onClick={() => {
+                  setRotation((current) => (current + 90) % 360);
+                  setOffset({ x: 0, y: 0 });
+                }}
                 disabled={disabled}
               >
-                ⟳ Rotate 90°
+                Rotate 90°
               </button>
               <button
                 type="button"
-                onClick={resetAdjustments}
+                onClick={() => imageInputRef.current?.click()}
                 disabled={disabled}
               >
-                Reset
-              </button>
-              <button
-                type="button"
-                onClick={() => setImageSrc(null)}
-                disabled={disabled}
-              >
-                Change Photo
+                Change photo
               </button>
             </div>
           </div>
-        </div>
+          {previewUrl && (
+            <div className={styles.preview}>
+              <h3>Edited photo preview</h3>
+              <img src={previewUrl} alt="Edited autograph photo preview" />
+            </div>
+          )}
+        </>
+      )}
+      {error && (
+        <p role="alert" className={styles.error}>
+          {error}
+        </p>
       )}
     </section>
   );

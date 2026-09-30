@@ -21,6 +21,10 @@ on:
         description: Full 40-character SHA already built and deployed to staging
         required: false
         type: string
+      production_approval:
+        description: For production, enter APPROVED after review and successful staging of the same SHA
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -32,26 +36,29 @@ jobs:
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main') ||
       (github.event_name == 'workflow_dispatch' &&
-       github.ref == 'refs/heads/main')
+       github.ref == 'refs/heads/main' &&
+       (inputs.target != 'production' ||
+        (vars.RELEASE_OPERATOR != '' &&
+         github.actor == vars.RELEASE_OPERATOR)))
     runs-on:
       - self-hosted
       - linux
       - x64
       - ${{ github.event_name == 'workflow_run' && 'da-staging' || inputs.target == 'production' && 'da-production' || 'da-staging' }}
-    environment:
-      name: ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
     concurrency:
       group: digital-autograph-release-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
       cancel-in-progress: false
     permissions:
       actions: read
       contents: read
-      deployments: read
+      deployments: write
       id-token: write
     env:
       RELEASE_TARGET: ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
       RELEASE_OPERATION: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.operation }}
       IMAGE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.image_sha }}
+      PRODUCTION_OPERATOR: ${{ vars.RELEASE_OPERATOR }}
+      PRODUCTION_APPROVAL: ${{ inputs.production_approval }}
     steps:
       - name: Validate release request
         shell: bash
@@ -60,6 +67,18 @@ jobs:
           if [[ "$GITHUB_REF" != refs/heads/main ]]; then
             echo "Releases must be dispatched from main" >&2
             exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch &&
+                "$RELEASE_TARGET" == production ]]; then
+            if [[ -z "$PRODUCTION_OPERATOR" ||
+                  "$GITHUB_ACTOR" != "$PRODUCTION_OPERATOR" ]]; then
+              echo "Only the configured RELEASE_OPERATOR may deploy production" >&2
+              exit 1
+            fi
+            if [[ "$PRODUCTION_APPROVAL" != APPROVED ]]; then
+              echo "Production requires APPROVED after review and same-SHA staging" >&2
+              exit 1
+            fi
           fi
           if [[ "$RELEASE_OPERATION" == deploy ]]; then
             if [[ ! "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
@@ -110,6 +129,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Create GitHub deployment record
+        id: deployment
+        if: env.RELEASE_OPERATION == 'deploy'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deployment_payload=$(jq -n \
+            --arg ref "$IMAGE_SHA" \
+            --arg environment "$RELEASE_TARGET" \
+            --arg description "Digital Autograph $RELEASE_TARGET deploy for $IMAGE_SHA" \
+            '{ref: $ref, environment: $environment, description: $description, auto_merge: false, required_contexts: []}')
+          deployment_id=$(printf '%s' "$deployment_payload" |
+            gh api --method POST "repos/$GITHUB_REPOSITORY/deployments" \
+              --input - --jq '.id')
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" \
+            -f state=in_progress \
+            -f description="Deployment started on the $RELEASE_TARGET runner" \
+            -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            >/dev/null
+          echo "id=$deployment_id" >>"$GITHUB_OUTPUT"
+
       - name: Checkout release configuration
         uses: actions/checkout@v4
         with:
@@ -122,7 +165,7 @@ jobs:
           YC_SERVICE_ACCOUNT_ID: ${{ vars.YC_SERVICE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          : "${YC_SERVICE_ACCOUNT_ID:?Set YC_SERVICE_ACCOUNT_ID in the staging GitHub Environment}"
+          : "${YC_SERVICE_ACCOUNT_ID:?Set YC_SERVICE_ACCOUNT_ID as a repository Actions variable}"
           oidc_response=$(curl --fail --silent --show-error \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https://github.com/${GITHUB_REPOSITORY_OWNER}")
@@ -153,7 +196,7 @@ jobs:
           YC_REGISTRY_ID: ${{ vars.YC_REGISTRY_ID }}
         run: |
           set -euo pipefail
-          : "${YC_REGISTRY_ID:?Set YC_REGISTRY_ID in the staging GitHub Environment}"
+          : "${YC_REGISTRY_ID:?Set YC_REGISTRY_ID as a repository Actions variable}"
           export IMAGE_TAG=$IMAGE_SHA
           printf '%s' "$YC_IAM_TOKEN" |
             docker login --username iam --password-stdin cr.yandex
@@ -171,6 +214,7 @@ jobs:
           docker logout cr.yandex
 
       - name: Deploy or roll back this VM
+        id: deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -189,3 +233,31 @@ jobs:
           sudo install -m 644 deploy/render-lockbox-env.mjs \
             /opt/digital-autograph/
           sudo /opt/digital-autograph/deploy-on-vm.sh "$release_ref"
+
+      - name: Mark deployment successful
+        if: always() && steps.deployment.outputs.id != '' && steps.deploy.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+        run: |
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" \
+            -f state=success \
+            -f description="Smoke checks passed for $IMAGE_SHA" \
+            -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            >/dev/null
+
+      - name: Mark deployment failed
+        if: always() && steps.deployment.outputs.id != '' && steps.deploy.outcome != 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+        run: |
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/deployments/$DEPLOYMENT_ID/statuses" \
+            -f state=failure \
+            -f description="Release runner did not complete successfully" \
+            -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            >/dev/null

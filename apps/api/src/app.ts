@@ -39,6 +39,8 @@ import {
   type AuthHttpConfig,
   type HttpSessionService,
 } from './auth/http';
+import { registerTestAuthRoutes } from './auth/test-auth-http';
+import type { SessionService } from '@digital-autograph/auth';
 
 type DatabaseProbe = Pick<Database, 'checkConnection'>;
 
@@ -55,6 +57,11 @@ export function buildApi(
   publicMedia?: PublicPlacementMediaService,
   pricing?: TakeoverQuoteService,
   reservations?: TakeoverReservationService,
+  testAuth?: {
+    sessions: Pick<SessionService, 'createSession'>;
+    userId: string;
+    webOrigin: string;
+  },
 ) {
   const app = Fastify({
     logger: {
@@ -110,6 +117,15 @@ export function buildApi(
   });
 
   registerAuthRoutes(app, sessions, authConfig);
+  if (testAuth) {
+    registerTestAuthRoutes(
+      app,
+      testAuth.sessions,
+      authConfig,
+      testAuth.userId,
+      testAuth.webOrigin,
+    );
+  }
   if (google)
     registerGoogleRoutes(app, google.login, authConfig, google.config);
   if (telegram)

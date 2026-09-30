@@ -1,0 +1,37 @@
+variable "YC_REGISTRY_ID" {}
+variable "IMAGE_TAG" {}
+
+target "_base" {
+  context    = "."
+  dockerfile = "Dockerfile"
+  cache-from = ["type=gha,scope=platform-images"]
+  cache-to   = ["type=gha,scope=platform-images,mode=max"]
+}
+
+target "api" {
+  inherits = ["_base"]
+  target   = "api"
+  tags     = ["cr.yandex/${YC_REGISTRY_ID}/digital-autograph/api:${IMAGE_TAG}"]
+}
+
+target "web" {
+  inherits = ["_base"]
+  target   = "web"
+  tags     = ["cr.yandex/${YC_REGISTRY_ID}/digital-autograph/web:${IMAGE_TAG}"]
+}
+
+target "worker" {
+  inherits = ["_base"]
+  target   = "worker"
+  tags     = ["cr.yandex/${YC_REGISTRY_ID}/digital-autograph/worker:${IMAGE_TAG}"]
+}
+
+target "migration" {
+  inherits = ["_base"]
+  target   = "migration"
+  tags     = ["cr.yandex/${YC_REGISTRY_ID}/digital-autograph/migration:${IMAGE_TAG}"]
+}
+
+group "release" {
+  targets = ["api", "web", "worker", "migration"]
+}

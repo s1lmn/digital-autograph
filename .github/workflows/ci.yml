@@ -76,3 +76,8 @@ jobs:
       - run: pnpm test:integration
       - run: pnpm build
       - run: pnpm test:build-smoke
+      - name: Build release container targets
+        env:
+          YC_REGISTRY_ID: ci-placeholder
+          IMAGE_TAG: ci-placeholder
+        run: docker buildx bake --file deploy/docker-bake.hcl release

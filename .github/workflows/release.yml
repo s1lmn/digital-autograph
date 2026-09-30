@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options: [staging, production]
+      operation:
+        description: Deploy an image or roll back to the previous release
+        required: true
+        type: choice
+        options: [deploy, rollback]
+      image_sha:
+        description: Full 40-character SHA already built and deployed to staging
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main')
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - ${{ github.event_name == 'workflow_run' && 'da-staging' || inputs.target == 'production' && 'da-production' || 'da-staging' }}
+    environment:
+      name: ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+    concurrency:
+      group: digital-autograph-release-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      deployments: read
+      id-token: write
+    env:
+      RELEASE_TARGET: ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+      RELEASE_OPERATION: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.operation }}
+      IMAGE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.image_sha }}
+    steps:
+      - name: Validate release request
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Releases must be dispatched from main" >&2
+            exit 1
+          fi
+          if [[ "$RELEASE_OPERATION" == deploy ]]; then
+            if [[ ! "$IMAGE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Deploy requires a full 40-character commit SHA" >&2
+              exit 1
+            fi
+            if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+              success=$(gh run list --workflow ci.yml --commit "$IMAGE_SHA" \
+                --limit 100 \
+                --json status,conclusion \
+                --jq 'any(.[]; .status == "completed" and .conclusion == "success")')
+              if [[ "$success" != true ]]; then
+                echo "The selected SHA does not have a successful CI run" >&2
+                exit 1
+              fi
+              if [[ "$RELEASE_TARGET" == production ]]; then
+                mapfile -t staging_deployments < <(
+                  gh api --paginate \
+                    "repos/$GITHUB_REPOSITORY/deployments?environment=staging&per_page=100" \
+                    --jq '.[].id'
+                )
+                staged=false
+                for deployment_id in "${staging_deployments[@]}"; do
+                  deployment_sha=$(gh api \
+                    "repos/$GITHUB_REPOSITORY/deployments/$deployment_id" \
+                    --jq '.sha')
+                  if [[ "$deployment_sha" != "$IMAGE_SHA" ]]; then
+                    continue
+                  fi
+                  deployment_state=$(gh api \
+                    "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses?per_page=100" \
+                    --jq '.[0].state // empty')
+                  if [[ "$deployment_state" == success ]]; then
+                    staged=true
+                  fi
+                  break
+                done
+                if [[ "$staged" != true ]]; then
+                  echo "Production deploy requires a successful staging deployment of the same SHA" >&2
+                  exit 1
+                fi
+              fi
+            fi
+          elif [[ "$RELEASE_OPERATION" != rollback ]]; then
+            echo "Unsupported release operation" >&2
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Checkout release configuration
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Authenticate to Yandex Cloud for staging image publication
+        if: github.event_name == 'workflow_run'
+        shell: bash
+        env:
+          YC_SERVICE_ACCOUNT_ID: ${{ vars.YC_SERVICE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          : "${YC_SERVICE_ACCOUNT_ID:?Set YC_SERVICE_ACCOUNT_ID in the staging GitHub Environment}"
+          oidc_response=$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https://github.com/${GITHUB_REPOSITORY_OWNER}")
+          subject_token=$(jq -er '.value' <<<"$oidc_response")
+          unset oidc_response
+          token_response=$(curl --fail --silent --show-error \
+            --request POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${YC_SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${subject_token}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')
+          unset subject_token
+          iam_token=$(jq -er '.access_token' <<<"$token_response")
+          unset token_response
+          echo "::add-mask::$iam_token"
+          {
+            echo 'YC_IAM_TOKEN<<EOF'
+            echo "$iam_token"
+            echo EOF
+          } >>"$GITHUB_ENV"
+          unset iam_token
+
+      - name: Build and publish commit-tagged images once
+        if: github.event_name == 'workflow_run'
+        shell: bash
+        env:
+          YC_REGISTRY_ID: ${{ vars.YC_REGISTRY_ID }}
+        run: |
+          set -euo pipefail
+          : "${YC_REGISTRY_ID:?Set YC_REGISTRY_ID in the staging GitHub Environment}"
+          export IMAGE_TAG=$IMAGE_SHA
+          printf '%s' "$YC_IAM_TOKEN" |
+            docker login --username iam --password-stdin cr.yandex
+          missing_targets=()
+          for target in api web worker migration; do
+            image="cr.yandex/$YC_REGISTRY_ID/digital-autograph/$target:$IMAGE_SHA"
+            if ! docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+              missing_targets+=("$target")
+            fi
+          done
+          if (( ${#missing_targets[@]} > 0 )); then
+            docker buildx bake --file deploy/docker-bake.hcl \
+              --push "${missing_targets[@]}"
+          fi
+          docker logout cr.yandex
+
+      - name: Deploy or roll back this VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+            release_ref=$IMAGE_SHA
+          elif [[ "$RELEASE_OPERATION" == rollback ]]; then
+            release_ref=rollback
+          else
+            release_ref=$IMAGE_SHA
+          fi
+          sudo install -d -m 755 /opt/digital-autograph
+          sudo install -m 644 deploy/compose.yaml deploy/Caddyfile \
+            /opt/digital-autograph/
+          sudo install -m 755 deploy/deploy-on-vm.sh \
+            /opt/digital-autograph/
+          sudo install -m 644 deploy/render-lockbox-env.mjs \
+            /opt/digital-autograph/
+          sudo /opt/digital-autograph/deploy-on-vm.sh "$release_ref"

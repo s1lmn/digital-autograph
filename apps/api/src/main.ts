@@ -44,6 +44,15 @@ import { TelegramLoginService } from './auth/telegram-login';
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
+  const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
+  if (
+    enableTestAuthSeam &&
+    (config.APP_ENV !== 'test' || process.env.NODE_ENV === 'production')
+  ) {
+    throw new Error(
+      'ENABLE_TEST_AUTH_SEAM is only permitted in a non-production test environment',
+    );
+  }
   const database = createDatabase(config.DATABASE_URL);
   const storage = createPrivateS3Storage({
     endpoint: config.S3_ENDPOINT,
@@ -124,6 +133,13 @@ async function main(): Promise<void> {
     new TakeoverReservationService(
       createPgTakeoverReservationRepository(database.pool),
     ),
+    enableTestAuthSeam
+      ? {
+          sessions,
+          userId: process.env.E2E_AUTH_USER_ID ?? '',
+          webOrigin: config.WEB_ORIGIN,
+        }
+      : undefined,
     new PlacementHistoryService(
       createPgPlacementHistoryRepository(database.pool),
     ),

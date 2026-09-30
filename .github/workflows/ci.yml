@@ -81,3 +81,81 @@ jobs:
           YC_REGISTRY_ID: ci-placeholder
           IMAGE_TAG: ci-placeholder
         run: docker buildx bake --file deploy/docker-bake.hcl release
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: autograph_e2e
+          POSTGRES_USER: autograph_e2e
+          POSTGRES_PASSWORD: e2e_local_only
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U autograph_e2e -d autograph_e2e"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      APP_ENV: test
+      ENABLE_TEST_AUTH_SEAM: 'true'
+      E2E_AUTH_USER_ID: f1111111-1111-4111-8111-111111111111
+      DATABASE_URL: postgres://autograph_e2e:e2e_local_only@localhost:5434/autograph_e2e
+      API_HOST: 127.0.0.1
+      API_PORT: 4000
+      SESSION_TTL_SECONDS: 1209600
+      TRUSTED_WEB_ORIGINS: http://127.0.0.1:3000,http://127.0.0.1:4000
+      WEB_ORIGIN: http://127.0.0.1:3000
+      GOOGLE_CLIENT_ID: test-google-client-id
+      GOOGLE_CLIENT_SECRET: test-google-client-secret
+      GOOGLE_REDIRECT_URI: http://127.0.0.1:4000/auth/google/callback
+      TELEGRAM_CLIENT_ID: test-telegram-client-id
+      TELEGRAM_CLIENT_SECRET: test-telegram-client-secret
+      TELEGRAM_REDIRECT_URI: http://127.0.0.1:4000/auth/telegram/callback
+      API_INTERNAL_URL: http://127.0.0.1:4000
+      API_PUBLIC_ORIGIN: http://127.0.0.1:4000
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: autographse2e
+      S3_ACCESS_KEY_ID: local_minio
+      S3_SECRET_ACCESS_KEY: local_minio_password
+      UPLOAD_URL_TTL_SECONDS: 300
+      PREVIEW_URL_TTL_SECONDS: 120
+      E2E_WEB_URL: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Start isolated MinIO
+        run: |
+          docker run -d --name autograph-minio-e2e -p 9000:9000 \
+            -e MINIO_ROOT_USER=local_minio \
+            -e MINIO_ROOT_PASSWORD=local_minio_password \
+            -e MINIO_API_CORS_ALLOW_ORIGIN=http://127.0.0.1:3000 \
+            ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z@sha256:69b55a1c1c5dc285ce04db96689f5b2102317fc77a50680a1874ca6efd1c87f9 \
+            server /data
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs autograph-minio-e2e
+          exit 1
+      - run: pnpm e2e:setup
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

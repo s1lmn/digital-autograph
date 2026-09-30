@@ -44,6 +44,37 @@ services:
       timeout: 3s
       retries: 10
 
+  postgres-e2e:
+    profiles: ['e2e']
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: autograph_e2e
+      POSTGRES_USER: autograph_e2e
+      POSTGRES_PASSWORD: e2e_local_only
+    ports:
+      - '127.0.0.1:5434:5432'
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U autograph_e2e -d autograph_e2e']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-e2e:
+    profiles: ['e2e']
+    image: ghcr.io/coollabsio/minio:RELEASE.2025-10-15T17-29-55Z@sha256:69b55a1c1c5dc285ce04db96689f5b2102317fc77a50680a1874ca6efd1c87f9
+    command: server /data --console-address ':9001'
+    environment:
+      MINIO_ROOT_USER: local_minio
+      MINIO_ROOT_PASSWORD: local_minio_password
+      MINIO_API_CORS_ALLOW_ORIGIN: http://127.0.0.1:3000
+    ports:
+      - '127.0.0.1:9002:9000'
+      - '127.0.0.1:9003:9001'
+    tmpfs:
+      - /data
+
 volumes:
   postgres_data:
   minio_data:

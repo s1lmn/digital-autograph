@@ -10,6 +10,7 @@ import {
   createPgProviderIdentityRepository,
   createPgSessionRepository,
   createPgWallRepository,
+  createPgPlacementHistoryRepository,
   createPgFreeClaimRepository,
   createPgPublicPlacementMediaRepository,
   createPgPricingRepository,
@@ -23,6 +24,7 @@ import {
 } from '@digital-autograph/autographs';
 import {
   FreeClaimService,
+  PlacementHistoryService,
   PublicPlacementMediaService,
   WallService,
   TakeoverQuoteService,
@@ -121,6 +123,9 @@ async function main(): Promise<void> {
     new TakeoverQuoteService(createPgPricingRepository(database.pool)),
     new TakeoverReservationService(
       createPgTakeoverReservationRepository(database.pool),
+    ),
+    new PlacementHistoryService(
+      createPgPlacementHistoryRepository(database.pool),
     ),
   );
   let closing = false;

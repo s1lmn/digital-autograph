@@ -201,6 +201,9 @@ export function PublicWallScreen({
           Wall status: <strong>{wall.status}</strong>
         </p>
         <p>{wallNotice(wall, now)}</p>
+        {auth === 'authenticated' && (
+          <a href="/me/placements">View your placement history</a>
+        )}
         {wall.startAt && <p>Starts: {new Date(wall.startAt).toUTCString()}</p>}
         {wall.endAt && <p>Ends: {new Date(wall.endAt).toUTCString()}</p>}
         <button

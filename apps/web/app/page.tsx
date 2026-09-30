@@ -34,6 +34,9 @@ export default async function HomePage() {
       <p>
         <a href="/autograph/create">Create a digital autograph</a>
       </p>
+      <p>
+        <a href="/me/placements">View your placement history</a>
+      </p>
     </main>
   );
 }

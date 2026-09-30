@@ -6,6 +6,7 @@ export { createPgSessionRepository } from './session-repository';
 export { createPgOAuthAttemptRepository } from './oauth-attempt-repository';
 export { createPgProviderIdentityRepository } from './provider-identity-repository';
 export { createPgWallRepository } from './wall-repository';
+export { createPgPlacementHistoryRepository } from './placement-history-repository';
 export { createPgFreeClaimRepository } from './free-claim-repository';
 export { createPgPublicPlacementMediaRepository } from './public-placement-media-repository';
 export { createPgPricingRepository } from './pricing-repository';

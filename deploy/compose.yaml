@@ -1,0 +1,91 @@
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN is required}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  web:
+    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/web:${IMAGE_TAG:?IMAGE_TAG is required}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      API_INTERNAL_URL: http://api:4000
+      API_PUBLIC_ORIGIN: https://${API_DOMAIN:?API_DOMAIN is required}
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    expose:
+      - '3000'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  api:
+    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/api:${IMAGE_TAG:?IMAGE_TAG is required}
+    restart: unless-stopped
+    env_file:
+      - /etc/digital-autograph/env/api.env
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+    volumes:
+      - /etc/digital-autograph/certs/yandex-cloud-root.crt:/run/secrets/postgres-ca.pem:ro
+    expose:
+      - '4000'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/worker:${IMAGE_TAG:?IMAGE_TAG is required}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - /etc/digital-autograph/env/worker.env
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+    volumes:
+      - /etc/digital-autograph/certs/yandex-cloud-root.crt:/run/secrets/postgres-ca.pem:ro
+
+  migration:
+    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/migration:${IMAGE_TAG:?IMAGE_TAG is required}
+    profiles: [migration]
+    env_file:
+      - /etc/digital-autograph/env/api.env
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV is required}
+    volumes:
+      - /etc/digital-autograph/certs/yandex-cloud-root.crt:/run/secrets/postgres-ca.pem:ro
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -65,3 +65,6 @@ The integration suite requires the separate `autograph_test` PostgreSQL instance
 - `packages/config`: typed server environment loading.
 
 See `AGENTS.md` for permanent invariants, `docs/architecture/domain-model.md` for the persistence model, and `docs/adr/` for architectural decisions.
+
+Staging/production provisioning and release procedures are documented in
+[the Yandex Cloud deployment runbook](docs/operations/deployment.md).

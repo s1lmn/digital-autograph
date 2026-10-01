@@ -1,0 +1,12 @@
+.git
+.github
+.vscode
+.next
+**/.next
+**/dist
+**/node_modules
+**/tsconfig.tsbuildinfo
+.env
+.env.*
+playwright-report
+test-results

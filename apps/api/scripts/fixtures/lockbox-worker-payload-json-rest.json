@@ -1,0 +1,41 @@
+{
+  "versionId": "synthetic-worker-version",
+  "entries": [
+    {
+      "textValue": "postgresql://staging:synthetic%27password@postgres:5432/autograph_staging?sslmode=disable",
+      "key": "DATABASE_URL"
+    },
+    {
+      "textValue": "https://storage.example.invalid",
+      "key": "S3_ENDPOINT"
+    },
+    {
+      "textValue": "synthetic-s3_region",
+      "key": "S3_REGION"
+    },
+    {
+      "textValue": "synthetic-staging-bucket",
+      "key": "S3_BUCKET"
+    },
+    {
+      "textValue": "synthetic-s3_access_key_id",
+      "key": "S3_ACCESS_KEY_ID"
+    },
+    {
+      "textValue": "synthetic-s3_secret_access_key",
+      "key": "S3_SECRET_ACCESS_KEY"
+    },
+    {
+      "textValue": "1000",
+      "key": "WORKER_POLL_INTERVAL_MS"
+    },
+    {
+      "textValue": "300",
+      "key": "WORKER_LEASE_SECONDS"
+    },
+    {
+      "textValue": "600",
+      "key": "UPLOAD_CLEANUP_GRACE_SECONDS"
+    }
+  ]
+}

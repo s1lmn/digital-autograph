@@ -121,3 +121,19 @@
   color: #9a3027;
   font-weight: 600;
 }
+.preview .status h3 {
+  margin: 0;
+}
+.preview .status + .actions {
+  margin-top: 1rem;
+}
+.preview .actions button {
+  font: inherit;
+  min-height: 44px;
+}
+@media (max-width: 30rem) {
+  .preview .status + .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

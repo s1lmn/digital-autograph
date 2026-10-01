@@ -8,8 +8,10 @@ export const imagePolicy = {
   maxInputDimension: 10_000,
   maxOutputDimension: 2048,
   maxOutputBytes: 10 * 1024 * 1024,
-  photoOpaqueLuminance: 190,
-  photoTransparentLuminance: 235,
+  photoBackgroundTileSize: 64,
+  photoWeakContrast: 0.1,
+  photoStrongContrast: 0.35,
+  maximumPhotoForegroundFraction: 0.65,
   cropAlphaThreshold: 32,
   padding: 16,
   minimumForegroundPixels: 8,
@@ -71,6 +73,79 @@ function decoder(bytes: Buffer) {
     animated: false,
     pages: 1,
   });
+}
+
+function luminance(pixels: Buffer, offset: number): number {
+  return (
+    0.2126 * (pixels[offset] ?? 0) +
+    0.7152 * (pixels[offset + 1] ?? 0) +
+    0.0722 * (pixels[offset + 2] ?? 0)
+  );
+}
+
+// Paper must dominate each coarse region. A high percentile ignores sparse ink;
+// local estimates follow lighting instead of treating dim paper as dark ink.
+function estimatePaper(pixels: Buffer, width: number, height: number) {
+  const columns = Math.max(
+    1,
+    Math.ceil(width / imagePolicy.photoBackgroundTileSize),
+  );
+  const rows = Math.max(
+    1,
+    Math.ceil(height / imagePolicy.photoBackgroundTileSize),
+  );
+  const tileWidth = width / columns;
+  const tileHeight = height / rows;
+  const paper = new Float64Array(columns * rows);
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const histogram = new Uint32Array(256);
+      let count = 0;
+      for (
+        let y = Math.floor(row * tileHeight);
+        y < Math.floor((row + 1) * tileHeight);
+        y++
+      ) {
+        for (
+          let x = Math.floor(column * tileWidth);
+          x < Math.floor((column + 1) * tileWidth);
+          x++
+        ) {
+          const offset = (y * width + x) * 4;
+          if ((pixels[offset + 3] ?? 0) < imagePolicy.cropAlphaThreshold)
+            continue;
+          const value = Math.round(luminance(pixels, offset));
+          histogram[value] = (histogram[value] ?? 0) + 1;
+          count++;
+        }
+      }
+      let cumulative = 0;
+      for (let value = 0; value < 256; value++) {
+        cumulative += histogram[value] ?? 0;
+        if (cumulative >= Math.max(1, Math.ceil(count * 0.75))) {
+          paper[row * columns + column] = value;
+          break;
+        }
+      }
+    }
+  }
+  return (x: number, y: number): number => {
+    const gx = Math.max(0, Math.min(columns - 1, (x + 0.5) / tileWidth - 0.5));
+    const gy = Math.max(0, Math.min(rows - 1, (y + 0.5) / tileHeight - 0.5));
+    const left = Math.floor(gx);
+    const top = Math.floor(gy);
+    const right = Math.min(columns - 1, left + 1);
+    const bottom = Math.min(rows - 1, top + 1);
+    const dx = gx - left;
+    const dy = gy - top;
+    const upper =
+      (paper[top * columns + left] ?? 0) * (1 - dx) +
+      (paper[top * columns + right] ?? 0) * dx;
+    const lower =
+      (paper[bottom * columns + left] ?? 0) * (1 - dx) +
+      (paper[bottom * columns + right] ?? 0) * dx;
+    return upper * (1 - dy) + lower * dy;
+  };
 }
 
 export async function processAutographImage(
@@ -137,27 +212,28 @@ export async function processAutographImage(
   let right = -1;
   let bottom = -1;
   let foreground = 0;
+  const paper =
+    source === 'photo' ? estimatePaper(pixels, width, height) : undefined;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const offset = (y * width + x) * 4;
-      const red = pixels[offset] ?? 0;
-      const green = pixels[offset + 1] ?? 0;
-      const blue = pixels[offset + 2] ?? 0;
       const originalAlpha = pixels[offset + 3] ?? 0;
       let alpha = originalAlpha;
       if (source === 'photo') {
-        const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+        const background = paper?.(x, y) ?? 0;
+        const contrast =
+          (background - luminance(pixels, offset)) / Math.max(32, background);
+        const strength = Math.max(
+          0,
+          Math.min(
+            1,
+            (contrast - imagePolicy.photoWeakContrast) /
+              (imagePolicy.photoStrongContrast - imagePolicy.photoWeakContrast),
+          ),
+        );
+        // Smoothstep retains antialiased stroke edges without promoting noise.
         alpha = Math.round(
-          originalAlpha *
-            Math.max(
-              0,
-              Math.min(
-                1,
-                (imagePolicy.photoTransparentLuminance - luminance) /
-                  (imagePolicy.photoTransparentLuminance -
-                    imagePolicy.photoOpaqueLuminance),
-              ),
-            ),
+          originalAlpha * strength * strength * (3 - 2 * strength),
         );
         pixels[offset] = 0;
         pixels[offset + 1] = 0;
@@ -181,6 +257,14 @@ export async function processAutographImage(
     )
   ) {
     throw new ImageProcessingError('EMPTY_AUTOGRAPH');
+  }
+  // A filled frame is not credible sparse ink on paper. Fail closed instead
+  // of presenting a black rectangle for approval; keep the existing error code.
+  if (
+    source === 'photo' &&
+    foreground / (width * height) > imagePolicy.maximumPhotoForegroundFraction
+  ) {
+    throw new ImageProcessingError('INVALID_IMAGE');
   }
   const cropped = sharp(pixels, { raw: { width, height, channels: 4 } })
     .extract({ left, top, width: right - left + 1, height: bottom - top + 1 })

@@ -1,4 +1,8 @@
-import { AutographApiError, type Autograph } from './autograph-api';
+import {
+  AutographApiError,
+  type Autograph,
+  type OriginalContentType,
+} from './autograph-api';
 
 export type SubmissionStage =
   | 'creating'
@@ -9,11 +13,12 @@ export type SubmissionStage =
   | 'loading_preview';
 
 export type SubmissionApi = {
-  create(signal: AbortSignal): Promise<Autograph>;
+  create(source: Autograph['source'], signal: AbortSignal): Promise<Autograph>;
   get(id: string, signal: AbortSignal): Promise<Autograph>;
   initiateUpload(
     id: string,
     sizeBytes: number,
+    contentType: OriginalContentType,
     signal: AbortSignal,
   ): Promise<{
     method: 'PUT';
@@ -22,8 +27,9 @@ export type SubmissionApi = {
   }>;
   upload(
     signed: { method: 'PUT'; url: string; headers: Record<string, string> },
-    png: Blob,
+    image: Blob,
     signal: AbortSignal,
+    onProgress?: (progress: number) => void,
   ): Promise<void>;
   complete(id: string, signal: AbortSignal): Promise<Autograph>;
   preview(
@@ -47,13 +53,15 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-export async function submitCanvas(
+export async function submitAutograph(
   api: SubmissionApi,
-  png: Blob,
+  image: Blob,
+  source: Autograph['source'],
   signal: AbortSignal,
   onStage: (stage: SubmissionStage) => void,
   onCreated: (id: string) => void,
   existingId?: string,
+  onUploadProgress?: (progress: number) => void,
   pause: (ms: number, signal: AbortSignal) => Promise<void> = wait,
 ): Promise<{
   id: string;
@@ -61,12 +69,17 @@ export async function submitCanvas(
   previewUrl: string;
   expiresAt: string;
 }> {
+  const contentType = image.type;
+  if (contentType !== 'image/png' && contentType !== 'image/jpeg') {
+    throw new Error('Choose a PNG or JPEG image before continuing.');
+  }
+
   let autograph: Autograph;
   if (existingId) {
     autograph = await api.get(existingId, signal);
   } else {
     onStage('creating');
-    autograph = await api.create(signal);
+    autograph = await api.create(source, signal);
     onCreated(autograph.id);
   }
 
@@ -86,10 +99,15 @@ export async function submitCanvas(
     }
     if (autograph.status === 'draft' || autograph.status === 'upload_pending') {
       onStage('requesting_upload');
-      const signed = await api.initiateUpload(autograph.id, png.size, signal);
+      const signed = await api.initiateUpload(
+        autograph.id,
+        image.size,
+        contentType,
+        signal,
+      );
       onStage('uploading');
       try {
-        await api.upload(signed, png, signal);
+        await api.upload(signed, image, signal, onUploadProgress);
       } catch (error) {
         if (!(error instanceof AutographApiError) || error.status !== 412)
           throw error;
@@ -113,7 +131,7 @@ export async function submitCanvas(
       };
     }
     if (autograph.status === 'processing_failed') {
-      throw new Error('Processing failed. Please start a new drawing.');
+      throw new Error('Processing failed. Please start a new autograph.');
     }
     await pause(1500, signal);
     autograph = await api.get(autograph.id, signal);

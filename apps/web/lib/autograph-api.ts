@@ -14,6 +14,8 @@ export type Autograph = {
   approvedAt?: string | null;
 };
 
+export type OriginalContentType = 'image/png' | 'image/jpeg';
+
 export class AutographApiError extends Error {
   constructor(
     readonly code: string,
@@ -54,33 +56,80 @@ function errorCode(value: unknown): string | null {
 
 export function autographApi(origin: string) {
   return {
-    create: (signal: AbortSignal) =>
-      apiJson<Autograph>(origin, '/autographs', signal, { source: 'canvas' }),
+    create: (source: Autograph['source'], signal: AbortSignal) =>
+      apiJson<Autograph>(origin, '/autographs', signal, { source }),
     get: (id: string, signal: AbortSignal) =>
       apiJson<Autograph>(
         origin,
         `/autographs/${encodeURIComponent(id)}`,
         signal,
       ),
-    initiateUpload: (id: string, sizeBytes: number, signal: AbortSignal) =>
+    initiateUpload: (
+      id: string,
+      sizeBytes: number,
+      contentType: OriginalContentType,
+      signal: AbortSignal,
+    ) =>
       apiJson<{
         method: 'PUT';
         url: string;
         headers: Record<string, string>;
         expiresAt: string;
       }>(origin, `/autographs/${encodeURIComponent(id)}/upload`, signal, {
-        contentType: 'image/png',
+        contentType,
         sizeBytes,
       }),
     upload: async (
       signed: { method: 'PUT'; url: string; headers: Record<string, string> },
-      png: Blob,
+      image: Blob,
       signal: AbortSignal,
+      onProgress?: (progress: number) => void,
     ) => {
+      if (onProgress) {
+        await new Promise<void>((resolve, reject) => {
+          const request = new XMLHttpRequest();
+          const abort = () => request.abort();
+          request.open(signed.method, signed.url);
+          request.withCredentials = false;
+          for (const [name, value] of Object.entries(signed.headers)) {
+            request.setRequestHeader(name, value);
+          }
+          request.upload.onprogress = (event) => {
+            if (event.lengthComputable && event.total > 0) {
+              onProgress(Math.min(1, event.loaded / event.total));
+            }
+          };
+          request.onload = () => {
+            signal.removeEventListener('abort', abort);
+            if (request.status >= 200 && request.status < 300) resolve();
+            else reject(new AutographApiError('UPLOAD_FAILED', request.status));
+          };
+          request.onerror = () => {
+            signal.removeEventListener('abort', abort);
+            reject(new AutographApiError('UPLOAD_FAILED', request.status));
+          };
+          request.onabort = () => {
+            signal.removeEventListener('abort', abort);
+            reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+          };
+          if (signal.aborted) {
+            request.abort();
+            return;
+          }
+          signal.addEventListener('abort', abort, { once: true });
+          try {
+            request.send(image);
+          } catch (error) {
+            signal.removeEventListener('abort', abort);
+            reject(error);
+          }
+        });
+        return;
+      }
       const response = await fetch(signed.url, {
         method: signed.method,
         headers: signed.headers,
-        body: png,
+        body: image,
         credentials: 'omit',
         signal,
       });

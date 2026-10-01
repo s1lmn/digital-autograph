@@ -58,6 +58,8 @@ immutable-image Container Registry:
   Enable managed backups/PITR and test a restore.
 - Private Object Storage bucket. Never enable public access; originals must
   remain private. Create S3-compatible access keys scoped to the bucket.
+  Configure browser CORS during provisioning as described below; a private
+  bucket without CORS cannot accept browser direct uploads.
 - Lockbox secrets and a runtime service account attached to the VM. Grant
   registry pull access, Lockbox payload access only to this environment's
   secrets, and only the bucket read/write/delete permissions needed by the
@@ -94,6 +96,72 @@ See the official [GitHub workload identity federation tutorial](https://yandex.c
 [Managed PostgreSQL connection guide](https://yandex.cloud/en/docs/managed-postgresql/operations/connect),
 [Object Storage access](https://yandex.cloud/en/docs/storage/concepts/bucket), and
 [Lockbox payload CLI reference](https://yandex.cloud/en/docs/lockbox/cli-ref/payload/get).
+
+### Staging Object Storage CORS (operator provisioning)
+
+Browser direct uploads require bucket CORS for the exact web origin. The
+reviewed staging configuration is `deploy/storage-cors.staging.xml`:
+
+- Origin: `https://staging.destka.online`, without a wildcard.
+- Methods: `PUT` for private original uploads and `GET` for signed private
+  previews (`ReadyAutographPicker` uses `crossOrigin="anonymous"`).
+- Allowed headers: `Content-Type` and `If-None-Match`. Both remain signed;
+  uploads retain the `If-None-Match: *` overwrite protection.
+- Preflight cache: 300 seconds. Do not add `OPTIONS` as an allowed method.
+
+CORS is not authorization and does not make objects public. Anonymous read,
+list, and config read must remain disabled; keep the existing private ACL and
+bucket policy. Presigned PUT/GET remain required. Do not grant runtime or
+publisher service accounts additional permissions or give the release workflow
+bucket administration access.
+
+Using an authenticated **operator** `yc` provisioning profile and Node.js 24:
+
+```sh
+node deploy/staging-storage-cors.mjs validate
+node deploy/staging-storage-cors.mjs check
+# Explicit environment change, only after reviewing the configuration:
+node deploy/staging-storage-cors.mjs apply
+node deploy/staging-storage-cors.mjs check
+```
+
+Set `YC_BIN` to the installed CLI path if `yc` is not on PATH. `validate` only
+checks the repository XML; `check` reads full bucket configuration and exits
+nonzero on drift or a privacy violation. `apply` targets only
+`digital-autograph-staging-e6ic8eh2`, verifies privacy before writing, updates
+only CORS, and verifies the result and unchanged non-CORS settings. Repeated
+application of matching configuration performs no write. CLI payloads/errors
+are suppressed; the script does not handle credentials or signed object URLs.
+
+The CLI mapping uses the documented `yc storage bucket update --cors` array
+syntax (`method-put`, `method-get`); see the official
+[Yandex CORS provisioning guide](https://yandex.cloud/en/docs/storage/operations/buckets/cors).
+This is a provisioning action, **not a per-release deployment step**. Neither
+application/worker startup nor the release workflow changes CORS. Applying this
+configuration does not rebuild/redeploy images or modify release image tags.
+
+Before physical browser smoke, verify an unsigned synthetic preflight against
+a nonexistent diagnostic key (no object is written):
+
+```sh
+curl --silent --show-error --include --request OPTIONS \
+  --header 'Origin: https://staging.destka.online' \
+  --header 'Access-Control-Request-Method: PUT' \
+  --header 'Access-Control-Request-Headers: content-type,if-none-match' \
+  'https://storage.yandexcloud.net/digital-autograph-staging-e6ic8eh2/__cors-preflight/check'
+```
+
+Expect a successful HTTP response with the exact staging
+`Access-Control-Allow-Origin`, `PUT` in allowed methods, and both requested
+headers allowed. Repeat with method `GET` to check private preview CORS. Repeat
+with `Origin: https://example.com`: it must not be permitted. A successful
+OPTIONS is **not** proof of a successful presigned PUT: the user must repeat
+upload, completion, worker processing, cleaned preview, approval, and placement
+smoke against the unchanged application release.
+
+Production must have its **own exact web origin**, never the staging origin or
+a wildcard. This staging script deliberately cannot target production; provision
+and review production CORS separately. Do not change public access to fix CORS.
 
 ### Lockbox payloads
 

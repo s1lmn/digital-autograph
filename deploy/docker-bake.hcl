@@ -7,6 +7,13 @@ variable "GITHUB_ACTIONS" {
 target "_base" {
   context    = "."
   dockerfile = "Dockerfile"
+  platforms  = ["linux/amd64"]
+  output     = ["type=image,oci-mediatypes=false"]
+  # Yandex Registry rejects the index produced by BuildKit's default attestations.
+  attest = [
+    { type = "provenance", disabled = true },
+    { type = "sbom", disabled = true },
+  ]
   cache-from = GITHUB_ACTIONS == "true" ? ["type=gha,scope=platform-images"] : []
   cache-to   = GITHUB_ACTIONS == "true" ? ["type=gha,scope=platform-images,mode=max"] : []
 }

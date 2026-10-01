@@ -2,6 +2,37 @@
   display: grid;
   gap: 1.25rem;
 }
+.modeTabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid #d9dfe5;
+  padding-bottom: 0.5rem;
+}
+.tab,
+.activeTab {
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.65rem 1rem;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.tab {
+  color: #53606d;
+  background: transparent;
+}
+.tab:hover:not(:disabled) {
+  background: #f2f4f6;
+}
+.activeTab {
+  color: white;
+  background: #17202a;
+}
+.tab:disabled,
+.activeTab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .primary {
   justify-self: start;
   border: 0;
@@ -18,10 +49,18 @@
   cursor: not-allowed;
 }
 .status {
+  display: grid;
+  gap: 0.6rem;
   padding: 0.9rem;
   background: #eaf3fc;
   border-radius: 0.5rem;
   margin: 0;
+}
+.status p {
+  margin: 0;
+}
+.status progress {
+  width: 100%;
 }
 .error {
   padding: 1rem;
@@ -81,4 +120,20 @@
 .approval [role='alert'] {
   color: #9a3027;
   font-weight: 600;
+}
+.preview .status h3 {
+  margin: 0;
+}
+.preview .status + .actions {
+  margin-top: 1rem;
+}
+.preview .actions button {
+  font: inherit;
+  min-height: 44px;
+}
+@media (max-width: 30rem) {
+  .preview .status + .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

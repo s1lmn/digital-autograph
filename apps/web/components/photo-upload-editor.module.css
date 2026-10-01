@@ -1,0 +1,117 @@
+.editor {
+  display: grid;
+  gap: 1rem;
+}
+
+.editor h2,
+.editor h3 {
+  margin: 0 0 0.35rem;
+}
+
+.editor p {
+  margin: 0;
+  color: #53606d;
+  line-height: 1.45;
+}
+
+.editor .photoHint {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: #53606d;
+  line-height: 1.4;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.actions button,
+.controls button {
+  border: 1px solid #7b8793;
+  border-radius: 0.5rem;
+  background: white;
+  color: #17202a;
+  padding: 0.65rem 0.9rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.actions button:disabled,
+.controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cropArea {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  max-width: 45rem;
+  aspect-ratio: 2 / 1;
+  border: 1px solid #7b8793;
+  border-radius: 0.5rem;
+  background: white;
+  touch-action: none;
+  cursor: grab;
+}
+
+.canvas:active {
+  cursor: grabbing;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: auto minmax(8rem, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 45rem;
+}
+
+.controls .actions {
+  grid-column: 1 / -1;
+}
+
+.preview {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 45rem;
+  padding: 1rem;
+  border: 1px solid #d9dfe5;
+  border-radius: 0.6rem;
+  background: white;
+}
+
+.preview img {
+  display: block;
+  width: 100%;
+  max-height: 20rem;
+  object-fit: contain;
+  background: #f6f7f8;
+}
+
+.error {
+  color: #9a3027 !important;
+  font-weight: 600;
+}
+
+@media (max-width: 36rem) {
+  .actions button {
+    flex: 1 1 10rem;
+  }
+}

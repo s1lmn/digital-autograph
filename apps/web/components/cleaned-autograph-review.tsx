@@ -185,7 +185,7 @@ export function CleanedAutographReview({
           onClick={onStartOver}
           disabled={refreshing || phase.kind === 'approving'}
         >
-          Start a new drawing
+          Start a new autograph
         </button>
       </div>
     </section>

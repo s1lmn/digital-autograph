@@ -11,7 +11,8 @@ export default function CreateAutographPage() {
       <p className="eyebrow">Digital Autograph Platform</p>
       <h1>Create a digital autograph</h1>
       <p className={styles.intro}>
-        Draw a mark, upload it privately, and review the cleaned result.
+        Draw or upload a photo, edit it privately, and review the cleaned
+        result.
       </p>
       <aside className={styles.warning}>
         This autograph may become public after a later approval step. Do not use

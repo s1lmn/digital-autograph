@@ -114,7 +114,7 @@ describe('cleaned autograph approval UI', () => {
     );
     await waitFor(() => expect(preview).toHaveBeenCalledTimes(1));
     fireEvent.click(
-      screen.getByRole('button', { name: 'Start a new drawing' }),
+      screen.getByRole('button', { name: 'Start a new autograph' }),
     );
     expect(onStartOver).toHaveBeenCalledTimes(1);
   });

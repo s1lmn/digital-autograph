@@ -2,14 +2,37 @@
 
 ## MVP topology
 
-Staging and production each run on a separate Ubuntu VM with Docker Compose.
-Each VM runs the Next.js web app, Fastify API, image-processing worker, and
-Caddy HTTPS reverse proxy. PostgreSQL and Object Storage are managed Yandex
-Cloud services, with separate staging and production clusters/databases,
-private buckets, Lockbox secrets, and environment-specific service accounts.
-No Instance Groups or Kubernetes are required for the MVP. The images,
-Compose file, and release script are portable so the services can later move
-to Instance Groups without changing application architecture.
+### Staging: budget single VM
+
+Staging uses one Ubuntu 24.04 x64 VM: 2 vCPU at 20% baseline, 2 GB RAM,
+25–30 GB network HDD, and about 4 GB host swap. It runs web, API, worker,
+Caddy, the repository-only runner, and local PostgreSQL 17. Object Storage,
+Container Registry, and Lockbox remain external services. This is deliberately
+not production-grade HA: losing the VM/disk can lose both DB and local backups.
+Staging preserves application/container/release semantics, but DB hosting is
+intentionally cheaper than production.
+
+`compose.yaml` plus `compose.staging.yaml` adds PostgreSQL only for staging.
+The DB has no published port and is on an internal Docker network shared only
+with API, worker, and migration. Data lives in the persistent named volume
+`digital-autograph-staging-postgres`. Normal Compose up/down and application
+rollback retain that volume. Never run `docker compose down -v`, volume prune,
+or delete this volume during release or routine cleanup.
+
+PostgreSQL reserves 128 MB and has a 384 MB RAM / 768 MB RAM-plus-swap limit,
+with 64 MB shared buffers and 30 connections. These are conservative starting
+settings for low-traffic smoke testing, not a capacity guarantee. No application
+memory caps are imposed: photo processing needs transient memory. Monitor OOM,
+RSS, swap usage, free disk, and worker processing during physical smoke.
+
+### Production: Managed PostgreSQL
+
+Production keeps a separate VM and Managed PostgreSQL cluster on a private
+network, managed backups/PITR and a tested restore procedure. Separate private
+buckets, Lockbox secrets, runtime service accounts, and domains are required.
+No local PostgreSQL service is added to the production Compose path. The
+Compose/images can later move to Instance Groups without changing application
+architecture. No new production backup architecture is introduced here.
 
 The VM accepts inbound HTTP/HTTPS for Caddy only. A self-hosted GitHub Actions
 runner on each VM uses outbound HTTPS to GitHub and Yandex Cloud; deployment
@@ -27,10 +50,12 @@ workflow.
 Provision resources separately for each environment, except for the shared
 immutable-image Container Registry:
 
-- Ubuntu 24.04 VM, public IP, and a network security group that permits inbound
-  TCP 80/443 only. Keep PostgreSQL private and allow port 6432 only from the
-  application VM's network/security group.
-- Managed PostgreSQL database and app user. Enable backups and test a restore.
+- Ubuntu 24.04 VM, public IP, and a network security group permitting inbound
+  TCP 80/443. Limit any administrative SSH to the operator's IP. For staging,
+  use the budget spec above; do not provision Managed PostgreSQL.
+- For production only, provision Managed PostgreSQL database/app user on the
+  private network; allow port 6432 only from its application VM security group.
+  Enable managed backups/PITR and test a restore.
 - Private Object Storage bucket. Never enable public access; originals must
   remain private. Create S3-compatible access keys scoped to the bucket.
 - Lockbox secrets and a runtime service account attached to the VM. Grant
@@ -51,7 +76,7 @@ immutable-image Container Registry:
   image-publishing identity: production pulls the image already deployed to
   staging.
 - A GitHub Actions self-hosted runner per VM, labelled `da-staging` and
-  `da-production` respectively. Install Docker Engine, the Compose v2 plugin,
+  `da-production` respectively. Install Docker Engine, the Compose v2 plugin (2.24.4 or newer for `!reset`),
   Docker Buildx, `yc`, `gh`, `curl`, and `jq`. Configure the VM's attached service
   account for `yc`, Lockbox, and the registry credential helper. The runner
   user must be trusted with Docker/root access and non-interactive `sudo`;
@@ -74,7 +99,12 @@ the repository, or deployment logs.
 
 API payload keys:
 
-- `DATABASE_URL`: this environment's Managed PostgreSQL URI with
+- `DATABASE_URL`: staging uses
+  `postgresql://<user>:<URL-encoded-password>@postgres:5432/<staging-db>?sslmode=disable`.
+  API and worker must use the same user/database/password. The renderer derives
+  the staging PostgreSQL env file from the API URI, validates both app URIs use
+  the private `postgres` service, and rejects external hosts or TLS overrides.
+  Production keeps its Managed PostgreSQL URI with
   `sslmode=verify-full&sslrootcert=/run/secrets/postgres-ca.pem`.
 - `SESSION_TTL_SECONDS`, `TRUSTED_WEB_ORIGINS`, and `WEB_ORIGIN`.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
@@ -88,10 +118,14 @@ Worker payload keys are `DATABASE_URL` (same environment, with TLS settings),
 `S3_SECRET_ACCESS_KEY`, `WORKER_POLL_INTERVAL_MS`, `WORKER_LEASE_SECONDS`,
 and `UPLOAD_CLEANUP_GRACE_SECONDS`.
 
-The database TLS root certificate must be installed read-only at
-`/etc/digital-autograph/certs/yandex-cloud-root.crt`. Confirm the connection
-URI encoding for reserved characters in credentials, and verify TLS by
-connecting from the VM before the first deploy. Use real HTTPS domains and
+For production, install the database TLS root certificate read-only at
+`/etc/digital-autograph/certs/yandex-cloud-root.crt` and verify the external DB
+connection with TLS. The staging override removes these CA mounts; its DB
+traffic stays on the internal Docker network. Confirm URI encoding for reserved
+characters in credentials. PostgreSQL initialization credentials apply only to
+an empty volume: rotate an existing DB password with an explicit SQL procedure
+and update both Lockbox payloads together; changing the env file alone does not
+change an existing PostgreSQL role. Use real HTTPS domains and
 provider callback URLs in each environment; register each exact OAuth callback
 with Google and Telegram.
 
@@ -133,7 +167,10 @@ independent of a developer checkout.
    under the 40-character Git commit SHA tag.
 2. The VM obtains the API and worker payloads from its environment's Lockbox,
    writes owner-only runtime environment files, pulls the SHA-tagged images,
-   and runs the migration container once against its private database. It
+   and uses one environment-selected Compose helper for pull, startup, migration,
+   health checks, and rollback. Staging first starts/waits for PostgreSQL, then
+   takes a custom-format `pg_dump` before running migration (including an empty
+   first-deploy DB). It
    then starts/replaces Compose services.
 3. Smoke checks require the API readiness endpoint, the public web origin,
    and a running worker. The deploy script records the active and previous
@@ -173,8 +210,104 @@ release workflow:
 docker buildx bake --file deploy/docker-bake.hcl release
 ```
 
-Before connecting a VM to the runner, validate Compose with
-`docker compose --env-file /opt/digital-autograph/release.env -f
-/opt/digital-autograph/compose.yaml config` after provisioning its runtime
-environment files. Those files must contain only that environment's values
+Before connecting a VM to the runner, validate Compose without printing the
+resolved secrets, after provisioning its runtime environment files:
+
+```sh
+# Production
+sudo docker compose --env-file /opt/digital-autograph/release.env \
+  -f /opt/digital-autograph/compose.yaml config --quiet
+# Staging
+sudo docker compose --env-file /opt/digital-autograph/release.env \
+  -f /opt/digital-autograph/compose.yaml \
+  -f /opt/digital-autograph/compose.staging.yaml config --quiet
+```
+
+Use only the command for the VM's environment. Those files must contain only that environment's values
 and must never be copied between staging and production.
+
+## Staging backups and migration failure
+
+Before every staging deploy migration, write a dump under
+`/var/lib/digital-autograph/staging-backups` (directory 0700, dumps 0600).
+Only the newest three successfully completed dumps are retained. A failed dump
+blocks migration. A failed migration exits before replacing application
+containers, leaves the recorded current image unchanged, and retains the dump.
+Rollback uses the same staging Compose context and persistent volume, skips
+migration/backup, and never restores schema automatically. These local dumps
+protect a small staging test DB from operator mistakes, not VM/disk loss.
+
+To rehearse recovery, copy a completed dump into an isolated test environment,
+inspect it with `pg_restore --list`, and restore only after reviewing the
+migration compatibility and selecting an explicit recovery target. Do not
+restore over the active staging DB automatically. Production continues its
+managed backup/PITR procedure.
+
+## Host swap and build memory
+
+Configure swap on the VM host, never inside containers. On a newly provisioned
+Ubuntu VM with no existing `/swapfile`, an operator can configure 4 GB:
+
+```sh
+sudo dd if=/dev/zero of=/swapfile bs=1M count=4096 status=progress
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+# Add this line once to /etc/fstab:
+# /swapfile none swap sw 0 0
+free -h
+```
+
+Do not overwrite an existing swapfile. Set a disk-space alarm: OS, swap,
+PostgreSQL volume, three dumps, images and Buildx cache share only 25–30 GB.
+Clean obsolete build cache selectively; never prune volumes. Keep active and
+previous release images available for rollback.
+
+The Dockerfile has one shared build stage: dependency installation, API/worker
+TypeScript builds, Next.js production build and two pnpm deploy operations.
+Buildx reuses this stage across four targets, but Next.js and dependency
+installation can exceed the spare RAM of a running 2 GB VM. Local builds on a
+larger machine do not prove viability on 2 GB; swap can prevent some OOMs but
+causes HDD contention, especially at 20% CPU baseline. Do not promise an
+unattended build on the 2 GB VM alongside the application/DB.
+
+Before a release build, an operator should temporarily stop the VM and increase
+RAM to 4 GB (subject to explicit cost approval), run the build/deploy, then stop
+and return it to 2 GB for runtime. This causes staging downtime and is not done
+by the workflow. Alternatively, a later reviewed change can publish the exact
+SHA images on a GitHub-hosted builder and leave the VM runner for pull/deploy
+only, subject to the private repository's included Actions minutes. Do not run
+PR code on the VM runner. No cloud build or RAM change is part of local checks.
+
+## Staging cost target
+
+Planning target: **approximately 1500–1700 RUB/month** at 24/7 use with little
+user traffic, no Managed PostgreSQL, no production resources and controlled
+image/secret version retention. This is a budget target, not a tariff quote.
+
+| Component          | Budget basis                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| Compute VM         | Main cost; official Ice Lake example for 2 × 20% vCPU + 2 GB RAM is 1224 RUB per 30 days            |
+| Public IP          | About 190 RUB per 30 days at the documented active-IP example rate                                  |
+| Disk               | Budget separately for 25–30 GB network HDD, including swap/DB/backups/cache                         |
+| Lockbox            | Budget for two active secret versions and payload read operations; old versions add cost            |
+| Object Storage     | Small private test uploads plus request/traffic charges                                             |
+| Container Registry | Unique stored image layers, traffic and optional vulnerability scans; retain only reviewed releases |
+
+Actual cost depends on current tariffs, selected platform/region, month length,
+stored data and temporary larger builds. Check the live calculator before
+provisioning and set billing alerts. With a 3990 RUB balance, 1500–1700 per
+month leaves roughly 590–990 RUB after two months, before unexpected usage.
+Do not treat that as a guaranteed minimum lifetime.
+
+Stop the staging VM during long idle periods to reduce compute charges. Disk,
+Lockbox, registry and bucket storage charges continue. A reserved static IP also
+continues billing and becomes more expensive while inactive, so stopping is not
+zero cost. No automatic deletion of cloud resources is performed.
+
+Current pricing sources (reviewed 2026-10-01):
+[Compute](https://yandex.cloud/ru/docs/compute/pricing),
+[VPC/IP](https://yandex.cloud/ru/docs/vpc/pricing),
+[Lockbox](https://yandex.cloud/ru/docs/lockbox/pricing),
+[Object Storage](https://yandex.cloud/ru/docs/storage/pricing), and
+[Container Registry](https://yandex.cloud/ru/docs/container-registry/pricing).

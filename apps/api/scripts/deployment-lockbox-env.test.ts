@@ -10,6 +10,67 @@ const script = fileURLToPath(
 );
 
 describe('Lockbox environment renderer', () => {
+  it('derives owner-only staging PostgreSQL credentials from the API DATABASE_URL without logging them', () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), 'da-lockbox-'));
+    try {
+      const output = path.join(directory, 'api.env');
+      const postgres = path.join(directory, 'postgres.env');
+      const result = spawnSync(
+        process.execPath,
+        [script, output, 'staging', postgres],
+        {
+          input: JSON.stringify({
+            entries: [
+              {
+                key: 'DATABASE_URL',
+                textValue:
+                  'postgresql://staging:synthetic%27password@postgres:5432/autograph_staging?sslmode=disable',
+              },
+            ],
+          }),
+          encoding: 'utf8',
+        },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toBe('');
+      expect(readFileSync(postgres, 'utf8')).toBe(
+        "POSTGRES_USER='staging'\nPOSTGRES_PASSWORD='synthetic\\'password'\nPOSTGRES_DB='autograph_staging'\n",
+      );
+      expect(statSync(postgres).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it.each([
+    'postgresql://user:synthetic-password@external.example/db',
+    'postgresql://user:synthetic-password@postgres:6432/db',
+    'postgresql://user:synthetic-password@postgres/db?sslmode=verify-full',
+    'postgresql://user:synthetic-password@postgres/db?host=external.example',
+    'postgresql://user@postgres/db',
+  ])(
+    'rejects unsafe staging DATABASE_URL %s before writing runtime files',
+    (url) => {
+      const directory = mkdtempSync(path.join(os.tmpdir(), 'da-lockbox-'));
+      const output = path.join(directory, 'worker.env');
+      try {
+        const result = spawnSync(
+          process.execPath,
+          [script, output, 'staging'],
+          {
+            input: JSON.stringify({
+              entries: [{ key: 'DATABASE_URL', textValue: url }],
+            }),
+            encoding: 'utf8',
+          },
+        );
+        expect(result.status).not.toBe(0);
+        expect(result.stderr).not.toContain('synthetic-password');
+        expect(() => readFileSync(output)).toThrow();
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
   it('writes escaped entries with owner-only permissions', () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'da-lockbox-'));
     const outputPath = path.join(directory, 'runtime.env');

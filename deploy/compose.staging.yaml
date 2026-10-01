@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file:
+      - /etc/digital-autograph/env/postgres.env
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=30
+    mem_limit: 384m
+    mem_reservation: 128m
+    memswap_limit: 768m
+    shm_size: 128m
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    networks: [staging_database]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+
+  api:
+    volumes: !reset []
+    networks: [default, staging_database]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    volumes: !reset []
+    networks: [default, staging_database]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migration:
+    volumes: !reset []
+    networks: [default, staging_database]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  staging_postgres_data:
+    name: digital-autograph-staging-postgres
+
+networks:
+  staging_database:
+    internal: true

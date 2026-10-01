@@ -183,7 +183,7 @@ describe('running deployment images', () => {
 if [[ "$1" == compose ]]; then echo "\${!#}"; elif [[ "$3" == '{{.State.Status}}' ]]; then echo running; else echo "cr.yandex/registry/digital-autograph/\${!#}:$ACTUAL_TAG"; fi
 `;
       const result = runScript(
-        `function application_images_match() {${fn}\n}\napplication_images_match`,
+        `function compose() { docker compose "$@"; }\nfunction application_images_match() {${fn}\n}\napplication_images_match`,
         'docker',
         docker,
         {

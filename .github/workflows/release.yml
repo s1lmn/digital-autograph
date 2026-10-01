@@ -255,7 +255,7 @@ jobs:
             release_ref=$IMAGE_SHA
           fi
           sudo install -d -m 755 /opt/digital-autograph
-          sudo install -m 644 deploy/compose.yaml deploy/Caddyfile \
+          sudo install -m 644 deploy/compose.yaml deploy/compose.staging.yaml deploy/Caddyfile \
             /opt/digital-autograph/
           sudo install -m 755 deploy/deploy-on-vm.sh \
             /opt/digital-autograph/

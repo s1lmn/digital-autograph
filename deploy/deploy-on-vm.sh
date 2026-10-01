@@ -64,10 +64,17 @@ fi
 install -d -m 700 /etc/digital-autograph/env "$state"
 umask 077
 for app in api worker; do
-  secret_id_var="YC_LOCKBOX_${app^^}_SECRET_ID"
+  secret_id_var=$(printf 'YC_LOCKBOX_%s_SECRET_ID' "$app" | tr '[:lower:]' '[:upper:]')
   secret_id=${!secret_id_var}
+  render_args=("/etc/digital-autograph/env/$app.env")
+  if [[ "$APP_ENV" == staging ]]; then
+    render_args+=(staging)
+    if [[ "$app" == api ]]; then
+      render_args+=(/etc/digital-autograph/env/postgres.env)
+    fi
+  fi
   yc lockbox payload get --id "$secret_id" --format json |
-    node "$root/render-lockbox-env.mjs" "/etc/digital-autograph/env/$app.env"
+    node "$root/render-lockbox-env.mjs" "${render_args[@]}"
 done
 
 export APP_ENV YC_REGISTRY_ID IMAGE_TAG=$image_tag WEB_DOMAIN API_DOMAIN
@@ -79,20 +86,54 @@ chmod 600 "$release_file"
 mv "$release_file" "$root/release.env"
 cd "$root"
 
+compose_files=(-f "$root/compose.yaml")
+if [[ "$APP_ENV" == staging ]]; then
+  compose_files+=(-f "$root/compose.staging.yaml")
+fi
+function compose() {
+  docker compose --env-file "$root/release.env" "${compose_files[@]}" "$@"
+}
+
+function backup_staging_database() {
+  local backup_dir backup_file saved_backup
+  local count=0
+  backup_dir="$state/staging-backups"
+  install -d -m 700 "$backup_dir"
+  backup_file="$backup_dir/$(date -u +%Y%m%dT%H%M%S)-$$.dump"
+  if ! compose exec -T postgres sh -c \
+    'pg_dump --format=custom --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+    >"$backup_file.tmp"; then
+    rm -f "$backup_file.tmp"
+    echo "Staging backup failed; refusing migration and application replacement." >&2
+    return 1
+  fi
+  chmod 600 "$backup_file.tmp"
+  mv "$backup_file.tmp" "$backup_file"
+  # Prune only our completed dumps after a successful backup; keep the newest three.
+  while IFS= read -r saved_backup; do
+    count=$((count + 1))
+    if (( count > 3 )); then rm -f -- "$saved_backup"; fi
+  done < <(find "$backup_dir" -maxdepth 1 -type f -name '*.dump' | sort -r)
+}
+
 registry_token=$(yc iam create-token)
 printf '%s' "$registry_token" |
   docker login --username iam --password-stdin cr.yandex >/dev/null
 unset registry_token
 
 trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
-docker compose --env-file "$root/release.env" -f "$root/compose.yaml" pull
+compose pull
+if [[ "$APP_ENV" == staging ]]; then
+  compose up -d --wait postgres
+fi
 if [[ "$rollback" == false ]]; then
-  docker compose --env-file "$root/release.env" -f "$root/compose.yaml" \
-    run --rm migration
+  if [[ "$APP_ENV" == staging ]]; then
+    backup_staging_database
+  fi
+  compose run --rm migration
 fi
 compose_updated=true
-if ! docker compose --env-file "$root/release.env" -f "$root/compose.yaml" \
-  up -d --remove-orphans; then
+if ! compose up -d --remove-orphans; then
   compose_updated=false
   echo "Compose update reported an error; checking health and attempting rollback if needed." >&2
 fi
@@ -100,8 +141,7 @@ fi
 function application_images_match() {
   local target container_id expected_image
   for target in api web worker; do
-    container_id=$(docker compose --env-file "$root/release.env" \
-      -f "$root/compose.yaml" ps -q "$target")
+    container_id=$(compose ps -q "$target")
     expected_image="cr.yandex/$YC_REGISTRY_ID/digital-autograph/$target:$IMAGE_TAG"
     if [[ -z "$container_id" ]] ||
        [[ "$(docker inspect --format '{{.State.Status}}' "$container_id")" != running ]] ||
@@ -113,8 +153,7 @@ function application_images_match() {
 
 for attempt in $(seq 1 30); do
   if [[ "$compose_updated" != true ]]; then break; fi
-  worker_id=$(docker compose --env-file "$root/release.env" \
-    -f "$root/compose.yaml" ps -q worker)
+  worker_id=$(compose ps -q worker)
   if application_images_match &&
     curl --fail --silent --show-error --max-time 5 \
     "https://$API_DOMAIN/health/ready" >/dev/null &&
@@ -144,19 +183,16 @@ if [[ -n "${old_image_tag:-}" && "$old_image_tag" != "$image_tag" ]]; then
     >"$release_file"
   chmod 600 "$release_file"
   mv "$release_file" "$root/release.env"
-  if docker compose --env-file "$root/release.env" -f "$root/compose.yaml" pull &&
-    docker compose --env-file "$root/release.env" -f "$root/compose.yaml" \
-      up -d --remove-orphans; then
+  if compose pull &&
+    compose up -d --remove-orphans; then
     for attempt in $(seq 1 30); do
       if application_images_match &&
         curl --fail --silent --show-error --max-time 5 \
         "https://$API_DOMAIN/health/ready" >/dev/null &&
         curl --fail --silent --show-error --max-time 5 \
           "https://$WEB_DOMAIN/" >/dev/null &&
-        [[ -n "$(docker compose --env-file "$root/release.env" \
-          -f "$root/compose.yaml" ps -q worker)" ]]; then
-        worker_id=$(docker compose --env-file "$root/release.env" \
-          -f "$root/compose.yaml" ps -q worker)
+        [[ -n "$(compose ps -q worker)" ]]; then
+        worker_id=$(compose ps -q worker)
         if [[ "$(docker inspect --format '{{.State.Status}}' "$worker_id")" != running ]]; then
           sleep 2
           continue

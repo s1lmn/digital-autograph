@@ -10,6 +10,7 @@ import {
   createPgProviderIdentityRepository,
   createPgSessionRepository,
   createPgWallRepository,
+  createPgPlacementHistoryRepository,
   createPgFreeClaimRepository,
   createPgPublicPlacementMediaRepository,
   createPgPricingRepository,
@@ -23,6 +24,7 @@ import {
 } from '@digital-autograph/autographs';
 import {
   FreeClaimService,
+  PlacementHistoryService,
   PublicPlacementMediaService,
   WallService,
   TakeoverQuoteService,
@@ -138,6 +140,9 @@ async function main(): Promise<void> {
           webOrigin: config.WEB_ORIGIN,
         }
       : undefined,
+    new PlacementHistoryService(
+      createPgPlacementHistoryRepository(database.pool),
+    ),
   );
   let closing = false;
 

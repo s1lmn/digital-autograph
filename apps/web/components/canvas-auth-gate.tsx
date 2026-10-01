@@ -34,7 +34,7 @@ export function CanvasAuthGate({ apiOrigin }: { apiOrigin: string }) {
     return (
       <section className={styles.auth} aria-labelledby="sign-in-heading">
         <h2 id="sign-in-heading">Sign in to continue</h2>
-        <p>Your drawing will start after sign-in.</p>
+        <p>Your autograph creation will start after sign-in.</p>
         <div className={styles.links}>
           <a href={`${apiOrigin}/auth/google/start?returnTo=${returnTo}`}>
             Continue with Google

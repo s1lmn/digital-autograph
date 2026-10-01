@@ -11,6 +11,7 @@ export * from './free-claim';
 export * from './public-media';
 export * from './pricing';
 export * from './reservation';
+export * from './placement-history';
 
 export type SlotStructure = { id: string; position: number };
 

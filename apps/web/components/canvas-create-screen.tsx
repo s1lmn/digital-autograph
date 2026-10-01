@@ -2,22 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { autographApi, AutographApiError } from '../lib/autograph-api';
-import { submitCanvas, type SubmissionStage } from '../lib/canvas-submission';
+import {
+  submitAutograph,
+  type SubmissionStage,
+} from '../lib/canvas-submission';
 import { exportPng, type Stroke } from '../lib/drawing';
 import { CanvasEditor } from './canvas-editor';
 import { CleanedAutographReview } from './cleaned-autograph-review';
+import { PhotoUploadEditor } from './photo-upload-editor';
 import styles from './canvas-create-screen.module.css';
 
 type ScreenState =
   | { kind: 'editing' }
-  | { kind: 'working'; stage: SubmissionStage }
+  | { kind: 'working'; stage: SubmissionStage; progress?: number }
   | { kind: 'error'; message: string }
   | { kind: 'preview'; assetId: string; url: string; expiresAt: string };
+
+type CreationMode = 'draw' | 'photo';
 
 const stageLabels: Record<SubmissionStage, string> = {
   creating: 'Creating your private draft…',
   requesting_upload: 'Preparing private upload…',
-  uploading: 'Uploading your drawing…',
+  uploading: 'Uploading your autograph…',
   completing: 'Verifying upload…',
   processing: 'Cleaning your autograph…',
   loading_preview: 'Loading your private preview…',
@@ -26,11 +32,11 @@ const stageLabels: Record<SubmissionStage, string> = {
 function errorMessage(error: unknown): string {
   if (error instanceof AutographApiError) {
     if (error.status === 401)
-      return 'Your session expired. Sign in again, then start a new drawing.';
+      return 'Your session expired. Sign in again, then start a new autograph.';
     if (error.code === 'UPLOAD_METADATA_MISMATCH')
-      return 'The upload could not be verified. Start a new drawing.';
+      return 'The upload could not be verified. Start a new autograph.';
     if (error.code === 'INVALID_AUTOGRAPH_STATE')
-      return 'This draft cannot be uploaded again. Start a new drawing.';
+      return 'This draft cannot be uploaded again. Start a new autograph.';
     return `The request failed (${error.code}). Retry when the connection is available.`;
   }
   return error instanceof Error
@@ -41,15 +47,22 @@ function errorMessage(error: unknown): string {
 export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
   const api = useRef(autographApi(apiOrigin));
   const strokes = useRef<readonly Stroke[]>([]);
-  const png = useRef<Blob | null>(null);
+  const image = useRef<Blob | null>(null);
   const autographId = useRef<string | undefined>(undefined);
   const controller = useRef<AbortController | null>(null);
   const busy = useRef(false);
+  const [mode, setMode] = useState<CreationMode>('draw');
   const [hasMarks, setHasMarks] = useState(false);
+  const [hasPhoto, setHasPhoto] = useState(false);
   const [state, setState] = useState<ScreenState>({ kind: 'editing' });
   const [editorKey, setEditorKey] = useState(0);
 
   useEffect(() => () => controller.current?.abort(), []);
+
+  const onPhotoChange = useCallback((blob: Blob | null) => {
+    image.current = blob;
+    setHasPhoto(Boolean(blob));
+  }, []);
 
   const run = useCallback(async () => {
     if (busy.current) return;
@@ -57,17 +70,37 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
     const nextController = new AbortController();
     controller.current = nextController;
     try {
-      if (!png.current) png.current = await exportPng(strokes.current);
+      if (mode === 'draw' && !image.current)
+        image.current = await exportPng(strokes.current);
+      if (!image.current) {
+        throw new Error(
+          mode === 'draw'
+            ? 'Draw an autograph before continuing.'
+            : 'Choose and edit a photo before continuing.',
+        );
+      }
       if (nextController.signal.aborted) return;
-      const result = await submitCanvas(
+      const result = await submitAutograph(
         api.current,
-        png.current,
+        image.current,
+        mode === 'draw' ? 'canvas' : 'photo',
         nextController.signal,
-        (stage) => setState({ kind: 'working', stage }),
+        (stage) =>
+          setState({
+            kind: 'working',
+            stage,
+            ...(stage === 'uploading' ? { progress: 0 } : {}),
+          }),
         (id) => {
           autographId.current = id;
         },
         autographId.current,
+        (progress) =>
+          setState((current) =>
+            current.kind === 'working' && current.stage === 'uploading'
+              ? { ...current, progress }
+              : current,
+          ),
       );
       setState({
         kind: 'preview',
@@ -82,15 +115,27 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
       busy.current = false;
       if (controller.current === nextController) controller.current = null;
     }
-  }, []);
+  }, [mode]);
 
   const startOver = () => {
     if (busy.current) return;
     strokes.current = [];
-    png.current = null;
+    image.current = null;
     autographId.current = undefined;
     setHasMarks(false);
+    setHasPhoto(false);
     setEditorKey((key) => key + 1);
+    setState({ kind: 'editing' });
+  };
+
+  const selectMode = (nextMode: CreationMode) => {
+    if (busy.current || autographId.current || mode === nextMode) return;
+    strokes.current = [];
+    image.current = null;
+    setHasMarks(false);
+    setHasPhoto(false);
+    setEditorKey((key) => key + 1);
+    setMode(nextMode);
     setState({ kind: 'editing' });
   };
 
@@ -123,42 +168,85 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
   return (
     <div className={styles.flow}>
       {state.kind !== 'preview' && (
-        <CanvasEditor
-          key={editorKey}
-          onDrawingChange={setHasMarks}
-          onStrokesChange={(value) => {
-            strokes.current = value;
-            png.current = null;
-          }}
-          disabled={state.kind === 'working' || Boolean(autographId.current)}
-        />
+        <div
+          className={styles.modeTabs}
+          role="group"
+          aria-label="Creation method"
+        >
+          <button
+            className={mode === 'draw' ? styles.activeTab : styles.tab}
+            type="button"
+            aria-pressed={mode === 'draw'}
+            disabled={state.kind === 'working' || Boolean(autographId.current)}
+            onClick={() => selectMode('draw')}
+          >
+            Draw
+          </button>
+          <button
+            className={mode === 'photo' ? styles.activeTab : styles.tab}
+            type="button"
+            aria-pressed={mode === 'photo'}
+            disabled={state.kind === 'working' || Boolean(autographId.current)}
+            onClick={() => selectMode('photo')}
+          >
+            Photo
+          </button>
+        </div>
       )}
+      {state.kind !== 'preview' &&
+        (mode === 'draw' ? (
+          <CanvasEditor
+            key={editorKey}
+            onDrawingChange={(hasDrawing) => {
+              setHasMarks(hasDrawing);
+              if (!hasDrawing) image.current = null;
+            }}
+            onStrokesChange={(value) => {
+              strokes.current = value;
+              image.current = null;
+            }}
+            disabled={state.kind === 'working' || Boolean(autographId.current)}
+          />
+        ) : (
+          <PhotoUploadEditor
+            key={editorKey}
+            onPhotoChange={onPhotoChange}
+            disabled={state.kind === 'working' || Boolean(autographId.current)}
+          />
+        ))}
       {state.kind === 'editing' && (
         <button
           className={styles.primary}
           type="button"
           onClick={run}
-          disabled={!hasMarks}
+          disabled={mode === 'draw' ? !hasMarks : !hasPhoto}
         >
           Create private preview
         </button>
       )}
       {state.kind === 'working' && (
-        <p role="status" aria-live="polite" className={styles.status}>
-          {stageLabels[state.stage]}
-        </p>
+        <div role="status" aria-live="polite" className={styles.status}>
+          <p>{stageLabels[state.stage]}</p>
+          {state.stage === 'uploading' && (
+            <progress
+              aria-label="Upload progress"
+              max={1}
+              value={state.progress ?? 0}
+            />
+          )}
+        </div>
       )}
       {state.kind === 'error' && (
         <div className={styles.error} role="alert">
           <p>{state.message}</p>
           <div className={styles.actions}>
-            {png.current && (
+            {image.current && (
               <button type="button" onClick={run}>
                 Retry
               </button>
             )}
             <button type="button" onClick={startOver}>
-              Start a new drawing
+              Start a new autograph
             </button>
             <button
               type="button"

@@ -115,14 +115,19 @@ identifiers and domains, never secret values).
 The release workflow only accepts manual dispatches from `main`. A production
 operation runs only for `RELEASE_OPERATOR`, requires the operator to enter
 `APPROVED`, verifies successful CI and a successful staging deployment for the
-same full SHA, then dispatches to the dedicated production runner. The
+same full SHA from trusted main history (successful push CI, not PR CI), then dispatches to the dedicated production runner. The
 operator's confirmation is the review gate on GitHub Free; a reviewer must
 review the change before the operator confirms. Do not describe this as GitHub
 Environment protection or branch protection.
 
 ## Release behavior
 
-1. A successful CI run on `main` starts the staging release on the staging VM.
+Deploy operations check out the exact validated `IMAGE_SHA` and verify the Git
+HEAD before executing any release scripts. Manual rollback uses the current
+main release configuration and the previous image tag recorded on the VM,
+independent of a developer checkout.
+
+1. A successful push CI run on this repository's `main` starts the staging release on the staging VM.
    The runner exchanges its short-lived GitHub OIDC token for a Yandex IAM
    token, builds separate API/web/worker/migration images, and pushes them
    under the 40-character Git commit SHA tag.
@@ -144,7 +149,11 @@ Environment protection or branch protection.
    environment and operation `rollback`. The VM redeploys its recorded
    previous image without rerunning migrations. A failed health check during a
    new deploy also attempts to restore the previously healthy application
-   image.
+   image. Compose startup errors cannot count as a successful release; smoke
+   checks also verify API/web/worker containers use the requested image tags.
+   Registry login remains available through an automatic rollback and is
+   removed on script exit. Registry inspection errors fail closed instead of
+   treating authentication/network failures as permission to overwrite a tag.
 
 Database schema is not automatically rolled back. Migrations must follow
 expand/deploy/contract: add backward-compatible schema, deploy and verify the

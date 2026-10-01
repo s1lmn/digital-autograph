@@ -1,11 +1,14 @@
 variable "YC_REGISTRY_ID" {}
 variable "IMAGE_TAG" {}
+variable "GITHUB_ACTIONS" {
+  default = "false"
+}
 
 target "_base" {
   context    = "."
   dockerfile = "Dockerfile"
-  cache-from = ["type=gha,scope=platform-images"]
-  cache-to   = ["type=gha,scope=platform-images,mode=max"]
+  cache-from = GITHUB_ACTIONS == "true" ? ["type=gha,scope=platform-images"] : []
+  cache-to   = GITHUB_ACTIONS == "true" ? ["type=gha,scope=platform-images,mode=max"] : []
 }
 
 target "api" {

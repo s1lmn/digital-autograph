@@ -84,21 +84,39 @@ printf '%s' "$registry_token" |
   docker login --username iam --password-stdin cr.yandex >/dev/null
 unset registry_token
 
+trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
 docker compose --env-file "$root/release.env" -f "$root/compose.yaml" pull
-docker logout cr.yandex >/dev/null
 if [[ "$rollback" == false ]]; then
   docker compose --env-file "$root/release.env" -f "$root/compose.yaml" \
     run --rm migration
 fi
+compose_updated=true
 if ! docker compose --env-file "$root/release.env" -f "$root/compose.yaml" \
   up -d --remove-orphans; then
+  compose_updated=false
   echo "Compose update reported an error; checking health and attempting rollback if needed." >&2
 fi
 
+function application_images_match() {
+  local target container_id expected_image
+  for target in api web worker; do
+    container_id=$(docker compose --env-file "$root/release.env" \
+      -f "$root/compose.yaml" ps -q "$target")
+    expected_image="cr.yandex/$YC_REGISTRY_ID/digital-autograph/$target:$IMAGE_TAG"
+    if [[ -z "$container_id" ]] ||
+       [[ "$(docker inspect --format '{{.State.Status}}' "$container_id")" != running ]] ||
+       [[ "$(docker inspect --format '{{.Config.Image}}' "$container_id")" != "$expected_image" ]]; then
+      return 1
+    fi
+  done
+}
+
 for attempt in $(seq 1 30); do
+  if [[ "$compose_updated" != true ]]; then break; fi
   worker_id=$(docker compose --env-file "$root/release.env" \
     -f "$root/compose.yaml" ps -q worker)
-  if curl --fail --silent --show-error --max-time 5 \
+  if application_images_match &&
+    curl --fail --silent --show-error --max-time 5 \
     "https://$API_DOMAIN/health/ready" >/dev/null &&
     curl --fail --silent --show-error --max-time 5 \
       "https://$WEB_DOMAIN/" >/dev/null &&
@@ -130,7 +148,8 @@ if [[ -n "${old_image_tag:-}" && "$old_image_tag" != "$image_tag" ]]; then
     docker compose --env-file "$root/release.env" -f "$root/compose.yaml" \
       up -d --remove-orphans; then
     for attempt in $(seq 1 30); do
-      if curl --fail --silent --show-error --max-time 5 \
+      if application_images_match &&
+        curl --fail --silent --show-error --max-time 5 \
         "https://$API_DOMAIN/health/ready" >/dev/null &&
         curl --fail --silent --show-error --max-time 5 \
           "https://$WEB_DOMAIN/" >/dev/null &&

@@ -76,6 +76,7 @@ jobs:
       - run: pnpm test:integration
       - run: pnpm build
       - run: pnpm test:build-smoke
+      - uses: docker/setup-buildx-action@v3
       - name: Build release container targets
         env:
           YC_REGISTRY_ID: ci-placeholder

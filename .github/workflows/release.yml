@@ -34,7 +34,9 @@ jobs:
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main') ||
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
       (github.event_name == 'workflow_dispatch' &&
        github.ref == 'refs/heads/main' &&
        (inputs.target != 'production' ||
@@ -86,10 +88,16 @@ jobs:
               exit 1
             fi
             if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
-              success=$(gh run list --workflow ci.yml --commit "$IMAGE_SHA" \
+              ancestry=$(gh api "repos/$GITHUB_REPOSITORY/compare/$IMAGE_SHA...main" --jq '.status')
+              if [[ "$ancestry" != ahead && "$ancestry" != identical ]]; then
+                echo "The selected SHA must belong to trusted main history" >&2
+                exit 1
+              fi
+              success=$(gh run list --repo "$GITHUB_REPOSITORY" \
+                --workflow ci.yml --commit "$IMAGE_SHA" \
                 --limit 100 \
-                --json status,conclusion \
-                --jq 'any(.[]; .status == "completed" and .conclusion == "success")')
+                --json status,conclusion,event,headBranch,headSha \
+                --jq 'any(.[]; .status == "completed" and .conclusion == "success" and .event == "push" and .headBranch == "main" and .headSha == env.IMAGE_SHA)')
               if [[ "$success" != true ]]; then
                 echo "The selected SHA does not have a successful CI run" >&2
                 exit 1
@@ -145,18 +153,29 @@ jobs:
           deployment_id=$(printf '%s' "$deployment_payload" |
             gh api --method POST "repos/$GITHUB_REPOSITORY/deployments" \
               --input - --jq '.id')
+          echo "id=$deployment_id" >>"$GITHUB_OUTPUT"
           gh api --method POST \
             "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" \
             -f state=in_progress \
             -f description="Deployment started on the $RELEASE_TARGET runner" \
             -f log_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             >/dev/null
-          echo "id=$deployment_id" >>"$GITHUB_OUTPUT"
 
       - name: Checkout release configuration
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ env.RELEASE_OPERATION == 'deploy' && env.IMAGE_SHA || github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact deploy checkout
+        if: env.RELEASE_OPERATION == 'deploy'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$IMAGE_SHA" ]]; then
+            echo "Validated image SHA differs from checked-out release configuration" >&2
+            exit 1
+          fi
 
       - name: Authenticate to Yandex Cloud for staging image publication
         if: github.event_name == 'workflow_run'
@@ -189,6 +208,10 @@ jobs:
           } >>"$GITHUB_ENV"
           unset iam_token
 
+      - name: Set up image builder
+        if: github.event_name == 'workflow_run'
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and publish commit-tagged images once
         if: github.event_name == 'workflow_run'
         shell: bash
@@ -200,10 +223,16 @@ jobs:
           export IMAGE_TAG=$IMAGE_SHA
           printf '%s' "$YC_IAM_TOKEN" |
             docker login --username iam --password-stdin cr.yandex
+          trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
           missing_targets=()
           for target in api web worker migration; do
             image="cr.yandex/$YC_REGISTRY_ID/digital-autograph/$target:$IMAGE_SHA"
-            if ! docker buildx imagetools inspect "$image" >/dev/null 2>&1; then
+            if ! inspection=$(docker buildx imagetools inspect "$image" 2>&1); then
+              if [[ "$inspection" != *"manifest unknown"* &&
+                    "$inspection" != *"not found"* ]]; then
+                echo "Registry inspection failed; refusing to overwrite a commit tag" >&2
+                exit 1
+              fi
               missing_targets+=("$target")
             fi
           done

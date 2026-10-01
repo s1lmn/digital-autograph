@@ -101,6 +101,11 @@ Create one API secret and one worker secret per environment. Payload entries
 are plain-text key/value pairs; do not put them in GitHub Actions variables,
 the repository, or deployment logs.
 
+Fetch runtime payloads with `yc lockbox payload get --format json-rest`.
+That CLI format uses camelCase fields, including `textValue`, as required by
+the renderer; plain `--format json` uses incompatible snake_case fields. Pipe the
+payload directly to the renderer without printing its contents.
+
 API payload keys:
 
 - `DATABASE_URL`: staging uses

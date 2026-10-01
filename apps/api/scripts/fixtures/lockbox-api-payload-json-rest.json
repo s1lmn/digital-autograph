@@ -1,0 +1,57 @@
+{
+  "versionId": "synthetic-api-version",
+  "entries": [
+    {
+      "textValue": "postgresql://staging:synthetic%27password@postgres:5432/autograph_staging?sslmode=disable",
+      "key": "DATABASE_URL"
+    },
+    {
+      "textValue": "https://storage.example.invalid",
+      "key": "S3_ENDPOINT"
+    },
+    {
+      "textValue": "synthetic-s3_region",
+      "key": "S3_REGION"
+    },
+    {
+      "textValue": "synthetic-staging-bucket",
+      "key": "S3_BUCKET"
+    },
+    {
+      "textValue": "synthetic-s3_access_key_id",
+      "key": "S3_ACCESS_KEY_ID"
+    },
+    {
+      "textValue": "synthetic-s3_secret_access_key",
+      "key": "S3_SECRET_ACCESS_KEY"
+    },
+    {
+      "textValue": "1209600",
+      "key": "SESSION_TTL_SECONDS"
+    },
+    {
+      "textValue": "synthetic-trusted_web_origins",
+      "key": "TRUSTED_WEB_ORIGINS"
+    },
+    {
+      "textValue": "synthetic-web_origin",
+      "key": "WEB_ORIGIN"
+    },
+    {
+      "textValue": "synthetic-google_redirect_uri",
+      "key": "GOOGLE_REDIRECT_URI"
+    },
+    {
+      "textValue": "synthetic-telegram_redirect_uri",
+      "key": "TELEGRAM_REDIRECT_URI"
+    },
+    {
+      "textValue": "synthetic-upload_url_ttl_seconds",
+      "key": "UPLOAD_URL_TTL_SECONDS"
+    },
+    {
+      "textValue": "synthetic-preview_url_ttl_seconds",
+      "key": "PREVIEW_URL_TTL_SECONDS"
+    }
+  ]
+}

@@ -73,7 +73,7 @@ for app in api worker; do
       render_args+=(/etc/digital-autograph/env/postgres.env)
     fi
   fi
-  yc lockbox payload get --id "$secret_id" --format json |
+  yc lockbox payload get --id "$secret_id" --format json-rest |
     node "$root/render-lockbox-env.mjs" "${render_args[@]}"
 done
 

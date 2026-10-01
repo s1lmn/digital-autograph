@@ -2,7 +2,6 @@ import { loadWebConfig } from '@digital-autograph/config';
 import { wallIdParams } from '@digital-autograph/contracts';
 import { notFound } from 'next/navigation';
 import { PublicWallScreen } from '../../../components/public-wall-screen';
-import { WallPlacementHistory } from '../../../components/placement-history';
 import {
   PublicWallApiError,
   publicWallApi,
@@ -24,10 +23,7 @@ export default async function WallPage({
       AbortSignal.timeout(5000),
     );
     return (
-      <>
-        <PublicWallScreen initialWall={wall} apiOrigin={API_PUBLIC_ORIGIN} />
-        <WallPlacementHistory wallId={wall.id} apiOrigin={API_PUBLIC_ORIGIN} />
-      </>
+      <PublicWallScreen initialWall={wall} apiOrigin={API_PUBLIC_ORIGIN} />
     );
   } catch (error) {
     if (error instanceof PublicWallApiError && error.status === 404) {

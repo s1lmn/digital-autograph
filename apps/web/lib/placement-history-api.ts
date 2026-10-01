@@ -2,6 +2,7 @@ export type PlacementHistoryItem = {
   wallId: string;
   wallSlug: string;
   wallDisplayName: string;
+  wallIsPublic: boolean;
   slotPosition: number;
   source: 'free_claim' | 'takeover' | 'admin';
   startedAt: string;

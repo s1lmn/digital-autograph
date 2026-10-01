@@ -15,12 +15,17 @@ are exposed. Responses are `no-store`.
 
 `GET /me/placements` requires the normal authenticated session and filters in
 PostgreSQL by that session's User ID. It returns only the caller's recent 100
-placements, with public Wall display information and the same safe reason
-category. It does not accept an arbitrary User ID. Both views order history by
+placements, including records from archived Walls, with Wall display
+information and the same safe reason category. The private read model adds
+`wallIsPublic`, a boolean derived from the public Wall statuses. The UI links
+to public Walls only; archived/private Wall names remain text. This boolean
+is not included in public Wall history. It does not accept an arbitrary User ID. Both views order history by
 `started_at` descending and use the same persisted Placement records, including
 Free Claims and future takeover placements.
 
-The public Wall includes a read-only history list. `/me/placements` presents
+The public Wall includes a read-only history list inside its single page
+landmark. Manual Wall refresh and refresh after a successful claim increment
+a history version token to reload the list without polling. `/me/placements` presents
 the current and completed placements for the signed-in User; anonymous users
 are offered the existing Google and Telegram return flow. No Placement writer
 or ownership rule is changed by this feature.

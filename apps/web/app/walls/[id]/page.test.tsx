@@ -28,12 +28,8 @@ describe('public Wall server page', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
       `http://internal-api:4000/walls/${id}`,
     );
-    expect(page.props.children[0].props).toMatchObject({
+    expect(page.props).toMatchObject({
       initialWall: wall,
-      apiOrigin: 'https://api.example.test',
-    });
-    expect(page.props.children[1].props).toMatchObject({
-      wallId: id,
       apiOrigin: 'https://api.example.test',
     });
     expect(JSON.stringify(page.props)).not.toContain('internal-api');

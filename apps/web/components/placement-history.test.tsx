@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import styles from './placement-history.module.css';
 import {
   UserPlacementHistory,
   WallPlacementHistory,
@@ -12,6 +13,7 @@ const placement = {
   wallId,
   wallSlug: 'public-creator',
   wallDisplayName: 'Public Creator',
+  wallIsPublic: true,
   slotPosition: 0,
   source: 'free_claim',
   startedAt: '2026-09-28T12:00:00.000Z',
@@ -32,6 +34,28 @@ afterEach(() => {
 });
 
 describe('Placement history UI', () => {
+  it('keeps archived Wall placements visible without a dead public link', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (input.endsWith('/auth/me'))
+          return json({ user: { id: 'private' } });
+        if (input.endsWith('/me/placements'))
+          return json({ items: [{ ...placement, wallIsPublic: false }] });
+        throw new Error(`Unexpected request: ${input}`);
+      }),
+    );
+    render(<UserPlacementHistory apiOrigin={origin} />);
+    expect(
+      await screen.findByRole('heading', { name: "Public Creator's Wall" }),
+    ).toBeTruthy();
+    expect(screen.getByText('Current placement')).toBeTruthy();
+    expect(
+      screen.queryByRole('link', { name: "Public Creator's Wall" }),
+    ).toBeNull();
+    expect(screen.getByRole('list').className).toBe(styles.historyList);
+  });
+
   it('shows safe public Wall history and the current Free Claim', async () => {
     const fetchMock = vi.fn(async (input: string) => {
       if (input.endsWith(`/walls/${wallId}/placements`)) {
@@ -74,6 +98,7 @@ describe('Placement history UI', () => {
       await screen.findByRole('link', { name: "Public Creator's Wall" }),
     ).toHaveProperty('href', `${window.location.origin}/walls/${wallId}`);
     expect(screen.getByText('Free Claim')).toBeTruthy();
+    expect(screen.getByRole('list').className).toBe(styles.historyList);
     expect(screen.queryByText('private')).toBeNull();
 
     cleanup();

@@ -25,7 +25,9 @@ function HistoryTime({ value }: { value: string }) {
 export function WallPlacementHistory({
   wallId,
   apiOrigin,
+  refreshVersion = 0,
 }: {
+  refreshVersion?: number;
   wallId: string;
   apiOrigin: string;
 }) {
@@ -51,7 +53,7 @@ export function WallPlacementHistory({
         if (!controller.signal.aborted) setError(true);
       });
     return () => controller.abort();
-  }, [apiOrigin, wallId]);
+  }, [apiOrigin, wallId, refreshVersion]);
 
   return (
     <section className={styles.history} aria-labelledby="wall-history-heading">
@@ -65,7 +67,7 @@ export function WallPlacementHistory({
         <p>Showing the 100 most recent placements.</p>
       )}
       {items && items.length > 0 && (
-        <ol>
+        <ol className={styles.historyList}>
           {items.map((item) => (
             <li
               key={`${item.slotPosition}:${item.startedAt}`}
@@ -156,16 +158,20 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
   return (
     <>
       {items.length >= 100 && <p>Showing your 100 most recent placements.</p>}
-      <ol className={styles.history}>
+      <ol className={styles.historyList}>
         {items.map((item) => (
           <li
             key={`${item.wallId}:${item.slotPosition}:${item.startedAt}`}
             className={styles.item}
           >
             <h2>
-              <a href={`/walls/${item.wallId}`}>
-                {item.wallDisplayName}&apos;s Wall
-              </a>
+              {item.wallIsPublic ? (
+                <a href={`/walls/${item.wallId}`}>
+                  {item.wallDisplayName}&apos;s Wall
+                </a>
+              ) : (
+                <>{item.wallDisplayName}&apos;s Wall</>
+              )}
             </h2>
             <p>Slot {item.slotPosition + 1}</p>
             <p>{placementSourceLabel(item.source)}</p>

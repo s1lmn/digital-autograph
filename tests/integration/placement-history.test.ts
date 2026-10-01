@@ -134,6 +134,38 @@ afterAll(async () => {
 });
 
 describe('Placement history read models', () => {
+  it('retains archived Wall history only for its owner and disables public linking', async () => {
+    const user = await createUser();
+    const { wallId, slotId } = await createWall();
+    await createPlacement(
+      slotId,
+      user.id,
+      new Date('2026-09-28T12:00:00Z'),
+      new Date('2026-09-29T12:00:00Z'),
+      'wall_ended',
+    );
+    await database.pool.query(
+      "UPDATE walls SET status = 'archived' WHERE id = $1::uuid",
+      [wallId],
+    );
+    const response = await app.inject({
+      url: '/me/placements',
+      headers: { cookie: `da_session=${user.token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items).toHaveLength(1);
+    expect(response.json().items[0]).toMatchObject({
+      wallId,
+      wallDisplayName: 'History Creator',
+      wallIsPublic: false,
+      source: 'free_claim',
+      endReason: 'wall_ended',
+    });
+    expect((await app.inject(`/walls/${wallId}/placements`)).statusCode).toBe(
+      404,
+    );
+  });
+
   it('reconstructs a public Wall history without disclosing holder identifiers', async () => {
     const wallId = fixture.wallId;
     if (!wallId) throw new Error('Wall fixture was not initialized');
@@ -149,6 +181,11 @@ describe('Placement history read models', () => {
     expect(response.body).not.toContain(fixture.currentUser?.id);
     expect(response.body).not.toContain('untrusted private details');
     expect(response.body).not.toContain('user_id');
+    for (const item of body.placements) {
+      expect(Object.keys(item).sort()).toEqual(
+        ['slotPosition', 'source', 'startedAt', 'endedAt', 'endReason'].sort(),
+      );
+    }
   });
 
   it('returns only the authenticated User own placements', async () => {
@@ -156,7 +193,7 @@ describe('Placement history read models', () => {
     if (!previousUser || !fixture.wallId)
       throw new Error('Placement history fixture was not initialized');
     const response = await app.inject({
-      url: '/me/placements',
+      url: `/me/placements?userId=${fixture.currentUser?.id}`,
       headers: { cookie: `da_session=${previousUser.token}` },
     });
     expect(response.statusCode).toBe(200);
@@ -164,6 +201,7 @@ describe('Placement history read models', () => {
     expect(response.json().items[0]).toMatchObject({
       wallId: fixture.wallId,
       wallDisplayName: 'History Creator',
+      wallIsPublic: true,
       slotPosition: 0,
       source: 'free_claim',
       endReason: 'other',

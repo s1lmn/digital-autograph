@@ -9,6 +9,7 @@ type PlacementHistoryDbRow = {
   wall_id: string;
   wall_slug: string;
   wall_display_name: string;
+  wall_is_public: boolean;
   slot_position: number;
   source: PlacementSource;
   started_at: Date;
@@ -23,6 +24,7 @@ function mapRecord(row: PlacementHistoryDbRow): PlacementHistoryRow {
     wallId: row.wall_id,
     wallSlug: row.wall_slug,
     wallDisplayName: row.wall_display_name,
+    wallIsPublic: row.wall_is_public,
     slotPosition: row.slot_position,
     source: row.source,
     startedAt: row.started_at,
@@ -38,7 +40,9 @@ export function createPgPlacementHistoryRepository(
     async listPublicWallHistory(wallId) {
       const result = await pool.query<PlacementHistoryDbRow>(
         `SELECT w.id AS wall_id, cp.slug AS wall_slug,
-                cp.display_name AS wall_display_name, s.position AS slot_position,
+                cp.display_name AS wall_display_name,
+                w.status IN ('scheduled', 'live', 'paused', 'ended') AS wall_is_public,
+                s.position AS slot_position,
                 p.source, p.started_at, p.ended_at, p.end_reason
          FROM walls w
          JOIN creator_profiles cp ON cp.creator_id = w.creator_id
@@ -59,7 +63,9 @@ export function createPgPlacementHistoryRepository(
     async listUserHistory(userId) {
       const result = await pool.query<PlacementHistoryDbRow>(
         `SELECT w.id AS wall_id, cp.slug AS wall_slug,
-                cp.display_name AS wall_display_name, s.position AS slot_position,
+                cp.display_name AS wall_display_name,
+                w.status IN ('scheduled', 'live', 'paused', 'ended') AS wall_is_public,
+                s.position AS slot_position,
                 p.source, p.started_at, p.ended_at, p.end_reason
          FROM placements p
          JOIN slots s ON s.id = p.slot_id

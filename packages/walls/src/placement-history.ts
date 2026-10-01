@@ -6,6 +6,7 @@ export type PlacementHistoryRecord = {
   wallId: string;
   wallSlug: string;
   wallDisplayName: string;
+  wallIsPublic: boolean;
   slotPosition: number;
   source: PlacementSource;
   startedAt: Date;

@@ -20,6 +20,7 @@ function api() {
               wallId,
               wallSlug: 'public-creator',
               wallDisplayName: 'Public Creator',
+              wallIsPublic: true,
               slotPosition: 0,
               source: 'free_claim' as const,
               startedAt,
@@ -33,6 +34,7 @@ function api() {
         wallId: '00000000-0000-4000-8000-000000000002',
         wallSlug: 'public-creator',
         wallDisplayName: 'Public Creator',
+        wallIsPublic: true,
         slotPosition: 0,
         source: 'free_claim' as const,
         startedAt,
@@ -113,6 +115,7 @@ describe('placement history routes', () => {
       expect(response.json().items).toMatchObject([
         {
           wallDisplayName: 'Public Creator',
+          wallIsPublic: true,
           slotPosition: 0,
           source: 'free_claim',
           endReason: null,

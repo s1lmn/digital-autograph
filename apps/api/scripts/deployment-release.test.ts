@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const workflow = readFileSync(
@@ -72,6 +73,54 @@ else echo "\${CI_SUCCESS:-true}"; fi
 `;
 
 describe('release SHA and authorization gates', () => {
+  it.each(['false', 'true'])(
+    'resolves single-platform release images without attestations (GITHUB_ACTIONS=%s)',
+    (githubActions) => {
+      const result = spawnSync(
+        'docker',
+        [
+          'buildx',
+          'bake',
+          '--file',
+          'deploy/docker-bake.hcl',
+          '--print',
+          '--push',
+          'release',
+        ],
+        {
+          cwd: fileURLToPath(new URL('../../../', import.meta.url)),
+          env: {
+            ...process.env,
+            YC_REGISTRY_ID: 'test-registry',
+            IMAGE_TAG: selected,
+            GITHUB_ACTIONS: githubActions,
+          },
+          encoding: 'utf8',
+          timeout: 10_000,
+        },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      const config = JSON.parse(result.stdout);
+      const targets = ['api', 'web', 'worker', 'migration'];
+      expect(config.group.release.targets).toEqual(targets);
+      expect(Object.keys(config.target).sort()).toEqual([...targets].sort());
+      for (const name of targets) {
+        const target = config.target[name];
+        expect(target.target).toBe(name);
+        expect(target.platforms).toEqual(['linux/amd64']);
+        expect(target.attest).toEqual([
+          { type: 'provenance', disabled: true },
+          { type: 'sbom', disabled: true },
+        ]);
+        expect(target.tags).toEqual([
+          `cr.yandex/test-registry/digital-autograph/${name}:${selected}`,
+        ]);
+        expect(target.output).toEqual([
+          { type: 'image', 'oci-mediatypes': 'false', push: 'true' },
+        ]);
+      }
+    },
+  );
   it.each(['deploy', 'rollback'])(
     'exports only the validated request for %s, ignoring rollback image input',
     (operation) => {
@@ -212,7 +261,7 @@ describe('release SHA and authorization gates', () => {
 if [[ "$1" == login ]]; then cat >/dev/null;
 elif [[ "$1" == buildx && "$2" == imagetools ]]; then
   if [[ "$INSPECTION" != existing ]]; then echo "$INSPECTION" >&2; exit 1; fi
-elif [[ "$1" == buildx && "$2" == bake ]]; then echo build >>"$BUILD_LOG";
+elif [[ "$1" == buildx && "$2" == bake ]]; then printf '%s\\n' "$@" >>"$BUILD_LOG";
 fi
 `;
         const result = runScript(
@@ -228,7 +277,10 @@ fi
           },
         );
         expect(result.status, result.stderr).toBe(status);
-        if (builds) expect(readFileSync(log, 'utf8')).toBe('build\n');
+        if (builds)
+          expect(readFileSync(log, 'utf8')).toBe(
+            'buildx\nbake\n--file\ndeploy/docker-bake.hcl\n--push\napi\nweb\nworker\nmigration\n',
+          );
         else expect(() => readFileSync(log)).toThrow();
       } finally {
         rmSync(dir, { recursive: true, force: true });

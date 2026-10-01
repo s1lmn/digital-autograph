@@ -50,6 +50,11 @@ describe('photo autograph editor', () => {
     );
     const onPhotoChange = vi.fn();
     render(<PhotoUploadEditor onPhotoChange={onPhotoChange} />);
+    expect(
+      screen.getByText(
+        'For best results, photograph your signature on clean, unlined paper.',
+      ),
+    ).toBeTruthy();
     const original = new File(['original'], 'autograph.jpg', {
       type: 'image/jpeg',
     });

@@ -14,6 +14,13 @@
   line-height: 1.45;
 }
 
+.editor .photoHint {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: #53606d;
+  line-height: 1.4;
+}
+
 .fileInput {
   position: absolute;
   width: 1px;

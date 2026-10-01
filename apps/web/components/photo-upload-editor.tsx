@@ -203,6 +203,9 @@ export function PhotoUploadEditor({
           Choose a photo or take one with your phone. Crop and rotate it here;
           only the edited image is uploaded.
         </p>
+        <p className={styles.photoHint}>
+          For best results, photograph your signature on clean, unlined paper.
+        </p>
       </div>
       <input
         ref={imageInputRef}

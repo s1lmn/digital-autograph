@@ -12,6 +12,7 @@ import {
   type ReadyAutographChoice,
 } from '../lib/wall-claim-api';
 import { ReadyAutographPicker } from './ready-autograph-picker';
+import { WallPlacementHistory } from './placement-history';
 import { WallSlot } from './wall-slot';
 import styles from '../app/walls/[id]/page.module.css';
 
@@ -59,6 +60,7 @@ export function PublicWallScreen({
   const [message, setMessage] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
   const inFlight = useRef(false);
   const requestController = useRef<AbortController | null>(null);
 
@@ -101,6 +103,7 @@ export function PublicWallScreen({
   const refreshWall = useCallback(async () => {
     setRefreshing(true);
     setRefreshError(false);
+    setHistoryVersion((version) => version + 1);
     try {
       const updated = await publicWallApi(apiOrigin).get(wall.id);
       setWall(updated);
@@ -201,6 +204,9 @@ export function PublicWallScreen({
           Wall status: <strong>{wall.status}</strong>
         </p>
         <p>{wallNotice(wall, now)}</p>
+        {auth === 'authenticated' && (
+          <a href="/me/placements">View your placement history</a>
+        )}
         {wall.startAt && <p>Starts: {new Date(wall.startAt).toUTCString()}</p>}
         {wall.endAt && <p>Ends: {new Date(wall.endAt).toUTCString()}</p>}
         <button
@@ -341,6 +347,11 @@ export function PublicWallScreen({
           {message}
         </p>
       )}
+      <WallPlacementHistory
+        wallId={wall.id}
+        apiOrigin={apiOrigin}
+        refreshVersion={historyVersion}
+      />
     </main>
   );
 }

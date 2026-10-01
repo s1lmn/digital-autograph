@@ -26,7 +26,9 @@ export default async function WallPage({
       <PublicWallScreen initialWall={wall} apiOrigin={API_PUBLIC_ORIGIN} />
     );
   } catch (error) {
-    if (error instanceof PublicWallApiError && error.status === 404) notFound();
+    if (error instanceof PublicWallApiError && error.status === 404) {
+      notFound();
+    }
     return (
       <main>
         <h1>Wall temporarily unavailable</h1>

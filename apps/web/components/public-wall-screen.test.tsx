@@ -81,9 +81,51 @@ afterEach(() => {
 });
 
 describe('public Wall and Free Claim UX', () => {
+  it('refreshes history with Refresh Wall inside the single page landmark', async () => {
+    let historyRequests = 0;
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/auth/me')) return json({}, 401);
+      if (input.endsWith(`/walls/${wallId}`)) return json(occupied());
+      if (input.endsWith('/placements')) {
+        historyRequests++;
+        return json({
+          wallId,
+          placements:
+            historyRequests === 1
+              ? []
+              : [
+                  {
+                    slotPosition: 0,
+                    source: 'free_claim',
+                    startedAt: '2026-09-28T12:00:00Z',
+                    endedAt: null,
+                    endReason: null,
+                  },
+                ],
+        });
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<PublicWallScreen initialWall={wall()} apiOrigin={origin} />);
+    expect(
+      await screen.findByText('No placements have been recorded yet.'),
+    ).toBeTruthy();
+    const main = screen.getByRole('main');
+    expect(
+      screen.getByRole('region', { name: 'Placement history' }).closest('main'),
+    ).toBe(main);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Wall' }));
+    expect(await screen.findByText('Current placement')).toBeTruthy();
+    expect(historyRequests).toBe(2);
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+  });
+
   it('renders anonymously with occupied media, an unavailable occupied state, and safe sign-in return paths', async () => {
-    const fetchMock = vi.fn(async () =>
-      json({ error: { code: 'UNAUTHENTICATED' } }, 401),
+    const fetchMock = vi.fn(async (input: string) =>
+      input.endsWith('/placements')
+        ? json({ wallId, placements: [] })
+        : json({ error: { code: 'UNAUTHENTICATED' } }, 401),
     );
     vi.stubGlobal('fetch', fetchMock);
     const initial = occupied();
@@ -134,7 +176,11 @@ describe('public Wall and Free Claim UX', () => {
     async (status) => {
       vi.stubGlobal(
         'fetch',
-        vi.fn(async () => json({ error: { code: 'UNAUTHENTICATED' } }, 401)),
+        vi.fn(async (input: string) =>
+          input.endsWith('/placements')
+            ? json({ wallId, placements: [] })
+            : json({ error: { code: 'UNAUTHENTICATED' } }, 401),
+        ),
       );
       render(
         <PublicWallScreen
@@ -151,7 +197,11 @@ describe('public Wall and Free Claim UX', () => {
   it('keeps a persisted live Wall with an elapsed window read-only in the UI', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => json({ error: { code: 'UNAUTHENTICATED' } }, 401)),
+      vi.fn(async (input: string) =>
+        input.endsWith('/placements')
+          ? json({ wallId, placements: [] })
+          : json({ error: { code: 'UNAUTHENTICATED' } }, 401),
+      ),
     );
     const expired = { ...wall(), endAt: '2020-01-01T00:00:00.000Z' };
     render(<PublicWallScreen initialWall={expired} apiOrigin={origin} />);
@@ -165,6 +215,8 @@ describe('public Wall and Free Claim UX', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
+        if (input.endsWith('/placements'))
+          return json({ wallId, placements: [] });
         if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
         if (input.endsWith('/autographs?status=ready'))
           return json({ items: [] });
@@ -186,11 +238,30 @@ describe('public Wall and Free Claim UX', () => {
   });
 
   it('selects a ready Autograph, waits for confirmation, then refreshes the claimed Slot on 201', async () => {
+    let historyRequests = 0;
     let completeClaim!: (response: Response) => void;
     const delayed = new Promise<Response>((resolve) => {
       completeClaim = resolve;
     });
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith('/placements')) {
+        historyRequests++;
+        return json({
+          wallId,
+          placements:
+            historyRequests === 1
+              ? []
+              : [
+                  {
+                    slotPosition: 0,
+                    source: 'free_claim',
+                    startedAt: '2026-09-28T12:00:00Z',
+                    endedAt: null,
+                    endReason: null,
+                  },
+                ],
+        });
+      }
       if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
       if (input.endsWith('/autographs?status=ready')) return json(readyList(2));
       if (input.includes('/preview')) {
@@ -207,6 +278,9 @@ describe('public Wall and Free Claim UX', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<PublicWallScreen initialWall={wall()} apiOrigin={origin} />);
+    expect(
+      await screen.findByText('No placements have been recorded yet.'),
+    ).toBeTruthy();
     const radios = await screen.findAllByRole('radio');
     fireEvent.click(radios[1]!);
     await waitFor(() =>
@@ -257,6 +331,8 @@ describe('public Wall and Free Claim UX', () => {
     expect(
       await screen.findByAltText('Digital autograph in slot 1'),
     ).toBeTruthy();
+    expect(await screen.findByText('Current placement')).toBeTruthy();
+    expect(historyRequests).toBe(2);
     expect(
       fetchMock.mock.calls.some(([url]) =>
         String(url).endsWith(`/walls/${wallId}`),
@@ -268,6 +344,8 @@ describe('public Wall and Free Claim UX', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
+        if (input.endsWith('/placements'))
+          return json({ wallId, placements: [] });
         if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
         if (input.endsWith('/autographs?status=ready'))
           return json(readyList());
@@ -298,6 +376,8 @@ describe('public Wall and Free Claim UX', () => {
 
   it('handles a Slot race by refreshing without claiming another Slot', async () => {
     const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/placements'))
+        return json({ wallId, placements: [] });
       if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
       if (input.endsWith('/autographs?status=ready')) return json(readyList());
       if (input.includes('/preview'))
@@ -335,6 +415,8 @@ describe('public Wall and Free Claim UX', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
+        if (input.endsWith('/placements'))
+          return json({ wallId, placements: [] });
         if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
         if (input.endsWith('/autographs?status=ready'))
           return json(readyList());
@@ -366,6 +448,8 @@ describe('public Wall and Free Claim UX', () => {
 
   it('disables claim controls when the server says the Wall is no longer claimable', async () => {
     const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/placements'))
+        return json({ wallId, placements: [] });
       if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
       if (input.endsWith('/autographs?status=ready')) return json(readyList());
       if (input.includes('/preview'))

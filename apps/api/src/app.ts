@@ -22,6 +22,7 @@ import type {
   WallService,
   TakeoverQuoteService,
   TakeoverReservationService,
+  PlacementHistoryService,
 } from '@digital-autograph/walls';
 import type { AutographService } from '@digital-autograph/autographs';
 import type { ModerationService } from '@digital-autograph/autographs';
@@ -32,6 +33,7 @@ import { registerFreeClaimRoutes } from './walls/free-claim-http';
 import { registerPublicPlacementMediaRoutes } from './walls/public-media-http';
 import { registerPricingRoutes } from './walls/pricing-http';
 import { registerTakeoverReservationRoutes } from './walls/reservation-http';
+import { registerPlacementHistoryRoutes } from './walls/placement-history-http';
 import {
   invalidOrigin,
   registerAuthRoutes,
@@ -62,6 +64,7 @@ export function buildApi(
     userId: string;
     webOrigin: string;
   },
+  placementHistory?: PlacementHistoryService,
 ) {
   const app = Fastify({
     logger: {
@@ -135,6 +138,7 @@ export function buildApi(
   if (publicMedia) registerPublicPlacementMediaRoutes(app, publicMedia);
   if (pricing) registerPricingRoutes(app, pricing);
   if (reservations) registerTakeoverReservationRoutes(app, reservations);
+  if (placementHistory) registerPlacementHistoryRoutes(app, placementHistory);
   if (autographs) registerAutographRoutes(app, autographs);
   if (moderation) registerModerationRoutes(app, moderation);
 

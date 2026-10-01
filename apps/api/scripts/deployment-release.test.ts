@@ -25,7 +25,7 @@ function stepScript(name: string) {
   const section = workflow
     .split(`      - name: ${name}\n`)[1]
     ?.split('\n      - name:')[0];
-  const run = section?.split('        run: |\n')[1]?.split('\n        env:')[0];
+  const run = section?.split('        run: |\n')[1]?.split(/\n {0,9}\S/)[0];
   if (!run) throw new Error(`Missing release step ${name}`);
   return run
     .split('\n')
@@ -61,16 +61,55 @@ const requestEnv = {
   IMAGE_SHA: selected,
 };
 const gh = `#!/bin/bash
-if [[ "$1" == api ]]; then echo "\${ANCESTRY:-ahead}"; else echo "\${CI_SUCCESS:-true}"; fi
+if [[ "$1" == api ]]; then
+  case "$2" in
+    *compare*) echo "\${ANCESTRY:-ahead}" ;;
+    *statuses*) echo "\${STAGING_STATE:-success}" ;;
+    *deployments/42) echo "\${STAGING_SHA:-$IMAGE_SHA}" ;;
+    --paginate) if [[ "\${STAGING_QUERY_FAIL:-false}" == true ]]; then exit 1; fi; echo 42 ;;
+  esac
+else echo "\${CI_SUCCESS:-true}"; fi
 `;
 
 describe('release SHA and authorization gates', () => {
+  it.each(['deploy', 'rollback'])(
+    'exports only the validated request for %s, ignoring rollback image input',
+    (operation) => {
+      const directory = mkdtempSync(path.join(os.tmpdir(), 'da-request-'));
+      const output = path.join(directory, 'outputs');
+      try {
+        const result = runScript(
+          stepScript('Export validated release request'),
+          'unused',
+          '#!/bin/bash\nexit 1\n',
+          {
+            ...requestEnv,
+            RELEASE_OPERATION: operation,
+            IMAGE_SHA:
+              operation === 'rollback'
+                ? '\noperation=deploy\ntarget=production'
+                : selected,
+            GITHUB_OUTPUT: output,
+          },
+        );
+        expect(result.status, result.stderr).toBe(0);
+        expect(readFileSync(output, 'utf8')).toBe(
+          `target=staging\noperation=${operation}\nimage_sha=${operation === 'deploy' ? selected : ''}\n`,
+        );
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
   it('uses the selected SHA for deploy checkout, with main configuration only for rollback', () => {
     expect(workflow).toContain(
       "ref: ${{ env.RELEASE_OPERATION == 'deploy' && env.IMAGE_SHA || github.sha }}",
     );
-    expect(workflow.indexOf('Verify exact deploy checkout')).toBeLessThan(
+    expect(workflow.indexOf('Verify exact build checkout')).toBeLessThan(
       workflow.indexOf('Authenticate to Yandex Cloud'),
+    );
+    expect(workflow.indexOf('Verify exact deploy checkout')).toBeLessThan(
+      workflow.indexOf('Deploy or roll back this VM'),
     );
     expect(workflow).toContain('--arg ref "$IMAGE_SHA"');
     const record = stepScript('Create GitHub deployment record');
@@ -79,20 +118,59 @@ describe('release SHA and authorization gates', () => {
     );
     expect(workflow).toContain('export IMAGE_TAG=$IMAGE_SHA');
   });
-  it.each([selected, current])(
-    'checks actual HEAD %s before deployment',
-    (head) => {
-      const result = runScript(
-        stepScript('Verify exact deploy checkout'),
-        'git',
-        '#!/bin/bash\necho "$CHECKOUT_HEAD"\n',
-        { IMAGE_SHA: selected, CHECKOUT_HEAD: head },
-      );
-      expect(result.status).toBe(head === selected ? 0 : 1);
-    },
-  );
+  it.each([
+    ['Verify exact build checkout', selected],
+    ['Verify exact build checkout', current],
+    ['Verify exact deploy checkout', selected],
+    ['Verify exact deploy checkout', current],
+  ])('checks %s against actual HEAD %s', (step, head) => {
+    const result = runScript(
+      stepScript(step),
+      'git',
+      '#!/bin/bash\necho "$CHECKOUT_HEAD"\n',
+      { IMAGE_SHA: selected, CHECKOUT_HEAD: head },
+    );
+    expect(result.status).toBe(head === selected ? 0 : 1);
+  });
   it.each([
     [{}, 0],
+    [{ RELEASE_TARGET: 'other' }, 1],
+    [{ RELEASE_OPERATION: 'rollback', IMAGE_SHA: '' }, 0],
+    [
+      {
+        RELEASE_TARGET: 'production',
+        PRODUCTION_OPERATOR: 'operator',
+        PRODUCTION_APPROVAL: 'APPROVED',
+      },
+      0,
+    ],
+    [
+      {
+        RELEASE_TARGET: 'production',
+        PRODUCTION_OPERATOR: 'operator',
+        PRODUCTION_APPROVAL: 'APPROVED',
+        STAGING_SHA: current,
+      },
+      1,
+    ],
+    [
+      {
+        RELEASE_TARGET: 'production',
+        PRODUCTION_OPERATOR: 'operator',
+        PRODUCTION_APPROVAL: 'APPROVED',
+        STAGING_STATE: 'failure',
+      },
+      1,
+    ],
+    [
+      {
+        RELEASE_TARGET: 'production',
+        PRODUCTION_OPERATOR: 'operator',
+        PRODUCTION_APPROVAL: 'APPROVED',
+        STAGING_QUERY_FAIL: 'true',
+      },
+      1,
+    ],
     [{ IMAGE_SHA: 'main' }, 1],
     [{ GITHUB_REF: 'refs/heads/untrusted' }, 1],
     [{ ANCESTRY: 'diverged' }, 1],

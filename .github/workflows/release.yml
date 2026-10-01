@@ -18,7 +18,7 @@ on:
         type: choice
         options: [deploy, rollback]
       image_sha:
-        description: Full 40-character SHA already built and deployed to staging
+        description: Full 40-character main SHA with published images; production also requires successful staging
         required: false
         type: string
       production_approval:
@@ -29,8 +29,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: digital-autograph-release-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  prepare:
     if: >-
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
@@ -42,19 +46,15 @@ jobs:
        (inputs.target != 'production' ||
         (vars.RELEASE_OPERATOR != '' &&
          github.actor == vars.RELEASE_OPERATOR)))
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - ${{ github.event_name == 'workflow_run' && 'da-staging' || inputs.target == 'production' && 'da-production' || 'da-staging' }}
-    concurrency:
-      group: digital-autograph-release-${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
-      cancel-in-progress: false
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
-      deployments: write
-      id-token: write
+      deployments: read
+    outputs:
+      target: ${{ steps.request.outputs.target }}
+      operation: ${{ steps.request.outputs.operation }}
+      image_sha: ${{ steps.request.outputs.image_sha }}
     env:
       RELEASE_TARGET: ${{ github.event_name == 'workflow_run' && 'staging' || inputs.target }}
       RELEASE_OPERATION: ${{ github.event_name == 'workflow_run' && 'deploy' || inputs.operation }}
@@ -66,6 +66,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$RELEASE_TARGET" != staging && "$RELEASE_TARGET" != production ]]; then
+            echo "Unsupported release target" >&2
+            exit 1
+          fi
           if [[ "$GITHUB_REF" != refs/heads/main ]]; then
             echo "Releases must be dispatched from main" >&2
             exit 1
@@ -103,13 +107,12 @@ jobs:
                 exit 1
               fi
               if [[ "$RELEASE_TARGET" == production ]]; then
-                mapfile -t staging_deployments < <(
-                  gh api --paginate \
-                    "repos/$GITHUB_REPOSITORY/deployments?environment=staging&per_page=100" \
-                    --jq '.[].id'
-                )
+                staging_deployments=$(gh api --paginate \
+                  "repos/$GITHUB_REPOSITORY/deployments?environment=staging&per_page=100" \
+                  --jq '.[].id')
                 staged=false
-                for deployment_id in "${staging_deployments[@]}"; do
+                while IFS= read -r deployment_id; do
+                  if [[ -z "$deployment_id" ]]; then continue; fi
                   deployment_sha=$(gh api \
                     "repos/$GITHUB_REPOSITORY/deployments/$deployment_id" \
                     --jq '.sha')
@@ -123,7 +126,7 @@ jobs:
                     staged=true
                   fi
                   break
-                done
+                done <<<"$staging_deployments"
                 if [[ "$staged" != true ]]; then
                   echo "Production deploy requires a successful staging deployment of the same SHA" >&2
                   exit 1
@@ -137,6 +140,128 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Export validated release request
+        id: request
+        shell: bash
+        run: |
+          # Rollback ignores image_sha; never forward unvalidated input as job outputs.
+          if [[ "$RELEASE_OPERATION" == rollback ]]; then IMAGE_SHA=''; fi
+          printf 'target=%s\noperation=%s\nimage_sha=%s\n' \
+            "$RELEASE_TARGET" "$RELEASE_OPERATION" "$IMAGE_SHA" >>"$GITHUB_OUTPUT"
+
+  build_publish:
+    needs: prepare
+    if: needs.prepare.result == 'success' && github.event_name == 'workflow_run' && needs.prepare.outputs.operation == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_sha: ${{ steps.image.outputs.sha }}
+    env:
+      IMAGE_SHA: ${{ needs.prepare.outputs.image_sha }}
+    steps:
+      - name: Checkout image source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.IMAGE_SHA }}
+          persist-credentials: false
+
+      - name: Verify exact build checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$(git rev-parse HEAD)" != "$IMAGE_SHA" ]]; then
+            echo "Validated image SHA differs from checked-out build source" >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Yandex Cloud for staging image publication
+        shell: bash
+        env:
+          YC_SERVICE_ACCOUNT_ID: ${{ vars.YC_SERVICE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          : "${YC_SERVICE_ACCOUNT_ID:?Set YC_SERVICE_ACCOUNT_ID as a repository Actions variable}"
+          oidc_response=$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https://github.com/${GITHUB_REPOSITORY_OWNER}")
+          subject_token=$(jq -er '.value' <<<"$oidc_response")
+          unset oidc_response
+          token_response=$(curl --fail --silent --show-error \
+            --request POST https://auth.yandex.cloud/oauth/token \
+            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
+            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
+            --data-urlencode "audience=${YC_SERVICE_ACCOUNT_ID}" \
+            --data-urlencode "subject_token=${subject_token}" \
+            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')
+          unset subject_token
+          iam_token=$(jq -er '.access_token' <<<"$token_response")
+          unset token_response
+          echo "::add-mask::$iam_token"
+          {
+            echo 'YC_IAM_TOKEN<<EOF'
+            echo "$iam_token"
+            echo EOF
+          } >>"$GITHUB_ENV"
+          unset iam_token
+
+      - name: Set up image builder
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and publish commit-tagged images once
+        shell: bash
+        env:
+          YC_REGISTRY_ID: ${{ vars.YC_REGISTRY_ID }}
+        run: |
+          set -euo pipefail
+          : "${YC_REGISTRY_ID:?Set YC_REGISTRY_ID as a repository Actions variable}"
+          export IMAGE_TAG=$IMAGE_SHA
+          printf '%s' "$YC_IAM_TOKEN" |
+            docker login --username iam --password-stdin cr.yandex
+          trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
+          missing_targets=()
+          for target in api web worker migration; do
+            image="cr.yandex/$YC_REGISTRY_ID/digital-autograph/$target:$IMAGE_SHA"
+            if ! inspection=$(docker buildx imagetools inspect "$image" 2>&1); then
+              if [[ "$inspection" != *"manifest unknown"* &&
+                    "$inspection" != *"not found"* ]]; then
+                echo "Registry inspection failed; refusing to overwrite a commit tag" >&2
+                exit 1
+              fi
+              missing_targets+=("$target")
+            fi
+          done
+          if (( ${#missing_targets[@]} > 0 )); then
+            docker buildx bake --file deploy/docker-bake.hcl \
+              --push "${missing_targets[@]}"
+          fi
+          docker logout cr.yandex
+
+      - name: Export published image SHA
+        id: image
+        shell: bash
+        run: echo "sha=$IMAGE_SHA" >>"$GITHUB_OUTPUT"
+
+  deploy:
+    needs: [prepare, build_publish]
+    if: >-
+      always() && !cancelled() && needs.prepare.result == 'success' &&
+      ((github.event_name == 'workflow_run' && needs.build_publish.result == 'success') ||
+       (github.event_name == 'workflow_dispatch' && needs.build_publish.result == 'skipped'))
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - ${{ needs.prepare.outputs.target == 'production' && 'da-production' || 'da-staging' }}
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      RELEASE_TARGET: ${{ needs.prepare.outputs.target }}
+      RELEASE_OPERATION: ${{ needs.prepare.outputs.operation }}
+      IMAGE_SHA: ${{ github.event_name == 'workflow_run' && needs.build_publish.outputs.image_sha || needs.prepare.outputs.image_sha }}
+    steps:
       - name: Create GitHub deployment record
         id: deployment
         if: env.RELEASE_OPERATION == 'deploy'
@@ -176,71 +301,6 @@ jobs:
             echo "Validated image SHA differs from checked-out release configuration" >&2
             exit 1
           fi
-
-      - name: Authenticate to Yandex Cloud for staging image publication
-        if: github.event_name == 'workflow_run'
-        shell: bash
-        env:
-          YC_SERVICE_ACCOUNT_ID: ${{ vars.YC_SERVICE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          : "${YC_SERVICE_ACCOUNT_ID:?Set YC_SERVICE_ACCOUNT_ID as a repository Actions variable}"
-          oidc_response=$(curl --fail --silent --show-error \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=https://github.com/${GITHUB_REPOSITORY_OWNER}")
-          subject_token=$(jq -er '.value' <<<"$oidc_response")
-          unset oidc_response
-          token_response=$(curl --fail --silent --show-error \
-            --request POST https://auth.yandex.cloud/oauth/token \
-            --data-urlencode 'grant_type=urn:ietf:params:oauth:grant-type:token-exchange' \
-            --data-urlencode 'requested_token_type=urn:ietf:params:oauth:token-type:access_token' \
-            --data-urlencode "audience=${YC_SERVICE_ACCOUNT_ID}" \
-            --data-urlencode "subject_token=${subject_token}" \
-            --data-urlencode 'subject_token_type=urn:ietf:params:oauth:token-type:id_token')
-          unset subject_token
-          iam_token=$(jq -er '.access_token' <<<"$token_response")
-          unset token_response
-          echo "::add-mask::$iam_token"
-          {
-            echo 'YC_IAM_TOKEN<<EOF'
-            echo "$iam_token"
-            echo EOF
-          } >>"$GITHUB_ENV"
-          unset iam_token
-
-      - name: Set up image builder
-        if: github.event_name == 'workflow_run'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and publish commit-tagged images once
-        if: github.event_name == 'workflow_run'
-        shell: bash
-        env:
-          YC_REGISTRY_ID: ${{ vars.YC_REGISTRY_ID }}
-        run: |
-          set -euo pipefail
-          : "${YC_REGISTRY_ID:?Set YC_REGISTRY_ID as a repository Actions variable}"
-          export IMAGE_TAG=$IMAGE_SHA
-          printf '%s' "$YC_IAM_TOKEN" |
-            docker login --username iam --password-stdin cr.yandex
-          trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
-          missing_targets=()
-          for target in api web worker migration; do
-            image="cr.yandex/$YC_REGISTRY_ID/digital-autograph/$target:$IMAGE_SHA"
-            if ! inspection=$(docker buildx imagetools inspect "$image" 2>&1); then
-              if [[ "$inspection" != *"manifest unknown"* &&
-                    "$inspection" != *"not found"* ]]; then
-                echo "Registry inspection failed; refusing to overwrite a commit tag" >&2
-                exit 1
-              fi
-              missing_targets+=("$target")
-            fi
-          done
-          if (( ${#missing_targets[@]} > 0 )); then
-            docker buildx bake --file deploy/docker-bake.hcl \
-              --push "${missing_targets[@]}"
-          fi
-          docker logout cr.yandex
 
       - name: Deploy or roll back this VM
         id: deploy

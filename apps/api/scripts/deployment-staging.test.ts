@@ -57,6 +57,7 @@ printf '%s\\n' "$*" >>"$COMMAND_LOG"
 if [[ "$1" == login ]]; then cat >/dev/null
 elif [[ "$1" == compose ]]; then
   case "$*" in
+    *"--profile migration pull"*) if [[ "$FAILURE" == pull ]]; then exit 1; fi ;;
     *"exec -T postgres"*) if [[ "$FAILURE" == backup ]]; then exit 1; fi; echo dump ;;
     *"run --rm migration"*) if [[ "$FAILURE" == migration ]]; then exit 1; fi ;;
     *"up -d --remove-orphans"*) if [[ "$FAILURE" == startup && ! -f "$COMMAND_LOG.failed" ]]; then touch "$COMMAND_LOG.failed"; exit 1; fi ;;
@@ -127,6 +128,22 @@ describe('staging release context and persistence', () => {
       ).toBe(true);
       if (environment === 'production')
         expect(commands.some((line) => line.includes('postgres'))).toBe(false);
+    },
+  );
+  it.each(['staging', 'production'])(
+    'requires all published images before %s migration without building',
+    (environment) => {
+      const run = release(environment, selected, 'pull');
+      expect(run.result.status).toBe(1);
+      expect(
+        run.commands.some((line) => line.includes('--profile migration pull')),
+      ).toBe(true);
+      expect(
+        run.commands.some((line) =>
+          /build|push|run --rm migration|up -d/.test(line),
+        ),
+      ).toBe(false);
+      expect(run.active).toBe(current);
     },
   );
   it('backs up the available staging DB before migration and retains three owner-only dumps', () => {

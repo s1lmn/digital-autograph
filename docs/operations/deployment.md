@@ -64,8 +64,11 @@ immutable-image Container Registry:
   API and worker.
 - One shared Container Registry for release artifacts and a GitHub staging CI
   service account with `container-registry.images.pusher` on that registry.
-  Both VM runtime service accounts get `container-registry.images.puller` on
-  this registry. Use a dedicated repository with no tag-overwrite workflow
+  The publisher is used only on the standard GitHub-hosted builder: no Lockbox,
+  S3, VM runtime or production grants. Both VM runtime service accounts get
+  `container-registry.images.puller` on this registry, never publisher/pusher
+  roles. Keep staging Lockbox/S3 grants staging-only and production runtime
+  grants separate. Use a dedicated repository with no tag-overwrite workflow
   outside the release workflow.
 - A Yandex workload identity federation for GitHub Actions. Use issuer
   `https://token.actions.githubusercontent.com`, JWKS URL
@@ -77,7 +80,8 @@ immutable-image Container Registry:
   staging.
 - A GitHub Actions self-hosted runner per VM, labelled `da-staging` and
   `da-production` respectively. Install Docker Engine, the Compose v2 plugin (2.24.4 or newer for `!reset`),
-  Docker Buildx, `yc`, `gh`, `curl`, and `jq`. Configure the VM's attached service
+  Node.js 24 for the Lockbox renderer, `yc`, `gh`, `curl`, and `jq` on the VM.
+  Docker Buildx is used on the hosted builder, not required by the VM deploy path. Configure the VM's attached service
   account for `yc`, Lockbox, and the registry credential helper. The runner
   user must be trusted with Docker/root access and non-interactive `sudo`;
   configure the helper/token profile for the same root context.
@@ -161,14 +165,24 @@ HEAD before executing any release scripts. Manual rollback uses the current
 main release configuration and the previous image tag recorded on the VM,
 independent of a developer checkout.
 
-1. A successful push CI run on this repository's `main` starts the staging release on the staging VM.
-   The runner exchanges its short-lived GitHub OIDC token for a Yandex IAM
-   token, builds separate API/web/worker/migration images, and pushes them
-   under the 40-character Git commit SHA tag.
-2. The VM obtains the API and worker payloads from its environment's Lockbox,
+1. Successful trusted same-repository push CI for `main` starts hosted `prepare`.
+   It validates the request and exports the exact CI head SHA. Hosted
+   `build_publish` (`ubuntu-latest`) checks out/verifies that SHA, exchanges a
+   short-lived GitHub OIDC token for the registry-only publisher IAM token,
+   and builds/pushes API/web/worker/migration images under the immutable commit
+   tag. Existing SHA images are reused; registry errors fail closed.
+   Only a successful publication schedules the self-hosted `deploy` job.
+   Manual deploy/rollback bypass publication; their authorization gates run
+   on the hosted prepare job before any VM is scheduled.
+2. The dedicated VM job checks out/verifies the exact published (or manually
+   validated) SHA and creates its deployment record. It has only GitHub contents
+   read/deployments write, no publishing OIDC permission or publisher token.
+   The VM obtains the API and worker payloads from its environment's Lockbox,
    writes owner-only runtime environment files, pulls the SHA-tagged images,
    and uses one environment-selected Compose helper for pull, startup, migration,
-   health checks, and rollback. Staging first starts/waits for PostgreSQL, then
+   health checks, and rollback. Deploy pulls all four ready images, including
+   migration, before DB startup or migration. Missing images stop the operation;
+   manual staging and production never rebuild. Staging first starts/waits for PostgreSQL, then
    takes a custom-format `pg_dump` before running migration (including an empty
    first-deploy DB). It
    then starts/replaces Compose services.
@@ -243,7 +257,7 @@ migration compatibility and selecting an explicit recovery target. Do not
 restore over the active staging DB automatically. Production continues its
 managed backup/PITR procedure.
 
-## Host swap and build memory
+## Host swap and GitHub-hosted builds
 
 Configure swap on the VM host, never inside containers. On a newly provisioned
 Ubuntu VM with no existing `/swapfile`, an operator can configure 4 GB:
@@ -259,25 +273,59 @@ free -h
 ```
 
 Do not overwrite an existing swapfile. Set a disk-space alarm: OS, swap,
-PostgreSQL volume, three dumps, images and Buildx cache share only 25–30 GB.
-Clean obsolete build cache selectively; never prune volumes. Keep active and
-previous release images available for rollback.
+PostgreSQL volume, three dumps, pulled images and container logs share only
+25–30 GB. Manage obsolete images/logs selectively; never prune volumes. Keep
+active and previous release images available for rollback. Buildx cache lives
+on the hosted builder, not on this VM.
 
 The Dockerfile has one shared build stage: dependency installation, API/worker
 TypeScript builds, Next.js production build and two pnpm deploy operations.
-Buildx reuses this stage across four targets, but Next.js and dependency
-installation can exceed the spare RAM of a running 2 GB VM. Local builds on a
-larger machine do not prove viability on 2 GB; swap can prevent some OOMs but
-causes HDD contention, especially at 20% CPU baseline. Do not promise an
-unattended build on the 2 GB VM alongside the application/DB.
+Buildx reuses this stage across four targets. Release builds now run exclusively
+on the standard GitHub-hosted `ubuntu-latest` x64 runner, currently documented
+as 2 CPUs / 8 GB RAM / 14 GB SSD for private repositories. No paid larger runner
+is configured. The 2 GB staging VM only pulls ready images, backs up/migrates
+its DB, starts containers and checks health; routine deployment does not require
+a temporary resize to 4 GB. Keep 4 GB host swap for runtime memory bursts,
+not for building release images.
 
-Before a release build, an operator should temporarily stop the VM and increase
-RAM to 4 GB (subject to explicit cost approval), run the build/deploy, then stop
-and return it to 2 GB for runtime. This causes staging downtime and is not done
-by the workflow. Alternatively, a later reviewed change can publish the exact
-SHA images on a GitHub-hosted builder and leave the VM runner for pull/deploy
-only, subject to the private repository's included Actions minutes. Do not run
-PR code on the VM runner. No cloud build or RAM change is part of local checks.
+Private-repository GitHub-hosted Actions minutes, artifact/cache storage and
+any overage are limited resources. Check the repository owner's GitHub Billing
+and set budgets/alerts before enabling releases. CI container validation and
+release publication both consume hosted minutes; reruns reuse existing release
+tags rather than overwriting them. Cloud balance does not cover GitHub charges.
+See the [standard runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+and [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+
+## Fixed staging domains and OAuth
+
+Registrar/DNS: **REG.RU**. The future staging VM non-secret deploy configuration
+must contain:
+
+```sh
+APP_ENV=staging
+WEB_DOMAIN=staging.destka.online
+API_DOMAIN=api.staging.destka.online
+```
+
+After provisioning a static staging IP, configure these DNS records:
+
+| Name                      | Type | Value          |
+| ------------------------- | ---- | -------------- |
+| staging.destka.online     | A    | `<STAGING_IP>` |
+| api.staging.destka.online | A    | `<STAGING_IP>` |
+
+No DNS changes are performed by this PR. Allow HTTP/HTTPS to Caddy and verify
+both names resolve to the staging IP before release. Keep production domains
+and runtime resources separate.
+
+Register exact staging provider callbacks manually:
+
+- Google: `https://api.staging.destka.online/auth/google/callback`
+- Telegram: `https://api.staging.destka.online/auth/telegram/callback`
+
+Use those same URLs in the respective staging Lockbox keys; set `WEB_ORIGIN`
+and `TRUSTED_WEB_ORIGINS` to `https://staging.destka.online`. Provider settings
+are not changed by this PR.
 
 ## Staging cost target
 
@@ -295,7 +343,7 @@ image/secret version retention. This is a budget target, not a tariff quote.
 | Container Registry | Unique stored image layers, traffic and optional vulnerability scans; retain only reviewed releases |
 
 Actual cost depends on current tariffs, selected platform/region, month length,
-stored data and temporary larger builds. Check the live calculator before
+stored data and hosted Actions usage (billed separately by GitHub). Check the live calculator before
 provisioning and set billing alerts. With a 3990 RUB balance, 1500–1700 per
 month leaves roughly 590–990 RUB after two months, before unexpected usage.
 Do not treat that as a guaranteed minimum lifetime.

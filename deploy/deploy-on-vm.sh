@@ -122,7 +122,13 @@ printf '%s' "$registry_token" |
 unset registry_token
 
 trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
-compose pull
+if [[ "$rollback" == false ]]; then
+  # Pull every required exact-tag image before DB startup, backup or migration.
+  # Missing images fail here; this VM never builds or publishes images.
+  compose --profile migration pull
+else
+  compose pull
+fi
 if [[ "$APP_ENV" == staging ]]; then
   compose up -d --wait postgres
 fi

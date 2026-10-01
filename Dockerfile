@@ -44,4 +44,5 @@ CMD ["node", "apps/web/server.js"]
 
 FROM build AS migration
 ENV NODE_ENV=production
-CMD ["pnpm", "--filter", "@digital-autograph/db", "db:migrate"]
+WORKDIR /workspace/packages/db
+CMD ["./node_modules/.bin/drizzle-kit", "migrate"]

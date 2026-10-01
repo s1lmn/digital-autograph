@@ -15,6 +15,7 @@
     "test": "vitest run --config vitest.config.ts",
     "test:integration": "dotenv -e .env -- node scripts/run-integration.mjs",
     "test:build-smoke": "dotenv -e .env -- node scripts/smoke-built-api.mjs",
+    "test:migration-image": "node scripts/smoke-migration-image.mjs",
     "e2e:setup": "tsx apps/api/scripts/e2e-setup.ts",
     "test:e2e": "playwright test",
     "db:migrate": "dotenv -e .env -- pnpm --filter @digital-autograph/db db:migrate",

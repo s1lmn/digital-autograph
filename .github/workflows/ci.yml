@@ -82,6 +82,8 @@ jobs:
           YC_REGISTRY_ID: ci-placeholder
           IMAGE_TAG: ci-placeholder
         run: docker buildx bake --file deploy/docker-bake.hcl release
+      - name: Run migration image twice without TTY on clean PostgreSQL
+        run: pnpm test:migration-image
   e2e:
     runs-on: ubuntu-latest
     services:

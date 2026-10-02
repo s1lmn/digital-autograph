@@ -90,6 +90,19 @@ describe('photo autograph editor', () => {
       ),
     );
     expect(context.rotate).toHaveBeenCalledWith(Math.PI / 2);
+    const previousTranslate = context.translate.mock.calls.at(-1);
+    fireEvent.keyDown(screen.getByLabelText('Crop preview'), {
+      key: 'ArrowRight',
+    });
+    await waitFor(() =>
+      expect(context.translate.mock.calls.at(-1)).not.toEqual(
+        previousTranslate,
+      ),
+    );
+    fireEvent.keyDown(screen.getByLabelText('Crop preview'), { key: 'Home' });
+    await waitFor(() =>
+      expect(context.translate.mock.calls.at(-1)).toEqual(previousTranslate),
+    );
     expect(
       await screen.findByRole('heading', { name: 'Edited photo preview' }),
     ).toBeTruthy();

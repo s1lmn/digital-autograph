@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import styles from './placement-history.module.css';
 import {
   UserPlacementHistory,
@@ -141,4 +141,53 @@ describe('Placement history UI', () => {
       await screen.findByText('Showing your 100 most recent placements.'),
     ).toBeTruthy();
   });
+});
+
+it('retries public history safely after an offline read', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('offline'))
+      .mockResolvedValueOnce(json({ wallId, placements: [] })),
+  );
+  render(<WallPlacementHistory wallId={wallId} apiOrigin={origin} />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry Wall history' }),
+  );
+  expect(
+    await screen.findByText('No placements have been recorded yet.'),
+  ).toBeTruthy();
+});
+
+it('clears personal history when the session expires between session check and history read', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(json({ user: { id: 'private' } }))
+      .mockResolvedValueOnce(json({ error: { code: 'UNAUTHENTICATED' } }, 401)),
+  );
+  render(<UserPlacementHistory apiOrigin={origin} />);
+  expect(
+    await screen.findByText('Sign in to view your placement history.'),
+  ).toBeTruthy();
+  expect(screen.queryByText('Current placement')).toBeNull();
+});
+
+it('rechecks authentication and retries personal history after a failed read', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(json({ user: {} }))
+      .mockRejectedValueOnce(new TypeError('offline'))
+      .mockResolvedValueOnce(json({ user: {} }))
+      .mockResolvedValueOnce(json({ items: [placement] })),
+  );
+  render(<UserPlacementHistory apiOrigin={origin} />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry your history' }),
+  );
+  expect(await screen.findByText('Current placement')).toBeTruthy();
 });

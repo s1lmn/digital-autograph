@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
+  PlacementHistoryApiError,
   placementEndReasonLabel,
   placementHistoryApi,
   placementSourceLabel,
@@ -38,9 +39,12 @@ export function WallPlacementHistory({
     >
   > | null>(null);
   const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
+    setLoading(true);
     placementHistoryApi(apiOrigin)
       .wall(wallId, controller.signal)
       .then((history) => {
@@ -51,16 +55,35 @@ export function WallPlacementHistory({
       })
       .catch(() => {
         if (!controller.signal.aborted) setError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [apiOrigin, wallId, refreshVersion]);
+  }, [apiOrigin, wallId, refreshVersion, retry]);
 
   return (
-    <section className={styles.history} aria-labelledby="wall-history-heading">
+    <section
+      className={styles.history}
+      aria-labelledby="wall-history-heading"
+      aria-busy={loading}
+    >
       <h2 id="wall-history-heading">Placement history</h2>
-      {items === null && !error && <p role="status">Loading Wall history…</p>}
+      {loading && <p role="status">Loading Wall history…</p>}
       {error && (
-        <p role="alert">Wall placement history is temporarily unavailable.</p>
+        <div>
+          <p role="alert">Wall placement history is temporarily unavailable.</p>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              setError(false);
+              setRetry((count) => count + 1);
+            }}
+          >
+            Retry Wall history
+          </button>
+        </div>
       )}
       {items?.length === 0 && <p>No placements have been recorded yet.</p>}
       {items && items.length >= 100 && (
@@ -102,6 +125,7 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
   >('checking');
   const [items, setItems] = useState<PlacementHistoryItem[] | null>(null);
   const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -116,14 +140,23 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
           if (!controller.signal.aborted) setItems(history);
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setAuth('unavailable');
-          setError(true);
+          setItems(null);
+          if (
+            error instanceof PlacementHistoryApiError &&
+            error.status === 401
+          ) {
+            setAuth('anonymous');
+            setError(false);
+          } else {
+            setAuth('unavailable');
+            setError(true);
+          }
         }
       });
     return () => controller.abort();
-  }, [apiOrigin]);
+  }, [apiOrigin, retry]);
 
   if (auth === 'checking') {
     return <p role="status">Checking sign-in…</p>;
@@ -146,7 +179,20 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
   }
   if (error) {
     return (
-      <p role="alert">Your placement history is temporarily unavailable.</p>
+      <section>
+        <p role="alert">Your placement history is temporarily unavailable.</p>
+        <button
+          type="button"
+          onClick={() => {
+            setAuth('checking');
+            setItems(null);
+            setError(false);
+            setRetry((count) => count + 1);
+          }}
+        >
+          Retry your history
+        </button>
+      </section>
     );
   }
   if (items === null) {

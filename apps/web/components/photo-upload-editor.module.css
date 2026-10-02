@@ -115,3 +115,17 @@
     flex: 1 1 10rem;
   }
 }
+
+.editor,
+.cropArea,
+.preview {
+  min-width: 0;
+}
+@media (max-width: 24rem) {
+  .controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .controls input {
+    width: 100%;
+  }
+}

@@ -166,3 +166,40 @@
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
   }
 }
+
+.slot,
+.panel,
+.picker,
+.choice {
+  min-width: 0;
+}
+.slotContent p {
+  margin: 0;
+}
+.slotContent {
+  overflow-wrap: anywhere;
+}
+.actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+@media (max-width: 30rem) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .actions button {
+    width: 100%;
+  }
+}
+
+.header a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.header > button {
+  display: block;
+  margin-top: 0.75rem;
+}

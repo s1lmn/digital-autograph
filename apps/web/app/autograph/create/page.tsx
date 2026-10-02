@@ -1,6 +1,12 @@
+import type { Metadata } from 'next';
 import { loadWebConfig } from '@digital-autograph/config';
 import { CanvasAuthGate } from '../../../components/canvas-auth-gate';
 import styles from './page.module.css';
+
+export const metadata: Metadata = {
+  title: 'Create a digital autograph',
+  robots: { index: false, follow: false },
+};
 
 export const dynamic = 'force-dynamic';
 

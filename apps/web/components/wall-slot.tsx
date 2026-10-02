@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { frontendCapabilities } from '../lib/frontend-capabilities';
+import { placementSourceLabel } from '../lib/placement-history-api';
 import type { PublicWall } from '../lib/public-wall-api';
 import styles from '../app/walls/[id]/page.module.css';
 
@@ -39,14 +41,46 @@ export function WallSlot({
               onError={() => setFailedPath(mediaPath)}
             />
           ) : (
-            <p>Autograph unavailable</p>
+            <div>
+              <p>Autograph unavailable</p>
+              {mediaPath && (
+                <button type="button" onClick={() => setFailedPath(null)}>
+                  Retry autograph
+                </button>
+              )}
+            </div>
+          )}
+          <p>
+            Current placement
+            {slot.currentPlacement
+              ? ` · ${placementSourceLabel(slot.currentPlacement.source)}`
+              : ''}
+          </p>
+          {!frontendCapabilities.paidTakeover && (
+            <div>
+              <button
+                type="button"
+                disabled
+                aria-describedby={`takeover-unavailable-${slot.id}`}
+              >
+                Paid takeover
+              </button>
+              <p id={`takeover-unavailable-${slot.id}`}>
+                Paid takeover is not available yet.
+              </p>
+            </div>
           )}
         </div>
       ) : (
         <div className={styles.slotContent}>
           <p>Empty slot</p>
           {actionLabel && (
-            <button type="button" disabled={actionDisabled} onClick={onAction}>
+            <button
+              id={`slot-action-${slot.id}`}
+              type="button"
+              disabled={actionDisabled}
+              onClick={onAction}
+            >
               {actionLabel}
             </button>
           )}

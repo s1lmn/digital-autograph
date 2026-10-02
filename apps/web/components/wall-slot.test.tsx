@@ -1,0 +1,43 @@
+// @vitest-environment jsdom
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { WallSlot } from './wall-slot';
+import { frontendCapabilities } from '../lib/frontend-capabilities';
+afterEach(cleanup);
+it('keeps paid takeover disabled without requests, and retries failed public media', () => {
+  const onAction = vi.fn();
+  render(
+    <ul>
+      <WallSlot
+        apiOrigin="https://api.example.test"
+        onAction={onAction}
+        slot={{
+          id: 'slot',
+          position: 0,
+          occupied: true,
+          currentPlacement: {
+            id: 'placement',
+            source: 'free_claim',
+            startedAt: '2026-10-02T12:00:00Z',
+            mediaPath: '/public/placements/placement/autograph',
+          },
+        }}
+      />
+    </ul>,
+  );
+  expect(frontendCapabilities).toEqual({
+    paidTakeover: false,
+    creatorDashboard: false,
+    notifications: false,
+  });
+  const paid = screen.getByRole('button', { name: 'Paid takeover' });
+  expect(paid).toHaveProperty('disabled', true);
+  fireEvent.click(paid);
+  expect(onAction).not.toHaveBeenCalled();
+  fireEvent.error(screen.getByRole('img'));
+  expect(screen.getByText('Autograph unavailable')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry autograph' }));
+  expect(screen.getByRole('img').getAttribute('src')).toBe(
+    'https://api.example.test/public/placements/placement/autograph',
+  );
+});

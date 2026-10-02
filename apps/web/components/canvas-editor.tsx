@@ -62,9 +62,13 @@ export function CanvasEditor({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    redraw();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', redraw);
+      return () => window.removeEventListener('resize', redraw);
+    }
     const observer = new ResizeObserver(redraw);
     observer.observe(canvas);
-    redraw();
     return () => observer.disconnect();
   }, [redraw]);
 

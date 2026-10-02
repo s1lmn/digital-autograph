@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { CanvasAuthGate } from './canvas-auth-gate';
 
 afterEach(() => {
@@ -28,4 +28,20 @@ describe('CanvasAuthGate', () => {
       'http://127.0.0.1:4000/auth/google/start?returnTo=%2Fautograph%2Fcreate',
     );
   });
+});
+
+it('retries authentication after a network error without discarding an editor', async () => {
+  const fetchMock = vi
+    .fn()
+    .mockRejectedValueOnce(new TypeError('offline'))
+    .mockResolvedValueOnce({ ok: false, status: 401 });
+  vi.stubGlobal('fetch', fetchMock);
+  render(<CanvasAuthGate apiOrigin="http://127.0.0.1:4000" />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry sign-in check' }),
+  );
+  expect(
+    await screen.findByRole('heading', { name: 'Sign in to continue' }),
+  ).toBeTruthy();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });

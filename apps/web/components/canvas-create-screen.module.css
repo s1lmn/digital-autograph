@@ -137,3 +137,18 @@
     align-items: stretch;
   }
 }
+
+.flow,
+.preview {
+  min-width: 0;
+}
+@media (max-width: 30rem) {
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .actions button,
+  .primary {
+    width: 100%;
+  }
+}

@@ -14,6 +14,7 @@ import {
 import { ReadyAutographPicker } from './ready-autograph-picker';
 import { WallPlacementHistory } from './placement-history';
 import { WallSlot } from './wall-slot';
+import { WallCountdown } from './wall-countdown';
 import styles from '../app/walls/[id]/page.module.css';
 
 type AuthState = 'checking' | 'anonymous' | 'authenticated' | 'unavailable';
@@ -50,6 +51,8 @@ export function PublicWallScreen({
   const [wall, setWall] = useState(initialWall);
   const [now, setNow] = useState(() => Date.now());
   const [auth, setAuth] = useState<AuthState>('checking');
+  const [authRetry, setAuthRetry] = useState(0);
+  const [readyRetry, setReadyRetry] = useState(0);
   const [ready, setReady] = useState<ReadyAutographChoice[] | null>(null);
   const [readyError, setReadyError] = useState(false);
   const [selectedId, setSelectedId] = useState('');
@@ -76,8 +79,14 @@ export function PublicWallScreen({
             ? current
             : (items[0]?.id ?? ''),
         );
-      } catch {
-        if (!signal?.aborted) setReadyError(true);
+      } catch (error) {
+        if (!signal?.aborted) {
+          setReady(null);
+          setSelectedId('');
+          if (error instanceof WallClaimApiError && error.status === 401) {
+            setAuth('anonymous');
+          } else setReadyError(true);
+        }
       }
     },
     [apiOrigin],
@@ -96,9 +105,17 @@ export function PublicWallScreen({
         if (!controller.signal.aborted) setAuth('unavailable');
       });
     return () => controller.abort();
-  }, [apiOrigin, loadReady]);
+  }, [apiOrigin, loadReady, authRetry, readyRetry]);
 
   useEffect(() => () => requestController.current?.abort(), []);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const confirmationRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    confirmationRef.current?.focus();
+  }, [targetSlotId]);
 
   const refreshWall = useCallback(async () => {
     setRefreshing(true);
@@ -159,6 +176,7 @@ export function PublicWallScreen({
           setMessage('This Wall is no longer available for free claims.');
           await refreshWall();
         } else if (
+          error.code === 'AUTOGRAPH_NOT_FOUND' ||
           error.code === 'AUTOGRAPH_NOT_READY' ||
           error.code === 'AUTOGRAPH_EVIDENCE_INCONSISTENT'
         ) {
@@ -167,6 +185,16 @@ export function PublicWallScreen({
             'That autograph is no longer ready. Choose another ready autograph.',
           );
           await loadReady(controller.signal);
+        } else if (
+          ['WALL_NOT_FOUND', 'SLOT_NOT_FOUND', 'SLOT_NOT_IN_WALL'].includes(
+            error.code,
+          )
+        ) {
+          setTargetSlotId(null);
+          setMessage(
+            'This Wall or slot is no longer available. Refresh the Wall to choose an available slot.',
+          );
+          await refreshWall();
         } else if (error.status === 401) {
           setAuth('anonymous');
           setMessage('Your session expired. Sign in to continue.');
@@ -204,6 +232,16 @@ export function PublicWallScreen({
           Wall status: <strong>{wall.status}</strong>
         </p>
         <p>{wallNotice(wall, now)}</p>
+        <p>
+          <a href={`/creators/${encodeURIComponent(wall.creator.slug)}`}>
+            View creator
+          </a>
+        </p>
+        <WallCountdown
+          startAt={wall.startAt}
+          endAt={wall.endAt}
+          status={wall.status}
+        />
         {auth === 'authenticated' && (
           <a href="/me/placements">View your placement history</a>
         )}
@@ -239,7 +277,7 @@ export function PublicWallScreen({
                 slot={slot}
                 apiOrigin={apiOrigin}
                 actionLabel={actionLabel}
-                actionDisabled={phase === 'claiming'}
+                actionDisabled={phase === 'claiming' || refreshing}
                 onAction={() => {
                   setTargetSlotId(slot.id);
                   setPhase('idle');
@@ -255,16 +293,40 @@ export function PublicWallScreen({
         <p role="status">Checking sign-in…</p>
       )}
       {canClaim && auth === 'unavailable' && (
-        <p role="alert">Sign-in is temporarily unavailable.</p>
+        <section>
+          <p role="alert">Sign-in is temporarily unavailable.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setAuth('checking');
+              setAuthRetry((value) => value + 1);
+            }}
+          >
+            Retry sign-in check
+          </button>
+        </section>
       )}
       {canClaim &&
         auth === 'authenticated' &&
         ready === null &&
         !readyError && <p role="status">Loading your ready autographs…</p>}
       {canClaim && auth === 'authenticated' && readyError && (
-        <p role="alert">
-          Your ready autographs could not be loaded. Refresh this page.
-        </p>
+        <section>
+          <p role="alert">
+            Your ready autographs could not be loaded. Check your connection and
+            retry.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setReadyError(false);
+              setReady(null);
+              setReadyRetry((value) => value + 1);
+            }}
+          >
+            Retry ready autographs
+          </button>
+        </section>
       )}
       {canClaim && auth === 'authenticated' && ready?.length === 0 && (
         <section className={styles.panel}>
@@ -284,7 +346,7 @@ export function PublicWallScreen({
 
       {canClaim && target && !target.occupied && auth === 'anonymous' && (
         <section className={styles.panel} aria-labelledby="sign-in-heading">
-          <h2 id="sign-in-heading">
+          <h2 id="sign-in-heading" ref={confirmationRef} tabIndex={-1}>
             Sign in to claim Slot {target.position + 1}
           </h2>
           <div className={styles.actions}>
@@ -304,7 +366,9 @@ export function PublicWallScreen({
         auth === 'authenticated' &&
         selected && (
           <section className={styles.panel} aria-labelledby="confirm-heading">
-            <h2 id="confirm-heading">Confirm your free claim</h2>
+            <h2 id="confirm-heading" ref={confirmationRef} tabIndex={-1}>
+              Confirm your free claim
+            </h2>
             <p>Wall: {wall.creator.displayName}</p>
             <p>Slot: {target.position + 1}</p>
             <p>
@@ -319,7 +383,7 @@ export function PublicWallScreen({
               <button
                 type="button"
                 onClick={() => void claim()}
-                disabled={phase === 'claiming'}
+                disabled={phase === 'claiming' || refreshing}
               >
                 {phase === 'claiming'
                   ? 'Claiming…'
@@ -329,8 +393,11 @@ export function PublicWallScreen({
               </button>
               <button
                 type="button"
-                onClick={() => setTargetSlotId(null)}
-                disabled={phase === 'claiming'}
+                onClick={() => {
+                  setTargetSlotId(null);
+                  document.getElementById(`slot-action-${target.id}`)?.focus();
+                }}
+                disabled={phase === 'claiming' || refreshing}
               >
                 Cancel
               </button>

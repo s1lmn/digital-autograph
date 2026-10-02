@@ -1,42 +1,38 @@
-import { loadWebConfig } from '@digital-autograph/config';
-import { liveHealthResponse } from '@digital-autograph/contracts';
-
-export const dynamic = 'force-dynamic';
-
-async function getApiStatus(): Promise<'online' | 'unavailable'> {
-  const { API_INTERNAL_URL } = loadWebConfig();
-  try {
-    const response = await fetch(`${API_INTERNAL_URL}/health/live`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(2000),
-    });
-    if (!response.ok) return 'unavailable';
-    const body: unknown = await response.json();
-    return liveHealthResponse.safeParse(body).success
-      ? 'online'
-      : 'unavailable';
-  } catch {
-    return 'unavailable';
-  }
-}
-
-export default async function HomePage() {
-  const apiStatus = await getApiStatus();
-
+export default function HomePage() {
   return (
     <main>
       <p className="eyebrow">Digital Autograph Platform</p>
-      <h1>Project bootstrap</h1>
-      <p>The web shell is running. Product screens will arrive in later PRs.</p>
+      <h1>Leave your mark on a creator’s Wall</h1>
       <p>
-        API health: <strong>{apiStatus}</strong>
+        Make a digital autograph, review it privately, and place it on a
+        creator’s live Wall after moderation.
       </p>
-      <p>
+      <div className="linkActions">
         <a href="/autograph/create">Create a digital autograph</a>
-      </p>
-      <p>
         <a href="/me/placements">View your placement history</a>
-      </p>
+      </div>
+      <section aria-labelledby="how-it-works">
+        <h2 id="how-it-works">How it works</h2>
+        <ol>
+          <li>
+            Draw your autograph or edit a photo. Your original upload stays
+            private.
+          </li>
+          <li>Review the cleaned preview and submit it for moderation.</li>
+          <li>
+            Open a creator’s Wall link and choose an empty slot for your Free
+            Claim.
+          </li>
+        </ol>
+        <p>
+          Each account has one Free Claim per Wall. A ready, moderated autograph
+          is required; availability is checked when you confirm.
+        </p>
+        <p>
+          Have a creator’s link? Open it to view their public Walls. Paid
+          takeover is not available yet.
+        </p>
+      </section>
     </main>
   );
 }

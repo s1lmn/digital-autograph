@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { CanvasEditor } from './canvas-editor';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('CanvasEditor', () => {
   it('offers accessible editing actions and reports a drawn stroke', () => {
@@ -75,4 +79,31 @@ describe('CanvasEditor', () => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
+});
+
+it('redraws and keeps keyboard drawing available when ResizeObserver is absent', () => {
+  vi.stubGlobal('ResizeObserver', undefined);
+  const context = {
+    setTransform: vi.fn(),
+    clearRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+    context as unknown as CanvasRenderingContext2D,
+  );
+  const changed = vi.fn();
+  render(<CanvasEditor onDrawingChange={changed} onStrokesChange={vi.fn()} />);
+  const before = context.clearRect.mock.calls.length;
+  fireEvent(window, new Event('resize'));
+  expect(context.clearRect.mock.calls.length).toBeGreaterThan(before);
+  const canvas = screen.getByLabelText('Autograph drawing area');
+  fireEvent.keyDown(canvas, { key: ' ' });
+  fireEvent.keyDown(canvas, { key: 'ArrowRight' });
+  fireEvent.keyDown(canvas, { key: ' ' });
+  expect(changed).toHaveBeenLastCalledWith(true);
 });

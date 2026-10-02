@@ -1,11 +1,14 @@
 # EGO-99: acquiring provider decision record
 
-Status: **Prepared for human decision; no provider selected, merchant approved,
-or credentials received.** Audit date: 2026-10-02. Baseline:
+Status: **Provider decision accepted: ЮKassa primary, Т-Бизнес fallback.
+ЮKassa sandbox available; production onboarding/KYB pending. EGO-99 is not Done.**
+Decision owner: Egor (project owner); human confirmation recorded 2026-10-02.
+Audit date: 2026-10-02. Repository baseline:
 `8d78cd9d169568a0e7daa60badfb9871a0c3b09b` (`origin/main`).
 
 [EGO-99](https://linear.app/egor-loshkarev/issue/EGO-99/0403-vybrat-i-podklyuchit-platyozhnogo-provajdera-dlya-mvp)
-prepares acquiring selection. Payment orchestration, Order persistence, webhook
+records the accepted acquiring selection and prepares integration readiness.
+Payment orchestration, Order persistence, webhook
 business effects, earnings, and atomic takeover belong to
 [EGO-100](https://linear.app/egor-loshkarev/issue/EGO-100/0404-realizovat-payment-orchestration-webhooks-i-atomic-takeover).
 This record does not authorize production activation or financial operations.
@@ -13,54 +16,60 @@ This record does not authorize production activation or financial operations.
 ## Read-only repository audit
 
 Paths below are relative to the repository root. PASS describes an existing
-foundation, not an implemented payment flow.
+foundation, not an implemented payment flow. Provider decision and sandbox
+availability below reflect the project owner's confirmation; this update did not
+read Lockbox payloads or perform provider API calls.
 
 | Requirement                                   | Result  | Evidence                                                                                                                                                                         | Action                                                                                               |
 | --------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Backend-authoritative amount/currency         | PASS    | `packages/walls/src/pricing.ts`, `packages/db/src/pricing-repository.ts`, `apps/api/src/walls/pricing-http.ts`, `docs/architecture/pricing.md`                                   | Bind payment to the stored quote; never accept browser price as authority                            |
 | Reservation/idempotency/Slot locks            | PASS    | `packages/walls/src/reservation.ts`, `packages/db/src/takeover-reservation-repository.ts`, `apps/api/src/walls/reservation-http.ts`, `docs/architecture/takeover-reservation.md` | Re-read eligibility under locks in EGO-100; expired/cancelled reservations cannot authorize takeover |
-| Provider decision/merchant approval           | MISSING | No acquiring decision or approval artifact in repository                                                                                                                         | Complete the dated decision below and human KYB                                                      |
+| Provider decision                             | PASS    | Egor confirmed ЮKassa primary / Т-Бизнес fallback; decision below                                                                                                                | Implement only the primary adapter in EGO-100                                                        |
+| Production merchant approval / KYB            | MISSING | Human input explicitly leaves production onboarding/KYB pending                                                                                                                  | Complete merchant review and approval; no live activation                                            |
 | Provider adapter                              | MISSING | `packages/integrations/src/` contains auth/private S3 adapters, no acquiring adapter; `apps/api/src/main.ts` composes them                                                       | Use the [proposed boundary](../architecture/payment-provider-boundary.md) when implementing EGO-100  |
 | Order/Payment/Refund/ledger                   | MISSING | `packages/db/src/schema.ts` has quote/reservation but no payment/Order/refund/ledger tables                                                                                      | EGO-100 scope; do not add unused tables here                                                         |
 | Safe config/secret mechanism                  | PARTIAL | `packages/config/src/index.ts`, `.env.example`, `deploy/render-lockbox-env.mjs`, `deploy/deploy-on-vm.sh`, `docs/operations/deployment.md`                                       | Document payment config now; add validated consumed config only with adapter                         |
 | Public merchant information/approved consents | MISSING | `apps/web/app/page.tsx` is bootstrap; no seller, terms, offer, privacy, refund or contact routes; consent schema is not approved legal content                                   | Close the merchant gaps below after legal review                                                     |
 | Acquiring economics inputs                    | MISSING | No approved acquiring tariff, mix, average ticket or settlement terms                                                                                                            | Use the [configurable planning model](payment-economics.md), obtain written current terms            |
 | Test foundation/private storage               | PASS    | `vitest.config.ts`, `tests/integration/`, `tests/e2e/`, `docs/operations/e2e.md`, private S3 adapter                                                                             | Add provider contract tests in EGO-100; preserve original upload privacy                             |
-| Sandbox/live merchant credentials             | MISSING | No payment config/adapter or verified merchant evidence                                                                                                                          | Human obtains and stores keys in environment-specific Lockbox; never send values in chat             |
+| ЮKassa sandbox credentials                    | PASS    | Egor confirmed test shop created and shopId/secretKey stored externally in Yandex Lockbox; values unavailable to repository                                                      | Development uses operator-managed secret reference; validate provider protocol in EGO-100            |
+| Live merchant credentials / activation        | MISSING | No production credentials or activation confirmed                                                                                                                                | Separate approval and production secret handling; no production changes here                         |
 
 ## Comparison template
 
 **H = REQUIRES CURRENT HUMAN VERIFICATION.** Every H must be replaced by a dated
-answer, source/contract reference, and owner before the decision is approved.
+answer, source/contract reference, and owner before commercial/live readiness is
+approved. Primary/fallback selection is already accepted independently of these
+remaining checks.
 Documentation confirms an API capability, not availability or terms for this
 merchant. Technical documentation checked on 2026-10-02; recheck at integration.
 Commercial rates are deliberately absent.
 
-| Field                           | ЮKassa                                                                                                                                  | Т-Бизнес (internet acquiring / eacq)                                                                                                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Onboarding / KYB                | Application, company information, documents, contract [Y1]; exact docs/timeline/activity approval: H                                    | Company/IP application [T1]; exact docs/timeline/activity approval: H                                                                                                                                       |
-| ИП / ООО                        | Provider supports business onboarding [Y1]; selected entity and seller/agent model eligibility: H                                       | Provider describes IP/legal-entity eligibility [T1]; selected activity/seller model eligibility: H                                                                                                          |
-| Cards                           | Payment API capability [Y2]; enabled networks/currencies/restrictions: H                                                                | Hosted payment form [T2]; enabled networks/currencies/restrictions: H                                                                                                                                       |
-| СБП                             | Confirm method activation, API/mobile return and refund conditions: H                                                                   | Advertised payment method [T1]; activation, API/mobile return and refund conditions: H                                                                                                                      |
-| T-Pay / SberPay / other methods | Confirm required method availability, enablement, minimums and browser support: H                                                       | T-Pay, SberPay, Alfa Pay, Mir Pay and СБП advertised [T1]; merchant activation and method-specific fees: H                                                                                                  |
-| Create payment API              | `POST /v3/payments`, authenticated server call [Y2]                                                                                     | eacq `/v2/Init`, `TerminalKey`, integer minor-unit `Amount`, `OrderId`, `Token` [T2]; do not substitute separate payouts/funding APIs                                                                       |
-| Confirmation / redirect         | Redirect confirmation, provider-managed checkout [Y2]; one-stage vs capture choice: H                                                   | `PaymentURL` returned to browser [T2]; one-stage vs capture choice: H                                                                                                                                       |
-| Webhook verification            | Provider recommends checking object status via authenticated API or sender IP [Y3]; no shared-secret HMAC assumption                    | Notification `Token`, provider SHA-256 canonicalization rules (top-level parameters, excludes nested objects) [T3]; verify exact notification contract before coding                                        |
-| Idempotency                     | `Idempotence-Key` for POST/DELETE; documented 24h retention [Y4]; local durable dedup still required                                    | Stable `OrderId` identifies merchant order [T2]; do not assume Init is exactly-once. Verify duplicate/timeout behavior and retention: H. `Cancel.ExternalRequestId` checks prior refunds when supplied [T4] |
-| Full refunds                    | Refund API [Y5]; enabled methods, deadlines, settlement and fee policy: H                                                               | `Cancel` after captured payment [T4]; method restrictions, deadlines, settlement and fee policy: H                                                                                                          |
-| Partial refunds                 | Amount-based partial refunds documented [Y5]; method limits/receipt corrections: H                                                      | Amount-based partial refunds and receipt positions documented [T4]; method limits/receipt corrections: H                                                                                                    |
-| Payment statuses                | `pending`, `waiting_for_capture`, `succeeded`, `canceled` [Y6]; refunds are separate observations                                       | `CONFIRMED` captures payment; `AUTHORIZED` is a hold; refunds include `PARTIAL_REFUNDED` / `REFUNDED` [T2,T4]. Keep raw status and fail closed on unknown status                                            |
-| Fiscal receipt integration      | Confirm cashier/service, API receipt fields, return receipts and legal applicability: H                                                 | Receipt integration described [T5]; chosen cash register, receipt fields, return receipts and legal applicability: H                                                                                        |
-| Settlement schedule             | Banking days, cutoffs, reserves, holdbacks, reconciliation files: H                                                                     | Banking days, cutoffs, reserves, holdbacks, reconciliation files: H                                                                                                                                         |
-| Settlement/payout limits        | Per-payment/daily/monthly limits, minimums, account restrictions: H                                                                     | Per-payment/daily/monthly limits, minimums, account restrictions: H                                                                                                                                         |
-| Sandbox                         | Test mode documented [Y7]; obtain actual test shop/keys, supported method/refund/webhook simulations: H                                 | Test terminal mode documented [T6]; obtain actual terminal/password and supported simulations: H                                                                                                            |
-| Production activation           | KYB, contract, approved site, enabled methods, live keys, limits: H                                                                     | KYB, contract, approved site, enabled terminal/methods, live keys, limits: H                                                                                                                                |
-| Website requirements            | Provider site checklist [Y8]; merchant-specific acceptance and legal texts: H                                                           | Provider site requirements [T1]; merchant-specific acceptance and legal texts: H                                                                                                                            |
-| Support / escalation            | Current merchant manager/channel, incident contact, SLA and escalation: H                                                               | Current merchant manager/channel, incident contact, SLA and escalation: H                                                                                                                                   |
-| Commission                      | Dated written per-method quote, volume tiers/minimum fees: H                                                                            | Dated written per-method quote, volume tiers/minimum fees: H                                                                                                                                                |
-| VAT / taxes on fees             | Included/additional/exempt per fee and recoverability: H (accountant + contract)                                                        | Included/additional/exempt per method/fee and recoverability: H (accountant + contract)                                                                                                                     |
-| Cash-register / receipt costs   | Setup, monthly, per-payment, refund receipt, OFD/fiscal services: H                                                                     | Setup, monthly, per-payment, refund receipt, OFD/fiscal services: H                                                                                                                                         |
-| Operational risks               | Timeouts/ambiguous outcomes, duplicate/delayed notifications, refund availability, settlement holds, outage handling; merchant terms: H | Same risks plus exact signing/duplicate request semantics and method-specific refund states; merchant terms: H                                                                                              |
+| Field                           | ЮKassa                                                                                                                                                  | Т-Бизнес (internet acquiring / eacq)                                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Onboarding / KYB                | Application, company information, documents, contract [Y1]; exact docs/timeline/activity approval: H                                                    | Company/IP application [T1]; exact docs/timeline/activity approval: H                                                                                                                                       |
+| ИП / ООО                        | Provider supports business onboarding [Y1]; selected entity and seller/agent model eligibility: H                                                       | Provider describes IP/legal-entity eligibility [T1]; selected activity/seller model eligibility: H                                                                                                          |
+| Cards                           | Payment API capability [Y2]; enabled networks/currencies/restrictions: H                                                                                | Hosted payment form [T2]; enabled networks/currencies/restrictions: H                                                                                                                                       |
+| СБП                             | Confirm method activation, API/mobile return and refund conditions: H                                                                                   | Advertised payment method [T1]; activation, API/mobile return and refund conditions: H                                                                                                                      |
+| T-Pay / SberPay / other methods | Confirm required method availability, enablement, minimums and browser support: H                                                                       | T-Pay, SberPay, Alfa Pay, Mir Pay and СБП advertised [T1]; merchant activation and method-specific fees: H                                                                                                  |
+| Create payment API              | `POST /v3/payments`, authenticated server call [Y2]                                                                                                     | eacq `/v2/Init`, `TerminalKey`, integer minor-unit `Amount`, `OrderId`, `Token` [T2]; do not substitute separate payouts/funding APIs                                                                       |
+| Confirmation / redirect         | Redirect confirmation, provider-managed checkout [Y2]; one-stage vs capture choice: H                                                                   | `PaymentURL` returned to browser [T2]; one-stage vs capture choice: H                                                                                                                                       |
+| Webhook verification            | Provider recommends checking object status via authenticated API or sender IP [Y3]; no shared-secret HMAC assumption                                    | Notification `Token`, provider SHA-256 canonicalization rules (top-level parameters, excludes nested objects) [T3]; verify exact notification contract before coding                                        |
+| Idempotency                     | `Idempotence-Key` for POST/DELETE; documented 24h retention [Y4]; local durable dedup still required                                                    | Stable `OrderId` identifies merchant order [T2]; do not assume Init is exactly-once. Verify duplicate/timeout behavior and retention: H. `Cancel.ExternalRequestId` checks prior refunds when supplied [T4] |
+| Full refunds                    | Refund API [Y5]; enabled methods, deadlines, settlement and fee policy: H                                                                               | `Cancel` after captured payment [T4]; method restrictions, deadlines, settlement and fee policy: H                                                                                                          |
+| Partial refunds                 | Amount-based partial refunds documented [Y5]; method limits/receipt corrections: H                                                                      | Amount-based partial refunds and receipt positions documented [T4]; method limits/receipt corrections: H                                                                                                    |
+| Payment statuses                | `pending`, `waiting_for_capture`, `succeeded`, `canceled` [Y6]; refunds are separate observations                                                       | `CONFIRMED` captures payment; `AUTHORIZED` is a hold; refunds include `PARTIAL_REFUNDED` / `REFUNDED` [T2,T4]. Keep raw status and fail closed on unknown status                                            |
+| Fiscal receipt integration      | Confirm cashier/service, API receipt fields, return receipts and legal applicability: H                                                                 | Receipt integration described [T5]; chosen cash register, receipt fields, return receipts and legal applicability: H                                                                                        |
+| Settlement schedule             | Banking days, cutoffs, reserves, holdbacks, reconciliation files: H                                                                                     | Banking days, cutoffs, reserves, holdbacks, reconciliation files: H                                                                                                                                         |
+| Settlement/payout limits        | Per-payment/daily/monthly limits, minimums, account restrictions: H                                                                                     | Per-payment/daily/monthly limits, minimums, account restrictions: H                                                                                                                                         |
+| Sandbox                         | AVAILABLE — test shop and credentials in Yandex Lockbox, confirmed by Egor; supported methods, redirect/webhook/refund protocol validation: H / EGO-100 | Fallback only; test terminal/credentials not confirmed, H if fallback integration is later authorized [T6]                                                                                                  |
+| Production activation           | KYB, contract, approved site, enabled methods, live keys, limits: H                                                                                     | KYB, contract, approved site, enabled terminal/methods, live keys, limits: H                                                                                                                                |
+| Website requirements            | Provider site checklist [Y8]; merchant-specific acceptance and legal texts: H                                                                           | Provider site requirements [T1]; merchant-specific acceptance and legal texts: H                                                                                                                            |
+| Support / escalation            | Current merchant manager/channel, incident contact, SLA and escalation: H                                                                               | Current merchant manager/channel, incident contact, SLA and escalation: H                                                                                                                                   |
+| Commission                      | Dated written per-method quote, volume tiers/minimum fees: H                                                                                            | Dated written per-method quote, volume tiers/minimum fees: H                                                                                                                                                |
+| VAT / taxes on fees             | Included/additional/exempt per fee and recoverability: H (accountant + contract)                                                                        | Included/additional/exempt per method/fee and recoverability: H (accountant + contract)                                                                                                                     |
+| Cash-register / receipt costs   | Setup, monthly, per-payment, refund receipt, OFD/fiscal services: H                                                                                     | Setup, monthly, per-payment, refund receipt, OFD/fiscal services: H                                                                                                                                         |
+| Operational risks               | Timeouts/ambiguous outcomes, duplicate/delayed notifications, refund availability, settlement holds, outage handling; merchant terms: H                 | Same risks plus exact signing/duplicate request semantics and method-specific refund states; merchant terms: H                                                                                              |
 
 Merchant acquiring settlement is **not creator payout integration**. Creator
 payout agreements, tax treatment and operational controls belong to
@@ -68,26 +77,45 @@ payout agreements, tax treatment and operational controls belong to
 Fallback means a separately approved contingency provider, not automatic retry
 at a second provider after an ambiguous first payment.
 
-### Decision to complete
+### Accepted decision and remaining inputs
 
-| Input                                                                  | Approved answer / evidence                             |
-| ---------------------------------------------------------------------- | ------------------------------------------------------ |
-| Decision owner / date / next review date                               | H                                                      |
-| Legal seller / entity / seller-of-record vs agent                      | H — EGO-72                                             |
-| Approved activity, temporary placement description, merchant category  | H                                                      |
-| Required methods and forecast mix                                      | H                                                      |
-| Average/min/max payment and monthly volumes                            | H — EGO-66                                             |
-| Primary / fallback provider and rationale                              | H                                                      |
-| Cost comparison using dated quote + tax assumptions                    | H — attach model inputs/output; no keys                |
-| KYB/contract approval reference                                        | H — restricted evidence location, not documents in Git |
-| Sandbox available / configured methods / test evidence                 | H — non-secret reference only                          |
-| Receipt solution, nomenclature, tax codes, refund receipt requirements | H — EGO-77 / EGO-101                                   |
-| Settlement/refund/late payment and incident handling accepted          | H                                                      |
-| Production activation owner and explicit approval gate                 | H — production remains disabled                        |
+| Input                                                                  | Approved answer / evidence                                                                                                                                                       |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Decision owner / date / next review date                               | Egor / 2026-10-02 human confirmation / next review date: H                                                                                                                       |
+| Legal seller / entity / seller-of-record vs agent                      | H — EGO-72                                                                                                                                                                       |
+| Approved activity, temporary placement description, merchant category  | H                                                                                                                                                                                |
+| Required methods and forecast mix                                      | H                                                                                                                                                                                |
+| Average/min/max payment and monthly volumes                            | H — EGO-66                                                                                                                                                                       |
+| Primary / fallback provider and rationale                              | ACCEPTED: ЮKassa / Т-Бизнес; technical rationale below                                                                                                                           |
+| Cost comparison using dated quote + tax assumptions                    | H — attach model inputs/output; no keys                                                                                                                                          |
+| KYB/contract approval reference                                        | H — restricted evidence location, not documents in Git                                                                                                                           |
+| ЮKassa sandbox availability / credentials                              | AVAILABLE: test shop created; shopId and secretKey stored externally in Yandex Lockbox. Values unavailable to repository; operator provides only a safe reference/access handoff |
+| Configured sandbox methods / protocol test evidence                    | Not validated by this documentation update; method settings: H; API/redirect/webhook/refund validation: EGO-100                                                                  |
+| Receipt solution, nomenclature, tax codes, refund receipt requirements | H — EGO-77 / EGO-101                                                                                                                                                             |
+| Settlement/refund/late payment and incident handling accepted          | H                                                                                                                                                                                |
+| Production activation owner and explicit approval gate                 | H — production remains disabled                                                                                                                                                  |
 
-No commercial winner is recommended without these answers. Technically both
-are adapter candidates; hosted redirect checkout avoids handling card data in
-our application. Start with one approved provider, not two runtime adapters.
+### Selection rationale and evidence scope
+
+The project owner chose **ЮKassa as primary** and **Т-Бизнес as fallback**.
+Technical rationale for proceeding with ЮKassa:
+
+- A real test shop and sandbox credentials are already available externally,
+  removing the credential-provisioning prerequisite for primary adapter work.
+- Its documented hosted redirect, authenticated payment lookup, idempotency keys
+  and separate refund objects fit the prepared integration boundary and existing
+  backend-authoritative quote/reservation model [Y2–Y6].
+- One primary adapter keeps initial EGO-100 integration focused. Т-Бизнес remains
+  a contingency choice; its onboarding/credentials are not claimed complete and
+  it is not an automatic retry destination for ambiguous payments.
+
+These are technical reasons for implementing the accepted human choice, not a
+verified price advantage or a claim that merchant activity/KYB is approved.
+Commercial tariffs, VAT, settlement, fiscalization and refund/support terms remain
+H. No provider credentials or payloads were inspected in this update. Sandbox
+availability is confirmed by the owner; actual integration remains unvalidated.
+The exact Lockbox reference/name and access handoff are operator-managed, not
+invented here. Secret values are unavailable to the repository, PR and this record.
 
 ## Merchant website gaps
 
@@ -108,43 +136,50 @@ Do not generate fictional requisites, legal promises or empty compliance pages.
 
 ## Human-only checklist (Egor)
 
-1. Open the current official provider pages below; ask each provider about this
-   exact digital-service activity and entity/agent model.
-2. Obtain dated written commercial terms: all enabled methods, minimum/fixed
-   fees, VAT treatment, refund/chargeback costs, settlement timing/reserves/limits,
-   cash-register/OFD/setup and recurring costs; have the accountant validate tax
-   treatment. Populate all H fields, including support/escalation contacts.
-3. Obtain provider website/KYB requirements; resolve seller model (EGO-72),
-   approved public documents/consents (EGO-75/74) and fiscal plan (EGO-77).
-4. Approve primary and contingency provider with cost/risk rationale. Define
-   required methods, estimated amount/volume/mix, cancellation and late-payment
-   policy; do not equate payment success with placement success.
-5. Submit merchant/KYB application and requested genuine documents through the
-   provider's secure channel; sign the agreement and obtain approval. Do not put
-   personal/company documents in Git or chat.
-6. Obtain real sandbox shop/terminal credentials and verify its test mode,
-   supported methods, redirect/webhook settings and refund simulation. Store
-   credentials in the existing environment-specific Lockbox through an approved
-   operator; provide only the non-secret reference/access owner to developers.
-7. Approve receipt item nomenclature, tax codes, customer receipt contact and
-   return receipt workflow; agree EGO-100/EGO-101 integration responsibilities.
-8. After technical sandbox verification and merchant approval, obtain separate
-   live credentials and verify settlement/refund/support terms. Store them in
-   production Lockbox only under a separate explicit production authorization.
-   Do not enable live payments as part of EGO-99 preparation.
-9. Record final decision and evidence dates. Only then assess the full EGO-99 DoD;
-   technical preparation alone does not complete merchant onboarding.
+Completed by human confirmation on 2026-10-02:
 
-Data needed from Egor: approved legal seller/entity and activity; approved
+- [x] Select ЮKassa primary and Т-Бизнес fallback.
+- [x] Create the ЮKassa sandbox shop and obtain sandbox shopId/secretKey.
+- [x] Store sandbox credentials externally in Yandex Lockbox; values unavailable
+      to the repository. Development accesses them through the secret manager.
+
+Remaining human work:
+
+1. Open current official provider pages; confirm this exact digital-service
+   activity, entity/seller-of-record model and merchant website requirements.
+2. Obtain dated written terms: enabled methods, minimum/fixed fees, VAT,
+   refund/chargeback costs, settlement timing/reserves/limits, cash-register/OFD
+   costs and support/escalation contacts. Accountant validates applicable tax
+   treatment. These fields remain REQUIRES CURRENT HUMAN VERIFICATION.
+3. Resolve seller model (EGO-72), approved public documents/consents (EGO-75/74),
+   fiscal plan/receipt inputs (EGO-77) and provider site acceptance.
+4. Define required methods, forecast amount/volume/mix, cancellation/late-payment
+   and incident policies. Add the commercial rationale when written terms exist.
+5. Complete production merchant/KYB application, genuine documents, contract and
+   approval through the provider's secure channel. No private documents in Git/chat.
+6. Hand off only the safe Lockbox reference/access owner for EGO-100 sandbox work;
+   confirm method/return/webhook settings and approved receipt test inputs. Real
+   sandbox API/redirect/webhook/refund validation belongs to EGO-100 and has not run.
+7. After technical sandbox verification and merchant approval, separately
+   authorize production credentials/storage and live activation. No production
+   credentials are added or production activated by this task.
+8. Record written settlement/refund/support acceptance and remaining evidence
+   dates, then reassess the full EGO-99 DoD. Selection and sandbox availability do
+   not complete production onboarding. Fallback onboarding remains separate if needed.
+
+Remaining data needed from Egor: approved legal seller/entity and activity;
 public texts/requisites/contacts; target methods/mix/amounts/volumes; written
-provider terms; primary/fallback decision; receipt/accountant decisions;
-KYB/contract status; safe sandbox secret reference and test-mode confirmation;
-settlement/refund/support owners. **No secret values needed in a reply.**
+provider terms; receipt/accountant decisions; KYB/contract status; safe sandbox
+secret reference/access handoff and method settings; settlement/refund/support
+owners. **No secret values needed in a reply.** Primary/fallback choice and
+sandbox creation/credential storage are already confirmed.
 
-EGO-100 can start sandbox implementation after provider choice, genuine sandbox
-credentials/access and required merchant/fiscal protocol inputs are available.
-Credentials alone do not resolve legal, receipt or provider-contract questions.
-Live activation and legal completion remain independent gates.
+After this preparation PR merges, the technical foundation is ready to start
+EGO-100 with the selected ЮKassa sandbox. The developer retrieves credentials via
+an authorized secret-manager handoff during EGO-100; real provider contract tests
+and receipt/config decisions are part of that implementation. Production legal,
+commercial, fiscal and KYB completion remain independent gates. EGO-100 is not
+implemented or started by this update; EGO-99 remains incomplete.
 
 ## Official sources
 

@@ -5,4 +5,6 @@ Record eligibility, cooldown, pricing, ownership, and moderation rules here befo
 [Acquiring provider readiness (EGO-99)](payment-provider-decision.md) records the
 repository audit, ЮKassa/Т-Бизнес decision inputs, merchant website gaps and
 human-only onboarding checklist. The [offline acquiring cost model](payment-economics.md)
-compares configurable fee assumptions; no provider is selected or enabled yet.
+compares configurable fee assumptions. ЮKassa is the selected primary, Т-Бизнес
+the fallback; ЮKassa sandbox credentials are stored externally in Lockbox.
+Payment runtime and production activation remain deferred.

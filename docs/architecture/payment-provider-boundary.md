@@ -2,7 +2,7 @@
 
 Status: **Design input for EGO-100, not a shipped runtime contract.** No acquiring
 adapter, payment route, DB schema, SDK or config consumer is introduced here.
-Provider choice remains pending in the
+The accepted choice is **ЮKassa primary / Т-Бизнес fallback**, recorded in the
 [decision record](../product/payment-provider-decision.md).
 
 ## Placement in the existing architecture
@@ -13,7 +13,10 @@ as existing auth/private S3 adapters are composed. Keep provider SDK/HTTP types
 out of `packages/domain`, public contracts and PostgreSQL business transactions.
 Do not build a generic payment framework, capability registry or automatic
 provider failover. Define executable types alongside their first consumer in
-EGO-100, once the selected provider protocol has been tested.
+EGO-100 for ЮKassa, with actual protocol validation using the available sandbox.
+Т-Бизнес remains a documented contingency; no fallback adapter or runtime
+failover is introduced. Sandbox shopId/secretKey are stored externally in Yandex
+Lockbox by the owner; this design contains no values or invented secret name.
 
 Proposed four operations (names are design sketches):
 
@@ -71,10 +74,13 @@ reservation plus late payment requires refund/manual review, never blind takeove
 Provider network calls must not be performed while holding Slot locks.
 
 Refund reconciliation must read the provider's authoritative refund object/status,
-not infer completion from a captured payment. For providers with separate refund
-objects (ЮKassa), add a narrowly scoped `getRefund` operation alongside its EGO-100
-consumer; for method-specific states (for example Т-Банк СБП), use the documented
-refund lookup. The four-operation sketch is a starting point, not a reason to
+not infer completion from a captured payment. For the selected ЮKassa primary,
+model its separate refund objects with a
+narrowly scoped `getRefund` operation alongside the EGO-100 reconciliation
+consumer. Preserve raw payment/refund statuses and authenticated amount/Order
+binding; no local fulfillment follows from a browser redirect. If Т-Бизнес is
+later integrated, use its documented method-specific refund lookup. The
+four-operation sketch is a starting point, not a reason to
 omit required reconciliation or force every provider into an inaccurate model.
 
 ## Config and secrets plan (documented, not added to runtime)
@@ -85,7 +91,7 @@ and tests, without a permissive default/fake credential fallback:
 
 | Proposed field                                    | Rule                                                                                              |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `PAYMENT_PROVIDER`                                | Explicit supported enum, initially the selected provider only                                     |
+| `PAYMENT_PROVIDER`                                | Explicit ЮKassa selection for initial EGO-100; no fallback default                                |
 | `PAYMENT_MODE`                                    | Explicit `sandbox` / `live`, independent of `NODE_ENV`                                            |
 | ЮKassa: `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY` | Non-empty server-only pair from matching test/live shop                                           |
 | Т-Банк: `TBANK_TERMINAL_KEY`, `TBANK_PASSWORD`    | Non-empty server-only pair from matching terminal; do not treat password as a generic HMAC secret |
@@ -108,12 +114,14 @@ a real consumer needs it. Sandbox references and approved test credentials are
 handled by the operator, never committed or printed. Production secret storage
 and payment activation require a separate authorization; this task touches neither.
 
-## EGO-100 tests required after provider selection
+## EGO-100 tests for the selected ЮKassa sandbox
 
 - Provider contract fixtures: exact amount conversion, merchant/mode/correlation,
   hosted redirect allowlist, supported/raw/unknown statuses, malformed responses.
-- Verification failures: forged/missing signature, altered nested fields, wrong
+- ЮKassa verification failures: spoofed event, mismatched authenticated lookup,
+  altered metadata, wrong
   merchant/test mode/currency/amount/Order, bad IP/proxy input, oversized body.
+  Signature tests belong to a future Т-Банк adapter; do not invent a ЮKassa HMAC.
 - Durable operation retry: concurrent duplicate create/refund, stable key/payload,
   changed payload rejection, timeout after provider accepted, delayed status read,
   local dedup after provider retention and no automatic fallback charge.

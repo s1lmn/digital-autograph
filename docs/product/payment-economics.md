@@ -4,7 +4,11 @@ This is an **offline planning estimate**, not a tariff quotation, tax decision,
 payment authorization, ledger or platform profit model. It performs no network
 calls, reads no environment credentials and changes no database/storage. Use
 separate input files for ЮKassa and Т-Бизнес with dated written terms from the
-[decision record](payment-provider-decision.md). There is no preset provider rate.
+[decision record](payment-provider-decision.md). The accepted decision is ЮKassa
+primary / Т-Бизнес fallback; actual
+commercial rates, VAT treatment, receipt/refund and settlement terms remain
+REQUIRES CURRENT HUMAN VERIFICATION. The template remains unfilled, with no preset
+provider rate; sandbox availability does not supply live commercial terms.
 
 Copy [payment-economics.template.json](payment-economics.template.json) to a local
 file, replace every `null` with a verified assumption, and run with Node 24:

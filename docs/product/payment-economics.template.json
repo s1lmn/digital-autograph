@@ -1,0 +1,47 @@
+{
+  "currency": "RUB",
+  "averagePaymentMinor": null,
+  "monthlyVolumes": [null],
+  "methods": [
+    {
+      "name": "card",
+      "shareBps": null,
+      "commissionBps": null,
+      "fixedFeeMinor": null,
+      "acquiringVat": { "mode": null, "rateBps": null, "recoverableBps": null },
+      "refundRateBps": null,
+      "refundedAmountBps": null,
+      "acquiringFeeReturnedBps": null,
+      "refundFee": {
+        "amountMinor": null,
+        "vat": { "mode": null, "rateBps": null, "recoverableBps": null }
+      }
+    },
+    {
+      "name": "sbp",
+      "shareBps": null,
+      "commissionBps": null,
+      "fixedFeeMinor": null,
+      "acquiringVat": { "mode": null, "rateBps": null, "recoverableBps": null },
+      "refundRateBps": null,
+      "refundedAmountBps": null,
+      "acquiringFeeReturnedBps": null,
+      "refundFee": {
+        "amountMinor": null,
+        "vat": { "mode": null, "rateBps": null, "recoverableBps": null }
+      }
+    }
+  ],
+  "paymentReceiptFee": {
+    "amountMinor": null,
+    "vat": { "mode": null, "rateBps": null, "recoverableBps": null }
+  },
+  "refundReceiptFee": {
+    "amountMinor": null,
+    "vat": { "mode": null, "rateBps": null, "recoverableBps": null }
+  },
+  "monthlyCashRegisterFee": {
+    "amountMinor": null,
+    "vat": { "mode": null, "rateBps": null, "recoverableBps": null }
+  }
+}

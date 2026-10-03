@@ -1,5 +1,7 @@
 # Proposed acquiring adapter boundary (EGO-99)
 
+Implementation: see [EGO-100 orchestration](payment-orchestration.md) for the executable contract, safe manual compensation path and validation limits. The remainder records the EGO-99 design baseline.
+
 Status: **Design input for EGO-100, not a shipped runtime contract.** No acquiring
 adapter, payment route, DB schema, SDK or config consumer is introduced here.
 The accepted choice is **ЮKassa primary / Т-Бизнес fallback**, recorded in the

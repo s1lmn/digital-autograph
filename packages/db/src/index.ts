@@ -40,3 +40,4 @@ export function createDatabase(databaseUrl: string) {
 }
 
 export type Database = ReturnType<typeof createDatabase>;
+export { createPgPaymentRepository } from './payment-repository';

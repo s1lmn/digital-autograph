@@ -31,7 +31,7 @@ type ReservationRow = {
   pricing_config_id: string;
   amount_minor: string;
   currency: string;
-  status: 'active' | 'expired' | 'cancelled';
+  status: 'active' | 'expired' | 'cancelled' | 'consumed';
   created_at: Date;
   expires_at: Date;
 };

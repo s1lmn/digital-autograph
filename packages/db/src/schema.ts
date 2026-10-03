@@ -65,6 +65,7 @@ export const takeoverReservationStatus = pgEnum('takeover_reservation_status', [
   'active',
   'expired',
   'cancelled',
+  'consumed',
 ]);
 
 export const users = pgTable('users', {
@@ -708,6 +709,7 @@ export const takeoverReservations = pgTable(
     status: takeoverReservationStatus().notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     expiredAt: timestamp('expired_at', { withTimezone: true }),
   },
@@ -739,7 +741,177 @@ export const takeoverReservations = pgTable(
     ),
     check(
       'takeover_reservations_state_valid',
-      sql`(${table.status} = 'active' AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'cancelled' AND ${table.cancelledAt} IS NOT NULL AND ${table.expiredAt} IS NULL AND ${table.cancelledAt} >= ${table.createdAt}) OR (${table.status} = 'expired' AND ${table.expiredAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} >= ${table.createdAt})`,
+      sql`(${table.status}::text = 'consumed' AND ${table.consumedAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'active' AND ${table.consumedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'cancelled' AND ${table.cancelledAt} IS NOT NULL AND ${table.expiredAt} IS NULL AND ${table.cancelledAt} >= ${table.createdAt}) OR (${table.status} = 'expired' AND ${table.expiredAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} >= ${table.createdAt})`,
+    ),
+  ],
+);
+
+export const paymentState = pgEnum('payment_state', [
+  'created',
+  'provider_pending',
+  'unknown',
+  'succeeded',
+  'canceled',
+  'paid_but_not_fulfilled',
+  'fulfilled',
+]);
+export const paymentOrders = pgTable(
+  'payment_orders',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => takeoverReservations.id),
+    quoteId: uuid('quote_id')
+      .notNull()
+      .references(() => takeoverQuotes.id),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id),
+    slotId: uuid('slot_id')
+      .notNull()
+      .references(() => slots.id),
+    targetPlacementId: uuid('target_placement_id')
+      .notNull()
+      .references(() => placements.id),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id),
+    pricingConfigId: uuid('pricing_config_id')
+      .notNull()
+      .references(() => pricingConfigVersions.id),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    creatorShareBps: integer('creator_share_bps').notNull(),
+    status: paymentState('status').notNull().default('created'),
+    placementId: uuid('placement_id').references(() => placements.id),
+    fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('payment_orders_reservation_uidx').on(t.reservationId),
+    uniqueIndex('payment_orders_placement_uidx').on(t.placementId),
+    check(
+      'payment_orders_amount',
+      sql`${t.amountMinor} BETWEEN 1 AND 100000000000 AND ${t.currency} = 'RUB' AND ${t.creatorShareBps} BETWEEN 0 AND 10000`,
+    ),
+    check(
+      'payment_orders_fulfillment',
+      sql`(${t.status} = 'fulfilled' AND ${t.placementId} IS NOT NULL AND ${t.fulfilledAt} IS NOT NULL) OR (${t.status} <> 'fulfilled' AND ${t.placementId} IS NULL AND ${t.fulfilledAt} IS NULL)`,
+    ),
+  ],
+);
+export const payments = pgTable(
+  'payments',
+  {
+    id: id(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => paymentOrders.id),
+    provider: text('provider').notNull(),
+    shopId: text('shop_id').notNull(),
+    mode: text('mode').notNull(),
+    providerPaymentId: text('provider_payment_id'),
+    operationKey: uuid('operation_key').notNull(),
+    requestFingerprint: varchar('request_fingerprint', {
+      length: 64,
+    }).notNull(),
+    returnUrl: text('return_url').notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    status: paymentState('status').notNull().default('created'),
+    rawStatus: varchar('raw_status', { length: 256 }),
+    confirmationUrl: text('confirmation_url'),
+    reason: text('reason'),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    leaseToken: uuid('lease_token'),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    nextCheckAt: timestamp('next_check_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    failures: integer('failures').notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('payments_order_uidx').on(t.orderId),
+    uniqueIndex('payments_provider_uidx').on(t.provider, t.providerPaymentId),
+    uniqueIndex('payments_operation_uidx').on(t.operationKey),
+    index('payments_reconcile_idx').on(t.nextCheckAt),
+    check(
+      'payments_config',
+      sql`${t.provider} = 'yookassa' AND ${t.mode} IN ('sandbox','live')`,
+    ),
+    check(
+      'payments_amount',
+      sql`${t.amountMinor} BETWEEN 1 AND 100000000000 AND ${t.currency} = 'RUB'`,
+    ),
+    check(
+      'payments_fingerprint',
+      sql`${t.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'payments_verified',
+      sql`${t.status} NOT IN ('succeeded','fulfilled','paid_but_not_fulfilled') OR (${t.verifiedAt} IS NOT NULL AND ${t.providerPaymentId} IS NOT NULL)`,
+    ),
+  ],
+);
+export const paymentEventReceipts = pgTable(
+  'payment_event_receipts',
+  {
+    id: id(),
+    provider: text('provider').notNull(),
+    providerPaymentId: text('provider_payment_id').notNull(),
+    event: text('event').notNull(),
+    receivedAt: createdAt(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    result: text('result'),
+  },
+  (t) => [
+    uniqueIndex('payment_event_receipts_identity').on(
+      t.provider,
+      t.providerPaymentId,
+      t.event,
+    ),
+  ],
+);
+export const creatorEarnings = pgTable(
+  'creator_earnings',
+  {
+    id: id(),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => paymentOrders.id),
+    paymentId: uuid('payment_id')
+      .notNull()
+      .references(() => payments.id),
+    placementId: uuid('placement_id')
+      .notNull()
+      .references(() => placements.id),
+    creatorId: uuid('creator_id')
+      .notNull()
+      .references(() => creators.id),
+    grossAmountMinor: bigint('gross_amount_minor', {
+      mode: 'bigint',
+    }).notNull(),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    shareBps: integer('share_bps').notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('creator_earnings_order_uidx').on(t.orderId),
+    uniqueIndex('creator_earnings_payment_uidx').on(t.paymentId),
+    uniqueIndex('creator_earnings_placement_uidx').on(t.placementId),
+    check(
+      'creator_earnings_amount',
+      sql`${t.currency} = 'RUB' AND ${t.shareBps} BETWEEN 0 AND 10000 AND ${t.grossAmountMinor} BETWEEN 1 AND 100000000000 AND ${t.amountMinor} = (${t.grossAmountMinor} * ${t.shareBps}) / 10000`,
     ),
   ],
 );

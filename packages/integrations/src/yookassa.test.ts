@@ -91,11 +91,14 @@ it.each([
 ])('rejects malformed/unsafe object', (value) =>
   expect(() => parseYookassaPayment(value)).toThrow(),
 );
-it.each([500, 503, 429])('treats HTTP %s as unknown', async (status) => {
-  await expect(
-    adapter(async () => new Response('sensitive', { status })).getPayment(id),
-  ).rejects.toThrow('PROVIDER_OUTCOME_UNKNOWN');
-});
+it.each([500, 503, 429, 408, 302])(
+  'treats HTTP %s as unknown',
+  async (status) => {
+    await expect(
+      adapter(async () => new Response('sensitive', { status })).getPayment(id),
+    ).rejects.toThrow('PROVIDER_OUTCOME_UNKNOWN');
+  },
+);
 it.each([400, 401, 403, 404])('sanitizes HTTP %s', async (status) => {
   await expect(
     adapter(async () => new Response('sensitive', { status })).getPayment(id),
@@ -149,4 +152,52 @@ it('actual HTTP fixture exercises bounded no-redirect transport and request byte
       server.close((e) => (e ? reject(e) : resolve())),
     );
   }
+});
+
+// Examples are coverage, not a provider path allowlist.
+it.each([
+  '/checkout/payments/v2/contract?orderId=fixture',
+  '/api-pages/v2/payment-confirm/epl?orderId=fixture',
+  '/payments/external/confirmation?orderId=fixture',
+  '/future-provider-route?orderId=fixture',
+])('accepts authenticated official-origin confirmation %s', (path) => {
+  const url = `https://yoomoney.ru${path}`;
+  expect(
+    parseYookassaPayment({
+      ...response,
+      confirmation: {
+        type: 'redirect',
+        confirmation_url: url,
+      },
+    }).confirmationUrl,
+  ).toBe(url);
+});
+it.each([
+  ['http', 'http://yoomoney.ru/payments/confirm'],
+  ['arbitrary host', 'https://evil.example/payments/confirm'],
+  ['hostname suffix', 'https://yoomoney.ru.evil.example/payments/confirm'],
+  ['subdomain', 'https://checkout.yoomoney.ru/payments/confirm'],
+  ['userinfo', 'https://user:password@yoomoney.ru/payments/confirm'],
+  ['empty userinfo', 'https://@yoomoney.ru/payments/confirm'],
+  ['missing authority separator', 'https:yoomoney.ru/payments/confirm'],
+  ['raw control', 'https://yoomoney.ru/payments/confirm\u0000'],
+  ['userinfo injection', 'https://yoomoney.ru@evil.example/payments/confirm'],
+  ['fragment', 'https://yoomoney.ru/payments/confirm#injected'],
+  ['empty fragment', 'https://yoomoney.ru/payments/confirm#'],
+  ['nonstandard port', 'https://yoomoney.ru:444/payments/confirm'],
+  ['control injection', 'https://yoomoney.ru/payments/confirm\n'],
+  ['backslash injection', 'https://yoomoney.ru/\\evil.example'],
+  ['relative URL', '//yoomoney.ru/payments/confirm'],
+  ['malformed URL', 'https://[invalid'],
+  ['oversized', `https://yoomoney.ru/${'x'.repeat(2048)}`],
+])('rejects unsafe confirmation: %s', (_case, url) => {
+  expect(() =>
+    parseYookassaPayment({
+      ...response,
+      confirmation: {
+        type: 'redirect',
+        confirmation_url: url,
+      },
+    }),
+  ).toThrow('INVALID_CONFIRMATION_URL');
 });

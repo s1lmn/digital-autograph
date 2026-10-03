@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { beforeEach, afterAll, it, expect } from 'vitest';
+import { createYookassaProvider } from '../../packages/integrations/src/yookassa';
 import { buildApi } from '../../apps/api/src/app';
 import { SessionService } from '../../packages/auth/src/index';
 import {
@@ -775,5 +776,280 @@ it('samples expiry after a real Wall lock wait, not before starting the transact
   } finally {
     await blocker.query('ROLLBACK');
     blocker.release();
+  }
+});
+
+it.each([
+  [
+    'cancelled',
+    'cancelled_at=clock_timestamp(), consumed_at=clock_timestamp()',
+  ],
+  ['expired', 'expired_at=clock_timestamp(), consumed_at=clock_timestamp()'],
+  ['consumed', 'consumed_at=clock_timestamp(), cancelled_at=clock_timestamp()'],
+  ['consumed', 'consumed_at=clock_timestamp(), expired_at=clock_timestamp()'],
+])(
+  'PostgreSQL rejects overlapping Reservation lifecycle: %s / %s',
+  async (status, timestamps) => {
+    const f = await setup();
+    await expect(
+      database.pool.query(
+        `UPDATE takeover_reservations SET status=$2, ${timestamps} WHERE id=$1`,
+        [f.reservationId, status],
+      ),
+    ).rejects.toMatchObject({
+      code: '23514',
+      constraint: 'takeover_reservations_state_valid',
+    });
+    expect(
+      (
+        await database.pool.query(
+          'SELECT status FROM takeover_reservations WHERE id=$1',
+          [f.reservationId],
+        )
+      ).rows[0].status,
+    ).toBe('active');
+  },
+);
+it.each([400, 401, 403, 404, 422])(
+  'deterministic create HTTP %s remains audited without repeated create or reconciliation',
+  async (status) => {
+    const f = await setup();
+    let calls = 0;
+    const rejected = createYookassaProvider(
+      { shopId: settings.shopId, secretKey: 'test_fixture_not_real' },
+      {
+        fetch: async () => {
+          calls++;
+          return new Response('sensitive provider body', { status });
+        },
+      },
+    );
+    const s = new PaymentService(repo, rejected, settings);
+    const order = await s.create(f.buyer.id, f.reservationId, f.autographId);
+    expect((await repo.find(order.id))?.reason).toBe('PROVIDER_REJECTED');
+    // Even an elapsed create window must not overwrite the retained rejection reason.
+    const elapsed = new PaymentService(
+      {
+        ...repo,
+        find: async (id) => {
+          const p = await repo.find(id);
+          return p ? { ...p, createRetryAllowed: false } : null;
+        },
+      },
+      rejected,
+      settings,
+    );
+    await elapsed.progress(order.id);
+    await s.create(f.buyer.id, f.reservationId, f.autographId);
+    await s.refresh(f.buyer.id, order.id);
+    await database.pool.query(
+      "UPDATE payments SET next_check_at=clock_timestamp()-interval '1 minute' WHERE order_id=$1",
+      [order.id],
+    );
+    expect(await repo.due(50)).not.toContain(order.id);
+    expect(await s.reconcile()).toMatchObject({ processed: 0, attention: 1 });
+    expect(await repo.anomalies()).toContainEqual({
+      orderId: order.id,
+      reason: 'PROVIDER_REJECTED',
+    });
+    expect((await repo.find(order.id))?.reason).toBe('PROVIDER_REJECTED');
+    expect(calls).toBe(1);
+    expect(await counts(order.id)).toMatchObject({
+      takeovers: 0,
+      earnings: 0,
+      active: 1,
+    });
+  },
+);
+it.each([408, 429, 500, 503])(
+  'ambiguous create HTTP %s stays due and retries only the same key/payload',
+  async (status) => {
+    const f = await setup();
+    const requests: Array<{ key: string; body: string }> = [];
+    const ambiguous = createYookassaProvider(
+      { shopId: settings.shopId, secretKey: 'test_fixture_not_real' },
+      {
+        fetch: async (_url, options) => {
+          requests.push({
+            key: (options?.headers as Record<string, string>)[
+              'Idempotence-Key'
+            ]!,
+            body: options?.body as string,
+          });
+          return new Response('sensitive provider body', { status });
+        },
+      },
+    );
+    const s = new PaymentService(repo, ambiguous, settings);
+    const order = await s.create(f.buyer.id, f.reservationId, f.autographId);
+    expect((await repo.find(order.id))?.reason).toBe(
+      'PROVIDER_OUTCOME_UNKNOWN',
+    );
+    await database.pool.query(
+      "UPDATE payments SET next_check_at=clock_timestamp()-interval '1 minute' WHERE order_id=$1",
+      [order.id],
+    );
+    expect(await repo.due(50)).toContain(order.id);
+    await s.reconcile();
+    expect(requests).toHaveLength(2);
+    expect(requests[1]).toEqual(requests[0]);
+    expect(await counts(order.id)).toMatchObject({ takeovers: 0, earnings: 0 });
+  },
+);
+it('a rejected GET for an already-bound payment remains reconcilable', async () => {
+  const f = await started();
+  const rejected = new PaymentService(
+    repo,
+    {
+      ...provider,
+      async getPayment() {
+        throw new PaymentError('PROVIDER_REJECTED');
+      },
+    },
+    settings,
+  );
+  await rejected.progress(f.orderId);
+  await database.pool.query(
+    "UPDATE payments SET next_check_at=clock_timestamp()-interval '1 minute' WHERE order_id=$1",
+    [f.orderId],
+  );
+  expect(await repo.due(50)).toContain(f.orderId);
+  await service().reconcile();
+  expect((await repo.find(f.orderId))?.state).toBe('provider_pending');
+});
+it('create/refresh frequency exhaustion cannot consume bounded webhook capacity', async () => {
+  const f = await started();
+  let reads = 0;
+  const app = api(
+    new PaymentService(
+      repo,
+      {
+        ...provider,
+        async getPayment(id) {
+          reads++;
+          return provider.getPayment(id);
+        },
+      },
+      settings,
+    ),
+  );
+  const headers = {
+    cookie: `da_session=${f.buyer.token}`,
+    origin: 'http://127.0.0.1:3000',
+  };
+  const callback = () =>
+    app.inject({
+      method: 'POST',
+      url: '/payments/webhooks/yookassa',
+      payload: {
+        type: 'notification',
+        event: 'payment.succeeded',
+        object: { id: f.providerId },
+      },
+    });
+  try {
+    for (let i = 0; i < 60; i++) {
+      const response = await app.inject(
+        i % 2
+          ? {
+              method: 'POST',
+              url: `/payments/orders/${f.orderId}/refresh`,
+              headers,
+              payload: {},
+            }
+          : {
+              method: 'POST',
+              url: '/payments/orders',
+              headers,
+              payload: {
+                reservationId: f.reservationId,
+                autographId: f.autographId,
+              },
+            },
+      );
+      expect(response.statusCode).toBe(200);
+    }
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/payments/orders/${f.orderId}/refresh`,
+          headers,
+          payload: {},
+        })
+      ).statusCode,
+    ).toBe(429);
+    const before = reads;
+    for (let i = 0; i < 60; i++)
+      expect((await callback()).statusCode).toBe(200);
+    expect(reads - before).toBe(120); // two verified reads per callback, still bounded
+    expect((await callback()).statusCode).toBe(429);
+    expect(reads - before).toBe(120);
+  } finally {
+    await app.close();
+  }
+});
+it('four in-flight user operations cannot occupy webhook concurrency capacity', async () => {
+  const fixtures: Array<Awaited<ReturnType<typeof started>>> = [];
+  for (let i = 0; i < 5; i++) fixtures.push(await started());
+  let release!: () => void,
+    entered!: () => void,
+    reads = 0;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const ready = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const app = api(
+    new PaymentService(
+      repo,
+      {
+        ...provider,
+        async getPayment(id) {
+          if (++reads <= 4) {
+            if (reads === 4) entered();
+            await gate;
+          }
+          return provider.getPayment(id);
+        },
+      },
+      settings,
+    ),
+  );
+  await app.ready();
+  const refresh = (f: (typeof fixtures)[number]) =>
+    app.inject({
+      method: 'POST',
+      url: `/payments/orders/${f.orderId}/refresh`,
+      headers: {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      },
+      payload: {},
+    });
+  const pending = fixtures.slice(0, 4).map((f) => refresh(f).then((r) => r));
+  try {
+    await ready;
+    const f = fixtures[4]!;
+    expect((await refresh(f)).statusCode).toBe(429);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/payments/webhooks/yookassa',
+          payload: {
+            type: 'notification',
+            event: 'payment.succeeded',
+            object: { id: f.providerId },
+          },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(reads).toBe(6);
+  } finally {
+    release();
+    await Promise.all(pending);
+    await app.close();
   }
 });

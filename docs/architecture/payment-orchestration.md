@@ -21,14 +21,18 @@ Official documentation checked 2026-10-03:
 One-stage hosted redirect uses `capture: true`. Only authenticated `succeeded`
 with `paid: true` can authorize fulfillment. `waiting_for_capture` is pending,
 never captured. Unknown statuses fail closed and retain the raw status. HTTP 5xx,
-429, malformed/oversized responses and transport failures are UNKNOWN; provider
+408/429, malformed/oversized responses and transport failures are UNKNOWN; provider
 response bodies and authorization headers never reach logs or API errors.
 
 Money is canonical integer minor-unit strings / PostgreSQL bigint. Decimal RUB
 conversion uses BigInt, up to the existing pricing limit of 100000000000 kopecks.
 The adapter does not accept an arbitrary API origin and refuses HTTP redirects.
 Responses are limited to 64 KiB and 10 seconds. Hosted confirmation URLs must use
-`https://yoomoney.ru/checkout/payments/` with no userinfo or fragment.
+the exact `https://yoomoney.ru` origin, no userinfo/fragment, no whitespace or
+backslash injection and at most 2048 characters. Paths are provider-controlled,
+not an application allowlist: official examples include checkout, API-page and
+external-confirmation routes, and legitimate future paths on that same origin
+remain accepted. See [official redirect examples](https://yookassa.ru/developers/payment-acceptance/integration-scenarios/manual-integration/basics).
 
 ## Persist before network
 
@@ -61,8 +65,11 @@ An early notification can recover a not-yet-bound provider ID using verified
 Order metadata. Unknown local Orders have no business effects.
 
 No invented HMAC scheme. The route has a 16 KiB body limit. Provider-triggering
-routes share a bounded per-process 60/minute budget and four-call concurrency
-limit. For multiple replicas, operators must also configure perimeter aggregate
+create/refresh routes share one per-process 60/minute budget and four-call
+concurrency limit. Webhooks have a separate 60/minute budget and four-call capacity;
+user requests cannot exhaust either callback allowance. Spoofed callbacks still
+consume the bounded callback budget (at most two provider reads per accepted
+hint). For multiple replicas, operators must also configure perimeter aggregate
 rate limiting. No unbounded per-client memory map is maintained.
 
 Durable receipts deduplicate `(provider, payment ID, event)` identity. A processed
@@ -120,7 +127,14 @@ a bounded batch using the same provider verification and fulfillment service.
 Schedule it at least once per minute with the same API config/DB and monitor exit
 status. It is executable but **not automatically scheduled/deployed by this PR**.
 Retry failures use bounded exponential backoff; terminal observations are audited
-daily. Structured `payment_attention` signals contain only Order ID and a fixed
+daily. A deterministic authenticated create HTTP 4xx (excluding 408/429) records
+`unknown` + `PROVIDER_REJECTED` as an audit-visible, non-retry/manual-review attempt.
+When no provider ID is bound, it is excluded from automatic reconciliation and
+never recreated, including after the create-retry deadline. Anomalies still emit
+its reason for operator attention. A rejection while GETting an already-bound
+payment remains reconcilable. Transport ambiguity, 408/429 and 5xx retain the
+same-key recovery path; no rejection authorizes a takeover. Structured
+`payment_attention` signals contain only Order ID and a fixed
 reason code. Manual-review/unknown/mismatch/contradictory terminal/repeated failure
 states remain queryable. EGO-111 owns alert delivery and durable incident routing.
 
@@ -164,7 +178,7 @@ is deployed; a local fixture route does not constitute a real provider callback.
 
 ## Validation evidence (2026-10-03)
 
-- Unit: 325 PASS; integration: 173 PASS, including 33 payment tests against real
+- Unit: 348 PASS; integration: 189 PASS, including 49 payment tests against real
   isolated PostgreSQL. Two application pools, 50 concurrent webhook/reconciliation
   calls, 20 concurrent creates, cancellation race, real lock-wait expiry, expired
   lease recovery, transactional failure/retry and immutable DB guards are covered.
@@ -174,17 +188,30 @@ is deployed; a local fixture route does not constitute a real provider callback.
 - Drizzle generate: no residual schema changes. Migration applies to a clean DB
   and populated pre-0014 schema, preserving active placement/history; 25 public
   tables after upgrade. `db:migrate` and the full integration runner pass.
-- Genuine ЮKassa test shop: authentication, create a pending 1.00 RUB test payment,
-  allowed hosted confirmation URL, authenticated getPayment and exact idempotent
-  retry (same provider payment) PASS. Provider `test=true` and merchant binding
+- Historical pre-review ЮKassa test-shop evidence: authentication, create a pending
+  1.00 RUB test payment, allowed hosted confirmation URL, authenticated getPayment
+  and exact idempotent retry (same provider payment) PASS. Provider `test=true` and merchant binding
   verified in memory. No real card/payment, completed sandbox payment, real webhook
   callback or refund was exercised. Those remain rollout gates.
 - Production/live credentials, production resources, IAM and deployments untouched.
 
+Security rotation result: **BLOCKED**. Rotation requires the merchant operator
+flow and owner SMS confirmation; it has not been performed in this environment.
+The old key is not used for any new genuine sandbox smoke. Operator must delete/revoke the exposed sandbox key,
+issue a replacement, store it only as `textValue` under `YOOKASSA_SECRET_KEY`, and
+store the shop ID as a value under `YOOKASSA_SHOP_ID`. Ordinary reissue leaves the
+old key usable for 48 hours, so explicit deletion or verified expiry is necessary.
+Verify old-key authentication is rejected without creating a payment, then rerun
+safe credential scans. See [provider key management](https://yookassa.ru/docs/support/merchant/payments/implement/keys).
+
 Operator action before runtime enablement: during sandbox preflight the supplied
 credentials were found in Lockbox entry **names**, not `textValue`. YC CLI debug
-logs include entry names; local affected logs were redacted, and repository scans
-found no credentials. Rotate the sandbox secret and place the replacement in the
+logs include entry names; the follow-up rescan found one residual local YC
+history file containing credential material and redacted it. Repository/current
+committed-tree scans found zero matches, and rescanned local logs/history/cache
+contain zero remaining matches. Lockbox REST audit read payloads in memory; no
+new CLI payload logging or genuine provider payment request was performed. Rotate
+the sandbox secret and place the replacement in the
 value field under a nonsensitive entry name. This implementation deliberately does
 not support retrieving runtime credentials from entry names. Lockbox contents were
 not changed by this PR. Approve a creator share and deploy/configure the sandbox

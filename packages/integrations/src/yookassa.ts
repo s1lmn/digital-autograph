@@ -40,13 +40,22 @@ export function parseYookassaPayment(value: unknown): PaymentObservation {
     if (
       confirmation.type !== 'redirect' ||
       typeof confirmation.confirmation_url !== 'string' ||
-      confirmation.confirmation_url.length > 2048
+      confirmation.confirmation_url.length > 2048 ||
+      !/^https:\/\//i.test(confirmation.confirmation_url) ||
+      /^https:\/\/[^/?#]*@/i.test(confirmation.confirmation_url) ||
+      /[\s\\#\p{Cc}]/u.test(confirmation.confirmation_url)
     )
       throw new PaymentError('INVALID_CONFIRMATION_URL');
-    const url = new URL(confirmation.confirmation_url);
+    let url: URL;
+    try {
+      url = new URL(confirmation.confirmation_url);
+    } catch {
+      throw new PaymentError('INVALID_CONFIRMATION_URL');
+    }
     if (
       url.origin !== 'https://yoomoney.ru' ||
-      !url.pathname.startsWith('/checkout/payments/') ||
+      url.protocol !== 'https:' ||
+      url.hostname !== 'yoomoney.ru' ||
       url.username ||
       url.password ||
       url.hash
@@ -89,9 +98,12 @@ export function createYookassaProvider(
       if (response.status !== 200) {
         await response.body?.cancel();
         throw new PaymentError(
-          response.status >= 500 || response.status === 429
-            ? 'PROVIDER_OUTCOME_UNKNOWN'
-            : 'PROVIDER_REJECTED',
+          response.status >= 400 &&
+            response.status < 500 &&
+            response.status !== 408 &&
+            response.status !== 429
+            ? 'PROVIDER_REJECTED'
+            : 'PROVIDER_OUTCOME_UNKNOWN',
         );
       }
       const reader = response.body?.getReader();

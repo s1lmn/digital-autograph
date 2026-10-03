@@ -44,22 +44,35 @@ function parserError(
     .code(error.statusCode === 413 ? 413 : 400)
     .send({ error: { code: 'INVALID_REQUEST' } });
 }
+// Two fixed counters per route group; no client-keyed memory or unbounded queue.
+function capacity() {
+  let window = Date.now(),
+    used = 0,
+    active = 0;
+  return {
+    acquire() {
+      if (Date.now() - window >= 60_000) {
+        window = Date.now();
+        used = 0;
+      }
+      if (used >= 60 || active >= 4) return false;
+      used++;
+      active++;
+      return true;
+    },
+    release() {
+      active--;
+    },
+  };
+}
 export function registerPaymentRoutes(
   app: FastifyInstance,
   payments: PaymentService,
 ) {
-  // Bounded process-wide budget: spoofed requests cannot cause unbounded outbound reads.
-  // Additional perimeter/distributed limits are required when scaling API replicas.
-  let window = Date.now(),
-    used = 0,
-    active = 0;
-  const budget = () => {
-    if (Date.now() - window >= 60_000) {
-      window = Date.now();
-      used = 0;
-    }
-    return ++used <= 60 && active < 4;
-  };
+  // Fixed independent budgets: user traffic cannot consume webhook capacity.
+  // Perimeter aggregate limits are still required across multiple replicas.
+  const users = capacity();
+  const callbacks = capacity();
   app.post(
     '/payments/orders',
     {
@@ -72,9 +85,8 @@ export function registerPaymentRoutes(
       const body = createBody.safeParse(req.body);
       if (!body.success)
         return reply.code(400).send({ error: { code: 'INVALID_REQUEST' } });
-      if (!budget())
+      if (!users.acquire())
         return reply.code(429).send({ error: { code: 'RATE_LIMITED' } });
-      active++;
       try {
         return await payments.create(
           authenticatedSession(req).user.id,
@@ -84,7 +96,7 @@ export function registerPaymentRoutes(
       } catch (e) {
         return sendError(e, reply);
       } finally {
-        active--;
+        users.release();
       }
     },
   );
@@ -124,9 +136,8 @@ export function registerPaymentRoutes(
           .safeParse(req.body ?? {}).success
       )
         return reply.code(400).send({ error: { code: 'INVALID_REQUEST' } });
-      if (!budget())
+      if (!users.acquire())
         return reply.code(429).send({ error: { code: 'RATE_LIMITED' } });
-      active++;
       try {
         return await payments.refresh(
           authenticatedSession(req).user.id,
@@ -135,7 +146,7 @@ export function registerPaymentRoutes(
       } catch (e) {
         return sendError(e, reply);
       } finally {
-        active--;
+        users.release();
       }
     },
   );
@@ -146,16 +157,15 @@ export function registerPaymentRoutes(
       const body = webhook.safeParse(req.body);
       if (!body.success)
         return reply.code(400).send({ error: { code: 'INVALID_REQUEST' } });
-      if (!budget())
+      if (!callbacks.acquire())
         return reply.code(429).send({ error: { code: 'RATE_LIMITED' } });
-      active++;
       try {
         await payments.webhook(body.data.object.id, body.data.event);
         return { received: true };
       } catch (e) {
         return sendError(e, reply);
       } finally {
-        active--;
+        callbacks.release();
       }
     },
   );

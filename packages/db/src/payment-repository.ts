@@ -453,7 +453,7 @@ export function createPgPaymentRepository(
     },
     async due(limit) {
       const r = await pool.query<{ order_id: string }>(
-        `SELECT order_id FROM payments WHERE next_check_at<=clock_timestamp() AND (lease_until IS NULL OR lease_until<clock_timestamp()) ORDER BY next_check_at LIMIT $1`,
+        `SELECT order_id FROM payments WHERE next_check_at<=clock_timestamp() AND (provider_payment_id IS NOT NULL OR reason IS DISTINCT FROM 'PROVIDER_REJECTED') AND (lease_until IS NULL OR lease_until<clock_timestamp()) ORDER BY next_check_at LIMIT $1`,
         [limit],
       );
       return r.rows.map((x) => x.order_id);

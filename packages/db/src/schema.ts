@@ -741,7 +741,7 @@ export const takeoverReservations = pgTable(
     ),
     check(
       'takeover_reservations_state_valid',
-      sql`(${table.status}::text = 'consumed' AND ${table.consumedAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'active' AND ${table.consumedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'cancelled' AND ${table.cancelledAt} IS NOT NULL AND ${table.expiredAt} IS NULL AND ${table.cancelledAt} >= ${table.createdAt}) OR (${table.status} = 'expired' AND ${table.expiredAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} >= ${table.createdAt})`,
+      sql`(${table.status}::text = 'consumed' AND ${table.consumedAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'active' AND ${table.consumedAt} IS NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} IS NULL) OR (${table.status} = 'cancelled' AND ${table.consumedAt} IS NULL AND ${table.cancelledAt} IS NOT NULL AND ${table.expiredAt} IS NULL AND ${table.cancelledAt} >= ${table.createdAt}) OR (${table.status} = 'expired' AND ${table.consumedAt} IS NULL AND ${table.expiredAt} IS NOT NULL AND ${table.cancelledAt} IS NULL AND ${table.expiredAt} >= ${table.createdAt})`,
     ),
   ],
 );

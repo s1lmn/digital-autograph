@@ -202,14 +202,14 @@ export class PaymentService {
         throw new PaymentError('CONFIG_BINDING_MISMATCH');
       let providerId = attempt.providerPaymentId;
       if (!providerId) {
-        // 23h safety margin to the documented 24h provider retention. Never a new key.
-        if (!attempt.createRetryAllowed)
-          throw new PaymentError('CREATE_UNKNOWN_REQUIRES_MANUAL_REVIEW');
         if (
           attempt.state === 'canceled' ||
           attempt.reason === 'PROVIDER_REJECTED'
         )
           return true;
+        // 23h safety margin to the documented 24h provider retention. Never a new key.
+        if (!attempt.createRetryAllowed)
+          throw new PaymentError('CREATE_UNKNOWN_REQUIRES_MANUAL_REVIEW');
         const created = await this.provider.createPayment(
           attempt,
           attempt.operationKey,

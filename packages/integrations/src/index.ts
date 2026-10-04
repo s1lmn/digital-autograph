@@ -10,3 +10,4 @@ export {
   type TelegramOidcClient,
   type TelegramOidcConfig,
 } from './telegram';
+export { createYookassaProvider } from './yookassa';

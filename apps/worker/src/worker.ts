@@ -24,6 +24,7 @@ export type WorkerOperations = {
   leaseSeconds: number;
   pollIntervalMs: number;
   cleanupGraceSeconds: number;
+  notifications?: () => Promise<void>;
 };
 
 function cleanedKey(job: ClaimedAutographJob): string {
@@ -139,6 +140,13 @@ export async function runWorker(
             );
         } catch {
           console.error('Worker polling cycle failed');
+        }
+        if (!stopping && operations.notifications) {
+          try {
+            await operations.notifications();
+          } catch {
+            console.error('Notification polling cycle failed');
+          }
         }
       }
       if (!stopping)

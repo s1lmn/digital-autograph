@@ -326,6 +326,20 @@ it('50 duplicate handlers across instances plus reconciliation fulfill exactly o
         )
       ).rows[0].n,
     ).toBe(1);
+    const outbox = await database.pool.query<{ kind: string; n: number }>(
+      `SELECT kind,count(*)::int n FROM notification_events
+       WHERE source_key=$1 OR source_key=$2 OR source_key=$3 GROUP BY kind ORDER BY kind`,
+      [
+        `payment:${f.orderId}:fulfilled`,
+        `displaced:${f.slots[0]!.placementId}`,
+        `claim:${(await repo.find(f.orderId))!.placementId}`,
+      ],
+    );
+    expect(outbox.rows).toEqual([
+      { kind: 'payment_status', n: 1 },
+      { kind: 'slot_claimed', n: 1 },
+      { kind: 'user_displaced', n: 1 },
+    ]);
   } finally {
     await other.close();
   }

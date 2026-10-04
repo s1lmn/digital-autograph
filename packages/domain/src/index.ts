@@ -91,3 +91,4 @@ export {
   type WallAction,
   type WallConfiguration,
 } from './wall';
+export * from './notifications';

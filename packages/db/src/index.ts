@@ -41,3 +41,5 @@ export function createDatabase(databaseUrl: string) {
 
 export type Database = ReturnType<typeof createDatabase>;
 export { createPgPaymentRepository } from './payment-repository';
+export { createPgNotificationRepository } from './notification-repository';
+export { createPgShareRepository } from './share-repository';

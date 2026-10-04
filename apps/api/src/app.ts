@@ -45,6 +45,12 @@ import {
 } from './auth/http';
 import { registerTestAuthRoutes } from './auth/test-auth-http';
 import type { SessionService } from '@digital-autograph/auth';
+import type {
+  NotificationService,
+  ShareRepository,
+} from '@digital-autograph/notifications';
+import { registerNotificationRoutes } from './notifications/http';
+import { registerSharingRoutes } from './notifications/sharing-http';
 
 type DatabaseProbe = Pick<Database, 'checkConnection'>;
 
@@ -68,6 +74,11 @@ export function buildApi(
   },
   placementHistory?: PlacementHistoryService,
   payments?: PaymentService,
+  notifications?: {
+    service: NotificationService;
+    shares: ShareRepository;
+    telegram?: { username: string; secret: string };
+  },
 ) {
   const app = Fastify({
     logger: {
@@ -146,5 +157,13 @@ export function buildApi(
   if (moderation) registerModerationRoutes(app, moderation);
 
   if (payments) registerPaymentRoutes(app, payments);
+  if (notifications) {
+    registerNotificationRoutes(
+      app,
+      notifications.service,
+      notifications.telegram,
+    );
+    registerSharingRoutes(app, notifications.shares);
+  }
   return app;
 }

@@ -375,3 +375,38 @@ export function loadPaymentConfig(environment = process.env) {
     throw new Error('Invalid payment configuration (values redacted)');
   }
 }
+
+export function loadNotificationTelegramConfig(environment = process.env) {
+  const keys = [
+    'NOTIFICATION_TELEGRAM_BOT_TOKEN',
+    'NOTIFICATION_TELEGRAM_BOT_USERNAME',
+    'NOTIFICATION_TELEGRAM_WEBHOOK_SECRET',
+  ];
+  if (keys.every((key) => environment[key] === undefined)) return null;
+  const schema = z.object({
+    NOTIFICATION_TELEGRAM_BOT_TOKEN: z
+      .string()
+      .regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
+    NOTIFICATION_TELEGRAM_BOT_USERNAME: z
+      .string()
+      .regex(/^[A-Za-z0-9_]{5,32}$/),
+    NOTIFICATION_TELEGRAM_WEBHOOK_SECRET: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{32,256}$/),
+    WEB_ORIGIN: exactOrigin,
+    APP_ENV: appEnvironment,
+  });
+  try {
+    const result = schema.parse(environment);
+    if (
+      ['staging', 'production'].includes(result.APP_ENV) &&
+      !result.WEB_ORIGIN.startsWith('https://')
+    )
+      throw new Error();
+    return result;
+  } catch {
+    throw new Error(
+      'Invalid notification Telegram configuration (values redacted)',
+    );
+  }
+}

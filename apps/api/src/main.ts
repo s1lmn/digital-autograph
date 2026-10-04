@@ -44,10 +44,17 @@ import {
   googleLoginAttemptTtlSeconds,
 } from './auth/google-login';
 import { TelegramLoginService } from './auth/telegram-login';
+import { NotificationService } from '@digital-autograph/notifications';
+import {
+  createPgNotificationRepository,
+  createPgShareRepository,
+} from '@digital-autograph/db';
+import { loadNotificationTelegramConfig } from '@digital-autograph/config';
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const paymentConfig = loadPaymentConfig();
+  const notificationTelegram = loadNotificationTelegramConfig();
   const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
   if (
     enableTestAuthSeam &&
@@ -164,6 +171,18 @@ async function main(): Promise<void> {
       createPgPlacementHistoryRepository(database.pool),
     ),
     payments,
+    {
+      service: new NotificationService(
+        createPgNotificationRepository(database.pool),
+      ),
+      shares: createPgShareRepository(database.pool),
+      telegram: notificationTelegram
+        ? {
+            username: notificationTelegram.NOTIFICATION_TELEGRAM_BOT_USERNAME,
+            secret: notificationTelegram.NOTIFICATION_TELEGRAM_WEBHOOK_SECRET,
+          }
+        : undefined,
+    },
   );
   let closing = false;
 

@@ -1,3 +1,5 @@
+import type { PaymentService } from '@digital-autograph/payments';
+import { registerPaymentRoutes } from './payments/http';
 import {
   liveHealthResponse,
   readyHealthResponse,
@@ -65,6 +67,7 @@ export function buildApi(
     webOrigin: string;
   },
   placementHistory?: PlacementHistoryService,
+  payments?: PaymentService,
 ) {
   const app = Fastify({
     logger: {
@@ -142,5 +145,6 @@ export function buildApi(
   if (autographs) registerAutographRoutes(app, autographs);
   if (moderation) registerModerationRoutes(app, moderation);
 
+  if (payments) registerPaymentRoutes(app, payments);
   return app;
 }

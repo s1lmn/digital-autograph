@@ -68,6 +68,9 @@ importers:
       '@digital-autograph/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
+      '@digital-autograph/payments':
+        specifier: workspace:*
+        version: link:../../packages/payments
       '@digital-autograph/walls':
         specifier: workspace:*
         version: link:../../packages/walls
@@ -188,6 +191,9 @@ importers:
       '@digital-autograph/domain':
         specifier: workspace:*
         version: link:../domain
+      '@digital-autograph/payments':
+        specifier: workspace:*
+        version: link:../payments
       '@digital-autograph/walls':
         specifier: workspace:*
         version: link:../walls
@@ -218,12 +224,17 @@ importers:
       '@digital-autograph/autographs':
         specifier: workspace:*
         version: link:../autographs
+      '@digital-autograph/payments':
+        specifier: workspace:*
+        version: link:../payments
       google-auth-library:
         specifier: ^11.1.0
         version: 11.1.0(supports-color@8.1.1)
       openid-client:
         specifier: ^6.8.8
         version: 6.8.8
+
+  packages/payments: {}
 
   packages/ui:
     dependencies:

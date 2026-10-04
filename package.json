@@ -24,7 +24,8 @@
     "infra:e2e:up": "docker compose --profile e2e up -d postgres-e2e minio-e2e",
     "infra:e2e:down": "docker compose --profile e2e rm --stop --force postgres-e2e minio-e2e",
     "infra:test:up": "docker compose --profile test up -d postgres-test",
-    "infra:down": "docker compose --profile test down"
+    "infra:down": "docker compose --profile test down",
+    "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

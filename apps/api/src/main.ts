@@ -1,4 +1,7 @@
-import { loadApiConfig } from '@digital-autograph/config';
+import { PaymentService } from '@digital-autograph/payments';
+import { createPgPaymentRepository } from '@digital-autograph/db';
+import { createYookassaProvider } from '@digital-autograph/integrations';
+import { loadApiConfig, loadPaymentConfig } from '@digital-autograph/config';
 import {
   IdentityService,
   OAuthAttemptService,
@@ -44,6 +47,7 @@ import { TelegramLoginService } from './auth/telegram-login';
 
 async function main(): Promise<void> {
   const config = loadApiConfig();
+  const paymentConfig = loadPaymentConfig();
   const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
   if (
     enableTestAuthSeam &&
@@ -95,6 +99,22 @@ async function main(): Promise<void> {
     identities,
     sessions,
   );
+  const payments = paymentConfig
+    ? new PaymentService(
+        createPgPaymentRepository(database.pool),
+        createYookassaProvider({
+          shopId: paymentConfig.YOOKASSA_SHOP_ID,
+          secretKey: paymentConfig.YOOKASSA_SECRET_KEY,
+        }),
+        {
+          shopId: paymentConfig.YOOKASSA_SHOP_ID,
+          mode: paymentConfig.PAYMENT_MODE,
+          returnUrl: paymentConfig.PAYMENT_RETURN_URL,
+          creatorShareBps: paymentConfig.PAYMENT_CREATOR_SHARE_BPS,
+        },
+        (signal) => console.warn(JSON.stringify(signal)),
+      )
+    : undefined;
   const app = buildApi(
     database,
     sessions,
@@ -143,6 +163,7 @@ async function main(): Promise<void> {
     new PlacementHistoryService(
       createPgPlacementHistoryRepository(database.pool),
     ),
+    payments,
   );
   let closing = false;
 

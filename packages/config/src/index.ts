@@ -297,3 +297,81 @@ export const loadWebConfig = (environment = process.env) => {
 };
 
 export type AppEnvironment = z.infer<typeof appEnvironment>;
+
+const paymentSchema = baseSchema
+  .extend({
+    PAYMENT_PROVIDER: z.literal('yookassa'),
+    PAYMENT_MODE: z.enum(['sandbox', 'live']),
+    YOOKASSA_SHOP_ID: z.string().regex(/^[0-9]{1,20}$/),
+    YOOKASSA_SECRET_KEY: z.string().min(1),
+    PAYMENT_RETURN_URL: z.url(),
+    WEB_ORIGIN: exactOrigin,
+    PAYMENT_LIVE_ACTIVATION: z.literal('approved').optional(),
+    PAYMENT_CREATOR_SHARE_BPS: z
+      .string()
+      .regex(/^(0|[1-9][0-9]{0,4})$/)
+      .transform(Number)
+      .pipe(z.number().int().min(0).max(10000)),
+  })
+  .superRefine((config, context) => {
+    const url = new URL(config.PAYMENT_RETURN_URL);
+    if (
+      url.origin !== config.WEB_ORIGIN ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      url.search ||
+      (url.protocol !== 'https:' &&
+        !(
+          url.protocol === 'http:' &&
+          ['local', 'test', 'development'].includes(config.APP_ENV) &&
+          ['localhost', '127.0.0.1'].includes(url.hostname)
+        ))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['PAYMENT_RETURN_URL'],
+        message: 'must be a fixed safe URL on WEB_ORIGIN',
+      });
+    }
+    if (
+      config.PAYMENT_MODE === 'live' &&
+      (config.APP_ENV !== 'production' ||
+        config.PAYMENT_LIVE_ACTIVATION !== 'approved')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['PAYMENT_MODE'],
+        message: 'live requires production and separate explicit approval',
+      });
+    }
+    // Fail before even creating a payment if a live key is accidentally supplied.
+    if (
+      config.PAYMENT_MODE === 'sandbox' &&
+      !config.YOOKASSA_SECRET_KEY.startsWith('test_')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['YOOKASSA_SECRET_KEY'],
+        message:
+          'sandbox requires a test key; provider test flag is also verified',
+      });
+    }
+  });
+export function loadPaymentConfig(environment = process.env) {
+  const keys = [
+    'PAYMENT_PROVIDER',
+    'PAYMENT_MODE',
+    'YOOKASSA_SHOP_ID',
+    'YOOKASSA_SECRET_KEY',
+    'PAYMENT_RETURN_URL',
+    'PAYMENT_LIVE_ACTIVATION',
+    'PAYMENT_CREATOR_SHARE_BPS',
+  ];
+  if (keys.every((key) => environment[key] === undefined)) return null; // no checkout routes until explicitly configured
+  try {
+    return paymentSchema.parse(environment);
+  } catch {
+    throw new Error('Invalid payment configuration (values redacted)');
+  }
+}

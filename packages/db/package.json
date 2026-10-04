@@ -16,7 +16,8 @@
     "@digital-autograph/domain": "workspace:*",
     "@digital-autograph/walls": "workspace:*",
     "drizzle-orm": "^0.45.3",
-    "pg": "^8.16.0"
+    "pg": "^8.16.0",
+    "@digital-autograph/payments": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.15.0",

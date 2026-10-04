@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export type ReservationStatus = 'active' | 'expired' | 'cancelled';
+export type ReservationStatus = 'active' | 'expired' | 'cancelled' | 'consumed';
 
 export type TakeoverReservation = {
   id: string;

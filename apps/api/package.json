@@ -23,6 +23,7 @@
     "google-auth-library": "^11.1.0",
     "openid-client": "^6.8.8",
     "pg": "^8.16.0",
-    "zod": "^4.1.0"
+    "zod": "^4.1.0",
+    "@digital-autograph/payments": "workspace:*"
   }
 }

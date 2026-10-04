@@ -43,6 +43,7 @@ export function PhotoUploadEditor({
   const previewUrlRef = useRef<string | null>(null);
   const onPhotoChangeRef = useRef(onPhotoChange);
   const renderGeneration = useRef(0);
+  const cropBounds = useRef({ x: 0, y: 0 });
   onPhotoChangeRef.current = onPhotoChange;
 
   const clearPreview = () => {
@@ -104,6 +105,10 @@ export function PhotoUploadEditor({
     const imageHeight = image.height * scale;
     const rotatedWidth = naturalWidth * scale;
     const rotatedHeight = naturalHeight * scale;
+    cropBounds.current = {
+      x: Math.max(0, (rotatedWidth - drawingWidth) / 2),
+      y: Math.max(0, (rotatedHeight - drawingHeight) / 2),
+    };
     const x = Math.max(
       -Math.max(0, (rotatedWidth - drawingWidth) / 2),
       Math.min(Math.max(0, (rotatedWidth - drawingWidth) / 2), offset.x),
@@ -210,6 +215,8 @@ export function PhotoUploadEditor({
       <input
         ref={imageInputRef}
         className={styles.fileInput}
+        tabIndex={-1}
+        aria-hidden="true"
         type="file"
         accept="image/jpeg,image/png"
         aria-label="Choose a photo"
@@ -219,6 +226,8 @@ export function PhotoUploadEditor({
       <input
         ref={cameraInputRef}
         className={styles.fileInput}
+        tabIndex={-1}
+        aria-hidden="true"
         type="file"
         accept="image/*"
         capture="environment"
@@ -248,6 +257,35 @@ export function PhotoUploadEditor({
             <canvas
               ref={canvasRef}
               aria-label="Crop preview"
+              aria-describedby="crop-help"
+              tabIndex={disabled ? -1 : 0}
+              onKeyDown={(event) => {
+                if (disabled) return;
+                const step = event.shiftKey ? 2 : 12;
+                const moves: Record<string, [number, number]> = {
+                  ArrowLeft: [-step, 0],
+                  ArrowRight: [step, 0],
+                  ArrowUp: [0, -step],
+                  ArrowDown: [0, step],
+                };
+                const move = moves[event.key];
+                if (event.key === 'Home') {
+                  event.preventDefault();
+                  setOffset({ x: 0, y: 0 });
+                } else if (move) {
+                  event.preventDefault();
+                  setOffset((current) => ({
+                    x: Math.max(
+                      -cropBounds.current.x,
+                      Math.min(cropBounds.current.x, current.x + move[0]),
+                    ),
+                    y: Math.max(
+                      -cropBounds.current.y,
+                      Math.min(cropBounds.current.y, current.y + move[1]),
+                    ),
+                  }));
+                }
+              }}
               className={styles.canvas}
               onPointerDown={(event) => {
                 if (disabled) return;
@@ -283,7 +321,11 @@ export function PhotoUploadEditor({
                 dragStart.current = null;
               }}
             />
-            <p>Drag the photo to crop it inside the frame.</p>
+            <p id="crop-help">
+              Drag the photo to crop it inside the frame. Keyboard: focus the
+              preview and use arrow keys to move the photo; Shift makes smaller
+              steps, Home recenters it.
+            </p>
           </div>
           <div className={styles.controls}>
             <label htmlFor="photo-zoom">Zoom</label>

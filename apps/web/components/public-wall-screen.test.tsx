@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { PublicWallScreen } from './public-wall-screen';
 import type { PublicWall } from '../lib/public-wall-api';
@@ -116,7 +117,11 @@ describe('public Wall and Free Claim UX', () => {
       screen.getByRole('region', { name: 'Placement history' }).closest('main'),
     ).toBe(main);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Wall' }));
-    expect(await screen.findByText('Current placement')).toBeTruthy();
+    expect(
+      await within(
+        screen.getByRole('region', { name: 'Placement history' }),
+      ).findByText('Current placement'),
+    ).toBeTruthy();
     expect(historyRequests).toBe(2);
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
@@ -331,7 +336,11 @@ describe('public Wall and Free Claim UX', () => {
     expect(
       await screen.findByAltText('Digital autograph in slot 1'),
     ).toBeTruthy();
-    expect(await screen.findByText('Current placement')).toBeTruthy();
+    expect(
+      await within(
+        screen.getByRole('region', { name: 'Placement history' }),
+      ).findByText('Current placement'),
+    ).toBeTruthy();
     expect(historyRequests).toBe(2);
     expect(
       fetchMock.mock.calls.some(([url]) =>
@@ -481,4 +490,83 @@ describe('public Wall and Free Claim UX', () => {
       screen.queryByRole('button', { name: 'Claim this slot' }),
     ).toBeNull();
   });
+});
+
+it('retries failed auth and ready list reads before showing claim actions', async () => {
+  let sessionReads = 0;
+  let readyReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string) => {
+      if (input.endsWith('/placements'))
+        return json({ wallId, placements: [] });
+      if (input.endsWith('/auth/me')) {
+        sessionReads++;
+        if (sessionReads === 1) throw new TypeError('offline');
+        return json({ user: {} });
+      }
+      if (input.endsWith('/autographs?status=ready')) {
+        readyReads++;
+        if (readyReads === 1) return json({}, 503);
+        return json(readyList());
+      }
+      if (input.endsWith('/preview'))
+        return json({
+          url: 'https://private.example/preview',
+          assetId: 'private',
+          expiresAt: new Date(Date.now() + 120000).toISOString(),
+        });
+      throw new Error('Unexpected request');
+    }),
+  );
+  render(<PublicWallScreen initialWall={wall()} apiOrigin={origin} />);
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry sign-in check' }),
+  );
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Retry ready autographs' }),
+  );
+  expect(
+    await screen.findAllByRole('button', { name: 'Claim this slot' }),
+  ).toHaveLength(2);
+  expect(readyReads).toBe(2);
+});
+
+it.each([
+  'WALL_NOT_FOUND',
+  'SLOT_NOT_FOUND',
+  'SLOT_NOT_IN_WALL',
+  'AUTOGRAPH_NOT_FOUND',
+])('explains %s without sending another claim', async (code) => {
+  const fetchMock = vi.fn(async (input: string) => {
+    if (input.endsWith('/placements')) return json({ wallId, placements: [] });
+    if (input.endsWith('/auth/me')) return json({ user: {} });
+    if (input.endsWith('/autographs?status=ready')) return json(readyList());
+    if (input.endsWith('/preview'))
+      return json({
+        assetId: 'private',
+        url: 'https://private.example/preview',
+        expiresAt: new Date(Date.now() + 120000).toISOString(),
+      });
+    if (input.endsWith('/free-claim')) return json({ error: { code } }, 404);
+    if (input.endsWith(`/walls/${wallId}`)) return json(wall());
+    throw new Error('Unexpected request');
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  render(<PublicWallScreen initialWall={wall()} apiOrigin={origin} />);
+  fireEvent.click(
+    (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+  expect(
+    await screen.findByText(
+      code === 'AUTOGRAPH_NOT_FOUND'
+        ? 'That autograph is no longer ready. Choose another ready autograph.'
+        : 'This Wall or slot is no longer available. Refresh the Wall to choose an available slot.',
+    ),
+  ).toBeTruthy();
+  expect(
+    fetchMock.mock.calls.filter(([url]) => url.endsWith('/free-claim')),
+  ).toHaveLength(1);
+  expect(screen.queryByRole('button', { name: 'Retry same claim' })).toBeNull();
 });

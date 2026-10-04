@@ -1,5 +1,11 @@
+import type { Metadata } from 'next';
 import { loadWebConfig } from '@digital-autograph/config';
 import { UserPlacementHistory } from '../../../components/placement-history';
+
+export const metadata: Metadata = {
+  title: 'Your placement history',
+  robots: { index: false, follow: false },
+};
 
 export const dynamic = 'force-dynamic';
 

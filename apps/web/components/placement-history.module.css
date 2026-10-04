@@ -29,3 +29,21 @@
   flex-wrap: wrap;
   gap: 1rem;
 }
+
+.history,
+.historyList,
+.item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.item h2 a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

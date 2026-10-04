@@ -1,23 +1,130 @@
 :root {
   color-scheme: light;
   font-family: system-ui, sans-serif;
-  color: #17202a;
+  --color-ink: #17202a;
+  --color-muted: #53606d;
+  --color-surface: #fff;
+  --color-border: #d9dfe5;
+  --color-link: #174f90;
+  --color-focus: #0e63c7;
+  --space-page: clamp(1rem, 4vw, 2rem);
+  color: var(--color-ink);
   background: #f6f7f8;
 }
-
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 body {
   margin: 0;
 }
-
 main {
-  max-width: 48rem;
-  margin: 12vh auto;
-  padding: 2rem;
+  width: 100%;
+  max-width: 52rem;
+  margin: 2rem auto 5rem;
+  padding: var(--space-page);
+  overflow-wrap: anywhere;
 }
-
+a {
+  color: var(--color-link);
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  min-height: 44px;
+}
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+:where(a, button, input, select, textarea, canvas):focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+p {
+  line-height: 1.5;
+}
 .eyebrow {
-  color: #53606d;
+  color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 0.75rem;
+}
+.siteHeader {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+.siteNav {
+  max-width: 78rem;
+  margin: auto;
+  padding: 0.75rem var(--space-page);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.siteNav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.siteNav .brand {
+  font-weight: 700;
+  margin-right: auto;
+}
+.skipLink {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 10;
+  padding: 0.75rem;
+  background: var(--color-surface);
+  transform: translateY(-200%);
+}
+.skipLink:focus {
+  transform: none;
+}
+.linkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.linkActions a,
+.actionLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-surface);
+}
+.contentList {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 1rem;
+}
+.contentList li {
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,5 +1,11 @@
+import type { Metadata } from 'next';
 type AuthErrorPageProps = {
   searchParams: Promise<{ code?: string | string[] }>;
+};
+
+export const metadata: Metadata = {
+  title: 'Sign-in',
+  robots: { index: false, follow: false },
 };
 
 export default async function AuthErrorPage({

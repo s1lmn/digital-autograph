@@ -8,6 +8,7 @@ type AuthState = 'checking' | 'authenticated' | 'anonymous' | 'unavailable';
 
 export function CanvasAuthGate({ apiOrigin }: { apiOrigin: string }) {
   const [auth, setAuth] = useState<AuthState>('checking');
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -17,6 +18,7 @@ export function CanvasAuthGate({ apiOrigin }: { apiOrigin: string }) {
       signal: controller.signal,
     })
       .then((response) => {
+        if (controller.signal.aborted) return;
         if (response.ok) setAuth('authenticated');
         else setAuth(response.status === 401 ? 'anonymous' : 'unavailable');
       })
@@ -24,7 +26,7 @@ export function CanvasAuthGate({ apiOrigin }: { apiOrigin: string }) {
         if (!controller.signal.aborted) setAuth('unavailable');
       });
     return () => controller.abort();
-  }, [apiOrigin]);
+  }, [apiOrigin, retry]);
 
   const returnTo = encodeURIComponent('/autograph/create');
   if (auth === 'checking') return <p role="status">Checking sign-in…</p>;
@@ -43,13 +45,26 @@ export function CanvasAuthGate({ apiOrigin }: { apiOrigin: string }) {
             Continue with Telegram
           </a>
         </div>
+        <p>
+          If sign-in cannot open inside this app, open this page in Safari or
+          Chrome and try again.
+        </p>
       </section>
     );
   }
   return (
     <section role="alert" className={styles.auth}>
       <h2>Sign-in is temporarily unavailable</h2>
-      <p>Refresh this page when the API is available.</p>
+      <p>Check your connection and try again.</p>
+      <button
+        type="button"
+        onClick={() => {
+          setAuth('checking');
+          setRetry((count) => count + 1);
+        }}
+      >
+        Retry sign-in check
+      </button>
     </section>
   );
 }

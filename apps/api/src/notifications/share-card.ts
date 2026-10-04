@@ -22,6 +22,7 @@ export async function renderShareCard(share: PublicShare): Promise<Buffer> {
   // Text only: never fetch an original, signed URL, avatar or remote resource.
   // Fixed canvas/line lengths keep user-controlled text inside the card.
   const svg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+    <style>text { font-family: 'DejaVu Sans', sans-serif; }</style>
     <rect width="1200" height="630" fill="#101a24"/><rect x="64" y="64" width="1072" height="502" rx="28" fill="#f2eee4"/>
     <g fill="#101a24" font-family="sans-serif">
       <text x="110" y="132" font-size="26">DIGITAL AUTOGRAPH</text>

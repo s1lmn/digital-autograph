@@ -18,10 +18,12 @@ export function ShareControls({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState('');
   async function action(fn: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
     setError('');
+    setNotice('');
     try {
       await fn();
     } catch (e) {
@@ -161,6 +163,9 @@ export function ShareControls({
               'PUT',
               { enabled: true },
             );
+            setNotice(
+              'Wall reminders enabled. Manage channels in Notifications.',
+            );
           })
         }
       >
@@ -177,12 +182,14 @@ export function ShareControls({
               'PUT',
               { enabled: false },
             );
+            setNotice('Unsubscribed from Wall reminders.');
           })
         }
       >
         Unsubscribe from this Wall
       </button>
       {error && <p role="alert">{error}</p>}
+      {notice && <p role="status">{notice}</p>}
     </section>
   );
 }

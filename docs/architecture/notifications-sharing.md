@@ -77,6 +77,7 @@ Walls, nonready autographs and revoked links fail closed for public reads/cards.
 1200×630 PNG containing creator, one-based slot number, optional public username,
 event and CTA. It renders escaped text only and never reads original/private
 autograph bytes, avatars, keys, signed URLs, payments or claimant identifiers.
+The API runtime image includes DejaVu fonts so a minimal Linux image renders text.
 PNG and share metadata use `no-store`; previously copied social previews cannot
 be recalled from a third-party cache.
 

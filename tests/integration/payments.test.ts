@@ -201,8 +201,8 @@ async function autographFixture(
   return autographId;
 }
 
-async function setup(shortTtlSeconds?: number) {
-  const f = await fixture();
+async function setup(shortTtlSeconds?: number, visibilitySeconds = 0) {
+  const f = await fixture(1, visibilitySeconds);
   const buyer = await person();
   const autographId = await autographFixture(buyer.id);
   const q = await new TakeoverQuoteService(
@@ -1051,5 +1051,109 @@ it('four in-flight user operations cannot occupy webhook concurrency capacity', 
     release();
     await Promise.all(pending);
     await app.close();
+  }
+});
+
+it('uses one post-User-lock fulfillment instant and preserves paid visibility after a real wait', async () => {
+  const f = await setup(undefined, 2);
+  const competitor = await person();
+  const o = await service().create(f.buyer.id, f.reservationId, f.autographId);
+  const payment = (await repo.find(o.id))!;
+  succeed(payment.providerPaymentId!);
+  const blocker = await database.pool.connect();
+  let processing: Promise<void> | undefined;
+  try {
+    await blocker.query('BEGIN');
+    const pid = (
+      await blocker.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')
+    ).rows[0]!.pid;
+    await blocker.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [
+      f.buyer.id,
+    ]);
+    processing = service().webhook(
+      payment.providerPaymentId!,
+      'payment.succeeded',
+    );
+    // Observe the real wait on this connection, not an assumption based on a sleep.
+    let waiting = false;
+    for (let i = 0; i < 100; i++) {
+      const wait = await database.pool.query<{ waiting: boolean }>(
+        `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+          AND wait_event_type='Lock' AND $1::integer=ANY(pg_blocking_pids(pid))
+          AND query LIKE '%FROM users%FOR SHARE%') AS waiting`,
+        [pid],
+      );
+      if (wait.rows[0]!.waiting) {
+        waiting = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    expect(waiting).toBe(true);
+    // PostgreSQL holds the lock longer than the complete two-second visibility window.
+    await blocker.query('SELECT pg_sleep(3)');
+    const releasedAt = (
+      await blocker.query<{ now: Date }>('SELECT clock_timestamp() AS now')
+    ).rows[0]!.now;
+    await blocker.query('COMMIT');
+    await processing;
+    expect(await counts(o.id)).toMatchObject({
+      status: 'fulfilled',
+      takeovers: 1,
+      earnings: 1,
+      active: 1,
+    });
+    const instants = await database.pool.query<{
+      started_at: Date;
+      coherent: boolean;
+      checked_at: Date;
+    }>(
+      `SELECT placed.started_at, clock_timestamp() AS checked_at,
+         previous.ended_at=placed.started_at AND r.consumed_at=placed.started_at
+         AND o.fulfilled_at=placed.started_at AS coherent
+       FROM payment_orders o JOIN placements placed ON placed.id=o.placement_id
+       JOIN placements previous ON previous.id=o.target_placement_id
+       JOIN takeover_reservations r ON r.id=o.reservation_id WHERE o.id=$1`,
+      [o.id],
+    );
+    const result = instants.rows[0]!;
+    // All four fields preserve the same exact SQL instant; bounds use PG time only.
+    expect(result.coherent).toBe(true);
+    expect(result.started_at.getTime()).toBeGreaterThanOrEqual(
+      releasedAt.getTime(),
+    );
+    expect(result.started_at.getTime()).toBeLessThanOrEqual(
+      result.checked_at.getTime(),
+    );
+    await expect(
+      new TakeoverQuoteService(
+        createPgPricingRepository(database.pool),
+      ).createQuote({
+        userId: competitor.id,
+        wallId: f.wallId,
+        slotId: f.slots[0]!.slotId,
+      }),
+    ).rejects.toMatchObject({ code: 'TAKEOVER_COOLDOWN_ACTIVE' });
+    // Duplicate authenticated observations must not restart/backdate this instant.
+    await service().refresh(f.buyer.id, o.id);
+    await service().reconcile();
+    await service().webhook(payment.providerPaymentId!, 'payment.succeeded');
+    expect(
+      (
+        await database.pool.query<{ fulfilled_at: Date }>(
+          'SELECT fulfilled_at FROM payment_orders WHERE id=$1',
+          [o.id],
+        )
+      ).rows[0]!.fulfilled_at,
+    ).toEqual(result.started_at);
+    expect(await counts(o.id)).toMatchObject({
+      takeovers: 1,
+      earnings: 1,
+      active: 1,
+    });
+  } finally {
+    await blocker.query('ROLLBACK');
+    blocker.release();
+    await processing;
   }
 });

@@ -97,6 +97,12 @@ unchanged target and pinned pricing, wall lifecycle/time, visibility cooldown,
 active buyer, and ready owned autograph plus approval/moderation/cleaned evidence.
 It closes the old Placement with `end_reason=takeover`, inserts the new Placement,
 consumes Reservation, fulfills Order/Payment and inserts exactly one earning.
+Eligibility returns both the decision and `evaluatedAt`, sampled once with
+PostgreSQL `clock_timestamp()` after the final User `FOR SHARE` lock and all prior
+eligibility locks. Successful fulfillment uses that same instant for the old
+Placement's `ended_at`, the new Placement's `started_at`, Reservation `consumed_at`
+and Order `fulfilled_at`. Webhook, reconciliation and manual refresh use the same
+guarded `observe` path; duplicates preserve the original fulfillment instant.
 Existing Placement rows are the history; the new `started_at` establishes the
 existing pricing cooldown. All effects commit or roll back together.
 
@@ -176,12 +182,17 @@ Safe sandbox secret references supplied by owner: `yookassa-test-shop-id` and
 HTTP notifications in the sandbox merchant account only after a reviewed endpoint
 is deployed; a local fixture route does not constitute a real provider callback.
 
-## Validation evidence (2026-10-03)
+## Validation evidence (2026-10-04)
 
-- Unit: 348 PASS; integration: 189 PASS, including 49 payment tests against real
+- Unit: 348 PASS; integration: 190 PASS, including 50 payment tests against real
   isolated PostgreSQL. Two application pools, 50 concurrent webhook/reconciliation
   calls, 20 concurrent creates, cancellation race, real lock-wait expiry, expired
   lease recovery, transactional failure/retry and immutable DB guards are covered.
+  The User-lock regression confirms a real blocked backend with `pg_blocking_pids`,
+  holds the lock for three seconds against a two-second visibility guarantee,
+  asserts exact lifecycle timestamp equality and rejects an immediate competing
+  Quote with `TAKEOVER_COOLDOWN_ACTIVE`. It fails on the reviewed implementation
+  (started_at backdated by about three seconds) and passes after the fix.
 - Browser E2E: 4 PASS (existing core flows plus two return-page contract fixtures).
   The browser payment cases do not claim genuine provider payment completion.
 - Format, lint, typecheck, build, built API smoke: PASS.
@@ -195,24 +206,22 @@ is deployed; a local fixture route does not constitute a real provider callback.
   callback or refund was exercised. Those remain rollout gates.
 - Production/live credentials, production resources, IAM and deployments untouched.
 
-Security rotation result: **BLOCKED**. Rotation requires the merchant operator
-flow and owner SMS confirmation; it has not been performed in this environment.
-The old key is not used for any new genuine sandbox smoke. Operator must delete/revoke the exposed sandbox key,
-issue a replacement, store it only as `textValue` under `YOOKASSA_SECRET_KEY`, and
-store the shop ID as a value under `YOOKASSA_SHOP_ID`. Ordinary reissue leaves the
-old key usable for 48 hours, so explicit deletion or verified expiry is necessary.
-Verify old-key authentication is rejected without creating a payment, then rerun
-safe credential scans. See [provider key management](https://yookassa.ru/docs/support/merchant/payments/implement/keys).
+Security rotation result: **OPERATOR-CONFIRMED COMPLETE** (2026-10-04).
 
-Operator action before runtime enablement: during sandbox preflight the supplied
-credentials were found in Lockbox entry **names**, not `textValue`. YC CLI debug
-logs include entry names; the follow-up rescan found one residual local YC
-history file containing credential material and redacted it. Repository/current
-committed-tree scans found zero matches, and rescanned local logs/history/cache
-contain zero remaining matches. Lockbox REST audit read payloads in memory; no
-new CLI payload logging or genuine provider payment request was performed. Rotate
-the sandbox secret and place the replacement in the
-value field under a nonsensitive entry name. This implementation deliberately does
-not support retrieving runtime credentials from entry names. Lockbox contents were
-not changed by this PR. Approve a creator share and deploy/configure the sandbox
-callback and reconciliation schedule before a complete hosted-payment smoke.
+Historical incident: credential material was stored in Lockbox entry **names** and
+appeared in local YC debug/history logs. The old sandbox credential was therefore
+considered exposed. Affected local files were redacted; the historical repository
+and working-tree scans found no credential values.
+
+The operator confirms that the old sandbox secret has been revoked/replaced, the
+replacement is stored only as a value under a nonsensitive entry name, and old-key
+invalidation plus replacement-key smoke are complete. These are operator-confirmed
+results, not additional reviewer access to the credentials. Reviewers do not read
+or copy secret values; repository and working tree must never contain them. This
+change reads, copies and modifies no credential values or Lockbox payloads.
+
+Remaining launch/runtime gates: genuine completed sandbox payment, actual provider
+callback and refund smoke; approved creator share and deployed callback/reconciliation
+schedule. Production activation remains separately gated by the commercial/legal
+and independent review requirements. Operator-confirmed key rotation does not claim
+those payment-completion, callback, refund or production gates are passed.

@@ -163,7 +163,7 @@ async function eligible(
   db: PoolClient,
   r: OrderRow,
   target: Awaited<ReturnType<typeof lockTarget>>,
-): Promise<boolean> {
+): Promise<{ eligible: boolean; evaluatedAt: Date }> {
   const reservation = await db.query<{ status: string; expires_at: Date }>(
     'SELECT status,expires_at FROM takeover_reservations WHERE id=$1::uuid',
     [r.reservation_id],
@@ -177,28 +177,31 @@ async function eligible(
     'SELECT status FROM users WHERE id=$1::uuid FOR SHARE',
     [r.user_id],
   );
-  const now = await clock(db);
-  return (
-    !!v &&
-    v.status === 'active' &&
-    v.expires_at > now &&
-    target.target.ended_at === null &&
-    target.target.user_id !== r.user_id &&
-    target.wall.pricing_config_id === r.pricing_config_id &&
-    user.rows[0]?.status === 'active' &&
-    isWallTakeoverEligible(
-      {
-        status: target.wall.status,
-        startAt: target.wall.start_at,
-        endAt: target.wall.end_at,
-      },
-      now,
-    ) &&
-    !!config.rows[0] &&
-    now.getTime() >=
-      target.target.started_at.getTime() +
-        config.rows[0].guaranteed_visibility_seconds * 1000
-  );
+  // All eligibility locks, including User, are held before sampling PG time.
+  const evaluatedAt = await clock(db);
+  return {
+    evaluatedAt,
+    eligible:
+      !!v &&
+      v.status === 'active' &&
+      v.expires_at > evaluatedAt &&
+      target.target.ended_at === null &&
+      target.target.user_id !== r.user_id &&
+      target.wall.pricing_config_id === r.pricing_config_id &&
+      user.rows[0]?.status === 'active' &&
+      isWallTakeoverEligible(
+        {
+          status: target.wall.status,
+          startAt: target.wall.start_at,
+          endAt: target.wall.end_at,
+        },
+        evaluatedAt,
+      ) &&
+      !!config.rows[0] &&
+      evaluatedAt.getTime() >=
+        target.target.started_at.getTime() +
+          config.rows[0].guaranteed_visibility_seconds * 1000,
+  };
 }
 export function createPgPaymentRepository(
   pool: Pool,
@@ -243,7 +246,7 @@ export function createPgPaymentRepository(
       }
       if (
         !(await autographReady(db, autographId, userId)) ||
-        !(await eligible(db, r, target))
+        !(await eligible(db, r, target)).eligible
       )
         throw new PaymentError('RESERVATION_NOT_ELIGIBLE');
       const id = randomUUID();
@@ -349,11 +352,12 @@ export function createPgPaymentRepository(
           order.autograph_id,
           order.user_id,
         );
-        const now = await clock(db);
-        if (!ready || !(await eligible(db, order, target))) {
+        const eligibility = ready ? await eligible(db, order, target) : null;
+        if (!eligibility?.eligible) {
           state = 'paid_but_not_fulfilled';
           reason = 'LATE_OR_INELIGIBLE_PAYMENT';
         } else {
+          const now = eligibility.evaluatedAt;
           await db.query(
             "UPDATE placements SET ended_at=$2,end_reason='takeover' WHERE id=$1::uuid",
             [order.target_placement_id, now],

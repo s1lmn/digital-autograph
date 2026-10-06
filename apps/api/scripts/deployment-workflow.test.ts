@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const workflow = readFileSync(
   new URL('../../../.github/workflows/release.yml', import.meta.url),
   'utf8',
-);
+).replaceAll('\r\n', '\n');
 function job(name: string) {
   const text = workflow
     .split(`\n  ${name}:\n`)[1]
@@ -177,5 +177,78 @@ describe('hosted image publication and self-hosted deployment boundary', () => {
       expect(prepare).toContain(gate);
     expect(job('deploy')).toContain("needs.prepare.result == 'success'");
     expect(workflow.split('jobs:')[0]).toContain('cancel-in-progress: false');
+  });
+});
+
+const deploy = readFileSync(
+  new URL('../../../deploy/deploy-on-vm.sh', import.meta.url),
+  'utf8',
+).replaceAll('\r\n', '\n');
+const staging = readFileSync(
+  new URL('../../../deploy/compose.staging.yaml', import.meta.url),
+  'utf8',
+).replaceAll('\r\n', '\n');
+const production = readFileSync(
+  new URL('../../../deploy/compose.yaml', import.meta.url),
+  'utf8',
+).replaceAll('\r\n', '\n');
+function stepScript(name: string) {
+  const section = workflow
+    .split(`      - name: ${name}\n`)[1]
+    ?.split('\n      - name:')[0];
+  const run = section?.split('        run: |\n')[1]?.split(/\n {0,9}\S/)[0];
+  if (!run) throw new Error(`Missing release step ${name}`);
+  return run
+    .split('\n')
+    .map((line) => line.replace(/^ {10}/, ''))
+    .join('\n');
+}
+
+describe('deployment configuration without POSIX execution', () => {
+  it('uses the selected SHA for deploy checkout, with main configuration only for rollback', () => {
+    expect(workflow).toContain(
+      "ref: ${{ env.RELEASE_OPERATION == 'deploy' && env.IMAGE_SHA || github.sha }}",
+    );
+    expect(workflow.indexOf('Verify exact build checkout')).toBeLessThan(
+      workflow.indexOf('Authenticate to Yandex Cloud'),
+    );
+    expect(workflow.indexOf('Verify exact deploy checkout')).toBeLessThan(
+      workflow.indexOf('Deploy or roll back this VM'),
+    );
+    expect(workflow).toContain('--arg ref "$IMAGE_SHA"');
+    const record = stepScript('Create GitHub deployment record');
+    expect(record.indexOf('echo "id=$deployment_id"')).toBeLessThan(
+      record.indexOf('statuses"'),
+    );
+    expect(workflow).toContain('export IMAGE_TAG=$IMAGE_SHA');
+  });
+
+  it('restricts staging to successful same-repository main push CI and keeps per-environment serialization', () => {
+    expect(workflow).toContain("github.event.workflow_run.event == 'push'");
+    expect(workflow).toContain(
+      'github.event.workflow_run.head_repository.full_name == github.repository',
+    );
+    expect(workflow).toContain('--repo "$GITHUB_REPOSITORY"');
+    expect(workflow).toContain(
+      '.event == "push" and .headBranch == "main" and .headSha == env.IMAGE_SHA',
+    );
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain("steps.deploy.outcome != 'success'");
+  });
+
+  it('isolates PostgreSQL in a persistent staging network without published ports or volume deletion', () => {
+    const postgres = staging.split('\n  api:')[0];
+    expect(postgres).toContain('image: postgres:17-alpine');
+    expect(postgres).toContain(
+      'staging_postgres_data:/var/lib/postgresql/data',
+    );
+    expect(staging).toContain('name: digital-autograph-staging-postgres');
+    expect(staging).toContain('internal: true');
+    expect(postgres).not.toContain('ports:');
+    expect(postgres).not.toContain('POSTGRES_PASSWORD:');
+    expect(postgres).toContain('mem_limit: 384m');
+    expect(production).not.toContain('image: postgres:');
+    expect(production).toContain('postgres-ca.pem:ro');
+    expect(deploy).not.toMatch(/\bdown\b/);
   });
 });

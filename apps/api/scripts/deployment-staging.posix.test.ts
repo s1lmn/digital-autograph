@@ -17,14 +17,6 @@ const deploy = readFileSync(
   new URL('../../../deploy/deploy-on-vm.sh', import.meta.url),
   'utf8',
 );
-const staging = readFileSync(
-  new URL('../../../deploy/compose.staging.yaml', import.meta.url),
-  'utf8',
-);
-const production = readFileSync(
-  new URL('../../../deploy/compose.yaml', import.meta.url),
-  'utf8',
-);
 const selected = 'a'.repeat(40);
 const current = 'b'.repeat(40);
 
@@ -211,20 +203,5 @@ describe('staging release context and persistence', () => {
     expect(run.commands.some((line) => /pg_restore|down/.test(line))).toBe(
       false,
     );
-  });
-  it('isolates PostgreSQL in a persistent staging network without published ports or volume deletion', () => {
-    const postgres = staging.split('\n  api:')[0];
-    expect(postgres).toContain('image: postgres:17-alpine');
-    expect(postgres).toContain(
-      'staging_postgres_data:/var/lib/postgresql/data',
-    );
-    expect(staging).toContain('name: digital-autograph-staging-postgres');
-    expect(staging).toContain('internal: true');
-    expect(postgres).not.toContain('ports:');
-    expect(postgres).not.toContain('POSTGRES_PASSWORD:');
-    expect(postgres).toContain('mem_limit: 384m');
-    expect(production).not.toContain('image: postgres:');
-    expect(production).toContain('postgres-ca.pem:ro');
-    expect(deploy).not.toMatch(/\bdown\b/);
   });
 });

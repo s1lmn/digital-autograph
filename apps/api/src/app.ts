@@ -88,6 +88,19 @@ export function buildApi(
     },
   });
 
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header(
+      'Content-Security-Policy',
+      "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+    );
+    if (!reply.hasHeader('Referrer-Policy')) {
+      reply.header('Referrer-Policy', 'no-referrer');
+    }
+    return payload;
+  });
+
   app.register(cookie);
   app.register(cors, {
     origin: [...authConfig.trustedWebOrigins],

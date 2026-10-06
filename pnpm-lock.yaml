@@ -68,6 +68,9 @@ importers:
       '@digital-autograph/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
+      '@digital-autograph/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@digital-autograph/payments':
         specifier: workspace:*
         version: link:../../packages/payments
@@ -147,6 +150,9 @@ importers:
       '@digital-autograph/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
+      '@digital-autograph/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       pg:
         specifier: ^8.16.0
         version: 8.23.0
@@ -233,6 +239,8 @@ importers:
       openid-client:
         specifier: ^6.8.8
         version: 6.8.8
+
+  packages/observability: {}
 
   packages/payments: {}
 

@@ -55,6 +55,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Audit all workspace dependencies for High/Critical advisories
+        run: pnpm security:audit
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck

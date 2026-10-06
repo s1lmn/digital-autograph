@@ -9,11 +9,11 @@ import { runWorker } from './worker';
 import { createPgNotificationRepository } from '@digital-autograph/db';
 import { notificationCycle } from '@digital-autograph/notifications';
 import { createTelegramNotificationSender } from '@digital-autograph/integrations';
-import { loadNotificationTelegramConfig } from '@digital-autograph/config';
+import { loadNotificationTelegramWorkerConfig } from '@digital-autograph/config';
 
 async function main(): Promise<void> {
   const config = loadWorkerConfig();
-  const telegramConfig = loadNotificationTelegramConfig();
+  const telegramConfig = loadNotificationTelegramWorkerConfig();
   const database = createDatabase(config.DATABASE_URL);
   const notificationRepository = createPgNotificationRepository(database.pool);
   const sender = telegramConfig

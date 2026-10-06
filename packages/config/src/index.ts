@@ -376,26 +376,10 @@ export function loadPaymentConfig(environment = process.env) {
   }
 }
 
-export function loadNotificationTelegramConfig(environment = process.env) {
-  const keys = [
-    'NOTIFICATION_TELEGRAM_BOT_TOKEN',
-    'NOTIFICATION_TELEGRAM_BOT_USERNAME',
-    'NOTIFICATION_TELEGRAM_WEBHOOK_SECRET',
-  ];
+function loadNotificationTelegram<
+  T extends { APP_ENV: string; WEB_ORIGIN: string },
+>(schema: z.ZodType<T>, keys: string[], environment: NodeJS.ProcessEnv) {
   if (keys.every((key) => environment[key] === undefined)) return null;
-  const schema = z.object({
-    NOTIFICATION_TELEGRAM_BOT_TOKEN: z
-      .string()
-      .regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
-    NOTIFICATION_TELEGRAM_BOT_USERNAME: z
-      .string()
-      .regex(/^[A-Za-z0-9_]{5,32}$/),
-    NOTIFICATION_TELEGRAM_WEBHOOK_SECRET: z
-      .string()
-      .regex(/^[A-Za-z0-9_-]{32,256}$/),
-    WEB_ORIGIN: exactOrigin,
-    APP_ENV: appEnvironment,
-  });
   try {
     const result = schema.parse(environment);
     if (
@@ -409,4 +393,40 @@ export function loadNotificationTelegramConfig(environment = process.env) {
       'Invalid notification Telegram configuration (values redacted)',
     );
   }
+}
+
+export function loadNotificationTelegramApiConfig(environment = process.env) {
+  return loadNotificationTelegram(
+    z.object({
+      APP_ENV: appEnvironment,
+      WEB_ORIGIN: exactOrigin,
+      NOTIFICATION_TELEGRAM_BOT_USERNAME: z
+        .string()
+        .regex(/^[A-Za-z0-9_]{5,32}$/),
+      NOTIFICATION_TELEGRAM_WEBHOOK_SECRET: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{32,256}$/),
+    }),
+    [
+      'NOTIFICATION_TELEGRAM_BOT_USERNAME',
+      'NOTIFICATION_TELEGRAM_WEBHOOK_SECRET',
+    ],
+    environment,
+  );
+}
+
+export function loadNotificationTelegramWorkerConfig(
+  environment = process.env,
+) {
+  return loadNotificationTelegram(
+    z.object({
+      APP_ENV: appEnvironment,
+      WEB_ORIGIN: exactOrigin,
+      NOTIFICATION_TELEGRAM_BOT_TOKEN: z
+        .string()
+        .regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
+    }),
+    ['NOTIFICATION_TELEGRAM_BOT_TOKEN'],
+    environment,
+  );
 }

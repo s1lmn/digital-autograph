@@ -191,6 +191,54 @@ it('bounds overall fanout to 20 per channel per hour, disabled users receive not
   await repository.collect();
   expect(await repository.inbox(f.userId)).toHaveLength(20);
 });
+it.each(['payment_status', 'refund_status'])(
+  'financial %s facts retain the hourly cap and channel preferences',
+  async (kind) => {
+    const f = await fixture();
+    await repository.issueLink(f.userId, hash('synthetic-financial'));
+    await repository.acceptLink(hash('synthetic-financial'), '123');
+    // Synthetic future refund facts exercise fanout only; no refund is executed.
+    for (let i = 0; i < 23; i++) await event(f, kind);
+    await Promise.all([repository.collect(), otherRepository.collect()]);
+    await repository.collect();
+    expect(await repository.inbox(f.userId)).toHaveLength(20);
+    const deliveries = await database.pool.query(
+      `SELECT channel,state,count(*)::int n FROM notification_deliveries GROUP BY channel,state ORDER BY channel,state`,
+    );
+    expect(deliveries.rows).toEqual([
+      { channel: 'telegram', state: 'queued', n: 20 },
+      { channel: 'telegram', state: 'suppressed', n: 3 },
+      { channel: 'web', state: 'sent', n: 20 },
+      { channel: 'web', state: 'suppressed', n: 3 },
+    ]);
+    // Age out the rate budget so suppression below proves the preferences gate.
+    await database.pool.query(
+      "UPDATE notification_deliveries SET created_at=clock_timestamp()-interval '2 hours'",
+    );
+    await repository.updatePreferences(f.userId, {
+      web: true,
+      telegram: true,
+      mutedKinds: [kind as 'payment_status' | 'refund_status'],
+    });
+    const mutedEvent = await database.pool.query<{ id: string }>(
+      'INSERT INTO notification_events (source_key,user_id,kind,wall_id,slot_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [randomUUID(), f.userId, kind, f.wallId, f.slotId],
+    );
+    await repository.collect();
+    expect(await repository.inbox(f.userId)).toHaveLength(20);
+    expect(
+      (
+        await database.pool.query(
+          'SELECT channel,state FROM notification_deliveries WHERE event_id=$1 ORDER BY channel',
+          [mutedEvent.rows[0]!.id],
+        )
+      ).rows,
+    ).toEqual([
+      { channel: 'telegram', state: 'suppressed' },
+      { channel: 'web', state: 'suppressed' },
+    ]);
+  },
+);
 it('one-time channel binding, consent check, concurrent sender and /stop suppress retries', async () => {
   const f = await fixture();
   await repository.issueLink(f.userId, hash('synthetic'));

@@ -40,8 +40,11 @@ responses are `no-store`; ordinary session and Origin protections apply.
 Worker fanout locks an event with `SKIP LOCKED` and serializes each recipient's
 preferences. One `(event, channel)` record is enforced by PostgreSQL. Suppression
 is recorded, rather than repeatedly processing disabled recipients. Rate policy:
-one notice of a given type per Wall/channel in a sliding 10-minute window and at
-most 20 per recipient/channel in an hour. All source facts remain available even
+one ordinary notice of a given type per Wall/channel in a sliding 10-minute
+window. Financial `payment_status`/`refund_status` facts bypass this short-window
+collapse: distinct Orders and important status changes keep their own source
+identity and `(event, channel)` deduplication. All kinds still share the cap of
+20 per recipient/channel in an hour and honor preferences/consent. All source facts remain available even
 when their notices are suppressed. Limits are shared across application pools.
 
 Telegram linking requires an authenticated application session and an explicit
@@ -100,15 +103,21 @@ tables and triggers preserve existing placements/financial history. No cloud,
 production deployment, IAM, Lockbox or payment configuration is changed.
 
 In-app delivery needs only the existing worker/PostgreSQL. Optional Telegram
-configuration must be complete in both API and worker:
+configuration is component-specific:
 
-- `NOTIFICATION_TELEGRAM_BOT_TOKEN`: server-only Bot API credential;
-- `NOTIFICATION_TELEGRAM_BOT_USERNAME`: nonsensitive bot username;
-- `NOTIFICATION_TELEGRAM_WEBHOOK_SECRET`: 32–256 URL-safe characters;
-- existing canonical `WEB_ORIGIN` (HTTPS in staging/production).
+- API: `NOTIFICATION_TELEGRAM_BOT_USERNAME` (nonsensitive) and
+  `NOTIFICATION_TELEGRAM_WEBHOOK_SECRET` (32–256 URL-safe characters). The API
+  never needs the Bot API token.
+- Worker: `NOTIFICATION_TELEGRAM_BOT_TOKEN` (server-only Bot API credential).
+  The worker never needs the username or webhook secret.
+- Both: existing `APP_ENV` and canonical `WEB_ORIGIN` (HTTPS in
+  staging/production).
 
-With no bot variables, Telegram linking/webhook/sending are disabled. Partial
-configuration fails startup with redacted values. The operator configures an HTTPS
+With no component-specific bot variables, that component's Telegram functionality
+is disabled; in-app delivery remains enabled. Partial configuration fails startup
+with redacted values. Separate API/worker Lockbox payload keys and the upgrade
+procedure are documented in [the deployment runbook](../operations/deployment.md#lockbox-payloads).
+The operator configures an HTTPS
 `/notifications/telegram/webhook` using Bot API `setWebhook` with `secret_token`
 and only `message` updates. Never log the token-bearing API URL or payload. API
 requests are bounded by 10 seconds/64 KiB; the webhook body is limited to 16 KiB.

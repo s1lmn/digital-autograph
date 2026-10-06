@@ -264,8 +264,14 @@ export function createPgNotificationRepository(
               WHERE e.user_id=$1 AND d.channel=$2 AND d.state<>'suppressed' AND d.created_at>clock_timestamp()-interval '1 hour'`,
               [event.user_id, channel, event.kind, event.wall_id],
             );
+            // Each financial fact has its own source identity. Do not collapse
+            // different Orders/statuses into the ordinary per-Wall spam budget.
+            const financial =
+              event.kind === 'payment_status' || event.kind === 'refund_status';
             permitted =
-              permitted && budget.rows[0]!.n < 20 && !budget.rows[0]!.recent;
+              permitted &&
+              budget.rows[0]!.n < 20 &&
+              (financial || !budget.rows[0]!.recent);
             // Old captured events are visible in-app but are not sent to a newly linked channel.
             if (channel === 'telegram') {
               permitted =

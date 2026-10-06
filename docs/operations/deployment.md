@@ -189,11 +189,38 @@ API payload keys:
 - `S3_ENDPOINT=https://storage.yandexcloud.net`, `S3_REGION=ru-central1`,
   `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`.
 - `UPLOAD_URL_TTL_SECONDS` and `PREVIEW_URL_TTL_SECONDS`.
+- Optional notification Telegram linking/webhook: configure
+  `NOTIFICATION_TELEGRAM_BOT_USERNAME` and `NOTIFICATION_TELEGRAM_WEBHOOK_SECRET`
+  together. The username is 5–32 alphanumeric/underscore characters without `@`;
+  the webhook secret is 32–256 URL-safe characters. Do not include
+  `NOTIFICATION_TELEGRAM_BOT_TOKEN` in the API payload.
 
 Worker payload keys are `DATABASE_URL` (same environment, with TLS settings),
 `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
 `S3_SECRET_ACCESS_KEY`, `WORKER_POLL_INTERVAL_MS`, `WORKER_LEASE_SECONDS`,
 and `UPLOAD_CLEANUP_GRACE_SECONDS`.
+
+For optional notification Telegram sending, add `NOTIFICATION_TELEGRAM_BOT_TOKEN`
+and `WEB_ORIGIN` to the worker payload. The token is the Bot API credential,
+distinct from Telegram OIDC credentials. `WEB_ORIGIN` must be the same canonical
+HTTPS web origin as the API. Do not include the bot username or webhook secret
+in the worker payload. `APP_ENV` already comes from deployment configuration for
+both services. Without the respective component's notification keys its Telegram
+functionality is disabled; in-app notifications continue to work. Incomplete or
+invalid component configuration fails startup without printing credential values.
+
+When upgrading an installation configured with all three notification variables
+in both payloads, remove the bot token from the API payload; remove the username
+and webhook secret from the worker payload and retain its `WEB_ORIGIN`. Use the
+same bot across API/worker. After applying migrations 0015/0016 and deploying the
+updated images, configure the API's HTTPS `/notifications/telegram/webhook` using
+Bot API `setWebhook` with the API payload's webhook secret as `secret_token` and
+only `message` updates. Run this from an authorized operator environment using
+the token; never print token-bearing URLs or payloads in release logs. Verify
+linking, delivery and `/stop` with an authorized test account before enabling the
+channel for a pilot. Deploy/rollback the matching payload versions with their
+images: an older image requires the older combined configuration. No live secret
+or webhook changes are performed by this code change.
 
 For production, install the database TLS root certificate read-only at
 `/etc/digital-autograph/certs/yandex-cloud-root.crt` and verify the external DB

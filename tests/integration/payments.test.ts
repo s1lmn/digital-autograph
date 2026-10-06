@@ -9,7 +9,9 @@ import {
   createPgPricingRepository,
   createPgTakeoverReservationRepository,
   createPgSessionRepository,
+  createPgNotificationRepository,
 } from '../../packages/db/src/index';
+import { NotificationService } from '../../packages/notifications/src/index';
 import {
   TakeoverQuoteService,
   TakeoverReservationService,
@@ -340,6 +342,78 @@ it('50 duplicate handlers across instances plus reconciliation fulfill exactly o
       { kind: 'slot_claimed', n: 1 },
       { kind: 'user_displaced', n: 1 },
     ]);
+  } finally {
+    await other.close();
+  }
+});
+it('two fulfilled Orders on one Wall within ten minutes notify the buyer separately across concurrent collectors', async () => {
+  const f = await fixture(2);
+  const buyer = await person();
+  const autographId = await autographFixture(buyer.id);
+  const notifications = createPgNotificationRepository(database.pool);
+  const linkHash = createHash('sha256').update('synthetic-link').digest('hex');
+  await notifications.issueLink(buyer.id, linkHash);
+  await notifications.acceptLink(linkHash, '123');
+  const orderIds: string[] = [];
+  for (const slot of f.slots) {
+    const quote = await new TakeoverQuoteService(
+      createPgPricingRepository(database.pool),
+    ).createQuote({ userId: buyer.id, wallId: f.wallId, slotId: slot.slotId });
+    const reservation = await new TakeoverReservationService(
+      createPgTakeoverReservationRepository(database.pool),
+    ).create(buyer.id, quote.id, randomUUID());
+    const order = await service().create(
+      buyer.id,
+      reservation.reservation.id,
+      autographId,
+    );
+    const providerId = (await repo.find(order.id))!.providerPaymentId!;
+    succeed(providerId);
+    await service().webhook(providerId, 'payment.succeeded');
+    await service().webhook(providerId, 'payment.succeeded');
+    orderIds.push(order.id);
+  }
+  const other = createDatabase(url!);
+  try {
+    await Promise.all([
+      notifications.collect(),
+      createPgNotificationRepository(other.pool).collect(),
+    ]);
+    await notifications.collect();
+    const inbox = await new NotificationService(notifications).inbox(buyer.id);
+    const financial = inbox.filter((item) => item.kind === 'payment_status');
+    expect(financial).toHaveLength(2);
+    expect(financial.map((item) => item.deepLink).sort()).toEqual(
+      orderIds.map((id) => `/payments/return?orderId=${id}`).sort(),
+    );
+    expect(
+      financial.every(
+        (item) => Date.now() - item.createdAt.getTime() < 600_000,
+      ),
+    ).toBe(true);
+    const deliveries = await database.pool.query<{
+      channel: string;
+      state: string;
+      n: number;
+    }>(
+      `SELECT d.channel,d.state,count(*)::int n FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id
+       WHERE e.user_id=$1 AND e.kind='payment_status' GROUP BY d.channel,d.state ORDER BY d.channel`,
+      [buyer.id],
+    );
+    expect(deliveries.rows).toEqual([
+      { channel: 'telegram', state: 'queued', n: 2 },
+      { channel: 'web', state: 'sent', n: 2 },
+    ]);
+    expect(inbox.filter((item) => item.kind === 'slot_claimed')).toHaveLength(
+      1,
+    );
+    for (const orderId of orderIds)
+      expect(await counts(orderId)).toMatchObject({
+        status: 'fulfilled',
+        takeovers: 1,
+        earnings: 1,
+        active: 1,
+      });
   } finally {
     await other.close();
   }

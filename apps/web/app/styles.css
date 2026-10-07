@@ -1,7 +1,7 @@
 @import './brand-tokens.css';
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
   font-family: var(--brand-font-body);
   --color-ink: var(--brand-color-ink);
   --color-muted: var(--brand-color-muted);
@@ -39,6 +39,11 @@ textarea {
 }
 button {
   min-height: 44px;
+  border: 1px solid var(--brand-color-control);
+  border-radius: var(--brand-radius-small);
+  background: var(--brand-color-surface);
+  color: var(--brand-color-ink);
+  padding: 0.6rem 0.9rem;
 }
 button,
 input,
@@ -56,6 +61,8 @@ p {
 h1,
 h2 {
   font-family: var(--brand-font-display);
+  font-weight: 800;
+  letter-spacing: -0.035em;
 }
 .eyebrow {
   color: var(--color-muted);

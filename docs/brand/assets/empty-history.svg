@@ -7,19 +7,19 @@
   aria-labelledby="title"
 >
   <title id="title">Empty placement history</title>
-  <rect width="320" height="200" fill="#f6f3eb" />
+  <rect width="320" height="200" fill="#192724" />
   <circle
     cx="160"
     cy="82"
     r="42"
-    fill="#ffffff"
-    stroke="#75857c"
+    fill="#22342e"
+    stroke="#8a9c90"
     stroke-width="2"
   />
   <path
     d="M160 52v32l22 14"
     fill="none"
-    stroke="#115c4b"
+    stroke="#b2f2d6"
     stroke-width="4"
     stroke-linecap="round"
   />
@@ -28,7 +28,7 @@
     y="164"
     font-family="Arial, sans-serif"
     font-size="18"
-    fill="#52605b"
+    fill="#bdc9c1"
     text-anchor="middle"
   >
     Your Wall story starts here

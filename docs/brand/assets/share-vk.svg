@@ -7,11 +7,11 @@
   aria-labelledby="title"
 >
   <title id="title">VK share-card design specimen</title>
-  <rect width="1080" height="1350" fill="#f6f3eb" />
+  <rect width="1080" height="1350" fill="#192724" />
   <g
     transform="translate(72 220) scale(0.875)"
     fill="none"
-    stroke="#115c4b"
+    stroke="#b2f2d6"
     stroke-width="4"
     stroke-linecap="round"
     stroke-linejoin="round"
@@ -24,7 +24,7 @@
     y="258"
     font-family="Arial, sans-serif"
     font-size="30"
-    fill="#115c4b"
+    fill="#b2f2d6"
     font-weight="700"
   >
     Digital Autograph
@@ -33,9 +33,10 @@
     x="72"
     y="360"
     font-family="Arial, sans-serif"
-    font-size="68"
-    fill="#192724"
-    font-weight="700"
+    font-size="76"
+    fill="#f4f6ee"
+    font-weight="900"
+    letter-spacing="-2"
   >
     A place on the Wall.
   </text>
@@ -44,24 +45,24 @@
     y="424"
     font-family="Arial, sans-serif"
     font-size="54"
-    fill="#52605b"
+    fill="#bdc9c1"
   >
     A mark in its history.
   </text>
-  <rect x="72" y="620" width="936" height="480" rx="24" fill="#115c4b" />
+  <rect x="72" y="620" width="936" height="480" rx="32" fill="#294b3b" />
   <text
     x="110"
     y="684"
     font-family="Arial, sans-serif"
     font-size="24"
-    fill="#ffffff"
+    fill="#f4f6ee"
   >
     CREATOR / DEMO WALL
   </text>
   <g
     transform="translate(108 764) scale(2.5)"
     fill="none"
-    stroke="#ffffff"
+    stroke="#b2f2d6"
     stroke-width="4"
     stroke-linecap="round"
     stroke-linejoin="round"
@@ -74,7 +75,7 @@
     y="864"
     font-family="Arial, sans-serif"
     font-size="46"
-    fill="#ffffff"
+    fill="#f4f6ee"
   >
     Your public mark
   </text>
@@ -83,7 +84,7 @@
     y="1196"
     font-family="Arial, sans-serif"
     font-size="30"
-    fill="#115c4b"
+    fill="#b2f2d6"
   >
     Open the creator’s Wall
   </text>
@@ -92,7 +93,7 @@
     y="1254"
     font-family="Arial, sans-serif"
     font-size="20"
-    fill="#52605b"
+    fill="#bdc9c1"
   >
     Design specimen · no live ownership claim
   </text>

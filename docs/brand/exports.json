@@ -1,12 +1,12 @@
 {
-  "inputHash": "b58b83960271d7102479030eca1e0a2877691cd8f37a1bb7339a0562b6401d1a",
+  "inputHash": "ef97b79776a1fdc2e63e69f3f0681d87fe7b32453b138cdb4e80ef9d14303c16",
   "files": {
-    "docs/brand/assets/og-platform.png": "1238eaa7de9e1b3781370e240e9d85cb475e3bf4a8502d4ec3cf219bf4549490",
-    "docs/brand/assets/share-telegram.png": "cc875063f5504925c653fa25013ed8fce10f9fa9204973c5fa2f250f50815d29",
-    "docs/brand/assets/share-x.png": "cc875063f5504925c653fa25013ed8fce10f9fa9204973c5fa2f250f50815d29",
-    "docs/brand/assets/share-vk.png": "b6097775f4fb566b1e5f63921112e827a1a527a398feeb1cf0efb022de167c45",
-    "docs/brand/assets/share-stories.png": "7d4b34f5c1573181699709767b4d5a5aab835d71bc9cfda66920937a98d2194f",
-    "docs/brand/assets/favicon-32.png": "2bf3463f9852ebe5b004d0e847e0eec7cea2c28671f5884e0d8caf9e60feb558",
-    "docs/brand/assets/apple-touch-icon.png": "570a4edd15a7f34de491a045f936359a6bcb6e896223fc808affd66c6aaedc05"
+    "docs/brand/assets/og-platform.png": "9b37ec975d4080e097560331d8aa48479056bd52851736bab2521c7cb90cec51",
+    "docs/brand/assets/share-telegram.png": "1701ccdd23a9ddeb9af334bc041be4b9da585795deb664a52d768a5fb6316caf",
+    "docs/brand/assets/share-x.png": "1701ccdd23a9ddeb9af334bc041be4b9da585795deb664a52d768a5fb6316caf",
+    "docs/brand/assets/share-vk.png": "5fa57775b0bb96fa434e320c89c6c076363411162077ccef19dec821bff1ca93",
+    "docs/brand/assets/share-stories.png": "2f59ae612cca1fd5e24ecda8d225f349517c76e3e9f22bc5f5d795638a2d9bbe",
+    "docs/brand/assets/favicon-32.png": "04f85be44a91af2f3b04afc265751e4a35ccf9a322e270ddd525c3962a55bd75",
+    "docs/brand/assets/apple-touch-icon.png": "1f999523cc014dd42eebf524abc83f191111ee142b1005a3caa974688741f616"
   }
 }

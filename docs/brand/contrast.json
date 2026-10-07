@@ -4,79 +4,121 @@
     {
       "foreground": "ink",
       "background": "paper",
-      "ratio": 13.96,
+      "ratio": 14.2,
       "minimum": 4.5
     },
     {
       "foreground": "muted",
       "background": "paper",
-      "ratio": 5.95,
+      "ratio": 9.06,
       "minimum": 4.5
     },
     {
       "foreground": "primary",
       "background": "paper",
-      "ratio": 7.13,
+      "ratio": 12.21,
       "minimum": 4.5
     },
     {
       "foreground": "ink",
       "background": "surface",
-      "ratio": 15.48,
+      "ratio": 12.05,
       "minimum": 4.5
     },
     {
       "foreground": "muted",
       "background": "surface",
-      "ratio": 6.6,
+      "ratio": 7.69,
       "minimum": 4.5
     },
     {
-      "foreground": "surface",
+      "foreground": "onPrimary",
       "background": "primary",
-      "ratio": 7.91,
+      "ratio": 12.21,
       "minimum": 4.5
     },
     {
       "foreground": "primary",
       "background": "primarySoft",
-      "ratio": 6.78,
+      "ratio": 7.66,
       "minimum": 4.5
     },
     {
       "foreground": "secondary",
       "background": "secondarySoft",
-      "ratio": 6.04,
+      "ratio": 7.42,
       "minimum": 4.5
     },
     {
       "foreground": "danger",
       "background": "dangerSoft",
-      "ratio": 6.17,
+      "ratio": 7.28,
       "minimum": 4.5
     },
     {
       "foreground": "focus",
       "background": "paper",
-      "ratio": 7.35,
+      "ratio": 13.12,
       "minimum": 3
     },
     {
       "foreground": "focus",
       "background": "surface",
-      "ratio": 8.15,
+      "ratio": 11.13,
       "minimum": 3
     },
     {
       "foreground": "control",
       "background": "surface",
-      "ratio": 3.89,
+      "ratio": 4.53,
       "minimum": 3
     },
     {
       "foreground": "control",
       "background": "paper",
-      "ratio": 3.51,
+      "ratio": 5.33,
+      "minimum": 3
+    },
+    {
+      "foreground": "ink",
+      "background": "primarySoft",
+      "ratio": 8.9,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "ink",
+      "background": "secondarySoft",
+      "ratio": 10.12,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "ink",
+      "background": "dangerSoft",
+      "ratio": 10.89,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "mediaInk",
+      "background": "mediaPaper",
+      "ratio": 15.48,
+      "minimum": 4.5
+    },
+    {
+      "foreground": "focus",
+      "background": "primarySoft",
+      "ratio": 8.23,
+      "minimum": 3
+    },
+    {
+      "foreground": "focus",
+      "background": "secondarySoft",
+      "ratio": 9.35,
+      "minimum": 3
+    },
+    {
+      "foreground": "focus",
+      "background": "dangerSoft",
+      "ratio": 10.06,
       "minimum": 3
     }
   ]

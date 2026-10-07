@@ -9,15 +9,15 @@
   <title id="title">
     Empty Wall illustration; decorative, not a slot count
   </title>
-  <rect width="320" height="200" fill="#f6f3eb" />
+  <rect width="320" height="200" fill="#192724" />
   <rect
     x="22"
     y="62"
     width="48"
     height="64"
     rx="8"
-    fill="#ffffff"
-    stroke="#75857c"
+    fill="#22342e"
+    stroke="#8a9c90"
     stroke-dasharray="4 4"
   />
   <rect
@@ -26,8 +26,8 @@
     width="48"
     height="64"
     rx="8"
-    fill="#ffffff"
-    stroke="#75857c"
+    fill="#22342e"
+    stroke="#8a9c90"
     stroke-dasharray="4 4"
   />
   <rect
@@ -36,8 +36,8 @@
     width="48"
     height="64"
     rx="8"
-    fill="#ffffff"
-    stroke="#75857c"
+    fill="#22342e"
+    stroke="#8a9c90"
     stroke-dasharray="4 4"
   />
   <rect
@@ -46,8 +46,8 @@
     width="48"
     height="64"
     rx="8"
-    fill="#ffffff"
-    stroke="#75857c"
+    fill="#22342e"
+    stroke="#8a9c90"
     stroke-dasharray="4 4"
   />
   <rect
@@ -56,8 +56,8 @@
     width="48"
     height="64"
     rx="8"
-    fill="#ffffff"
-    stroke="#75857c"
+    fill="#22342e"
+    stroke="#8a9c90"
     stroke-dasharray="4 4"
   />
   <text
@@ -65,7 +65,7 @@
     y="164"
     font-family="Arial, sans-serif"
     font-size="18"
-    fill="#52605b"
+    fill="#bdc9c1"
     text-anchor="middle"
   >
     A place for your mark

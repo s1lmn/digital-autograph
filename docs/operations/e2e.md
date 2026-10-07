@@ -98,14 +98,17 @@ traces can include short-lived private presigned URLs. There are zero retries.
 
 The authoritative commands are the actual `.github/workflows/ci.yml` jobs:
 
-| CI job               | Required validation                                                                                                                                              |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `checks`             | `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm build`, `pnpm test:build-smoke`                                  |
-| `checks`             | All four release container targets via `docker buildx bake --file deploy/docker-bake.hcl release`; `pnpm test:migration-image` (clean PostgreSQL, twice, no TTY) |
-| `e2e`                | Isolated setup, critical Playwright user and creator flows via `pnpm test:e2e`                                                                                   |
-| PR Policy / `policy` | Issue reference, scoped review sections, main base, branch naming and secret-pattern checks before merge                                                         |
+| CI job                       | Required validation                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checks`                     | `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm build`, `pnpm test:build-smoke`                                  |
+| `checks`                     | All four release container targets via `docker buildx bake --file deploy/docker-bake.hcl release`; `pnpm test:migration-image` (clean PostgreSQL, twice, no TTY) |
+| `e2e`                        | Isolated setup, critical Playwright user and creator flows via `pnpm test:e2e`                                                                                   |
+| `windows-integration-runner` | Launcher, isolated-database guard and child-failure regression tests on Windows via `pnpm test apps/api/scripts/integration-runner.test.ts`                      |
+| PR Policy / `policy`         | Issue reference, scoped review sections, main base, branch naming and secret-pattern checks before merge                                                         |
 
-Both CI jobs must finish successfully at the reviewed SHA. No critical suite may
+All three CI jobs must finish successfully at the reviewed SHA. The Windows job
+checks runner portability without DB/storage; `checks` runs the full PostgreSQL
+and MinIO integration suite on Linux. No critical suite may
 be skipped, made continue-on-error, retried to hide flakiness, or replaced by a
 successful PR run for a different SHA. Actionlint is an additional local check
 when workflows change; it is not currently a mandatory CI step.
@@ -123,6 +126,6 @@ returns HTTP 403 for branch protection/rulesets. CI and PR Policy report failure
 but GitHub does not server-enforce required checks before a maintainer merge.
 The operational merge gate is fresh exact-head checks + review + explicit merge
 authorization. To meet a strictly automatic merge-blocking DoD, enable protected
-main / required checks on a supporting GitHub plan, including `checks`, `e2e`,
+main / required checks on a supporting GitHub plan, including `checks`, `e2e`, `windows-integration-runner`,
 `policy`, and review requirements. Do not claim that protection already exists;
 this PR does not alter repository billing, visibility, IAM or authorization.

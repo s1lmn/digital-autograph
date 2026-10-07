@@ -6,6 +6,20 @@ on:
     branches: [main]
 
 jobs:
+  windows-integration-runner:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check integration launcher and database guard on Windows
+        run: pnpm test apps/api/scripts/integration-runner.test.ts
   windows-unit:
     runs-on: windows-latest
     steps:
@@ -69,6 +83,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Audit all workspace dependencies for High/Critical advisories
+        run: pnpm security:audit
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck

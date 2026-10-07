@@ -12,6 +12,13 @@ const release = readFileSync(
 
 describe('production-critical test gate', () => {
   it('runs Windows portable units alongside the complete Linux unit suite', () => {
+    const launcher = ci
+      .split('\n  windows-integration-runner:\n')[1]
+      ?.split('\n  windows-unit:\n')[0];
+    expect(launcher).toContain('runs-on: windows-latest');
+    expect(launcher).toContain(
+      'run: pnpm test apps/api/scripts/integration-runner.test.ts',
+    );
     const windows = ci
       .split('\n  windows-unit:\n')[1]
       ?.split('\n  checks:\n')[0];
@@ -26,6 +33,7 @@ describe('production-critical test gate', () => {
   });
   it('keeps every critical suite in mandatory CI jobs without failure masking', () => {
     for (const command of [
+      'pnpm security:audit',
       'pnpm format:check',
       'pnpm lint',
       'pnpm typecheck',

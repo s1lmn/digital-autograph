@@ -56,10 +56,18 @@ Use `pnpm test:portable` for the same portable suite on either platform and
 with an explicit platform error on Windows. A green Windows run covers portable
 unit tests; the Linux `checks` job continues to run the full unit suite plus
 integration/build/container checks, and the `windows-unit` job runs the default
-Windows command. Both jobs and `e2e` must pass before merge. Unit tests require no
+Windows command. Both Windows jobs, Linux `checks` and `e2e` must pass before merge. Unit tests require no
 local PostgreSQL, MinIO or cloud credentials.
 
 The integration suite requires the separate `autograph_test` PostgreSQL instance on port 5433 and local MinIO on port 9000. It rejects a database URL with another database name, applies committed migrations, and then runs against that schema and a private test bucket. CI provisions PostgreSQL and MinIO. `pnpm db:generate` generates Drizzle migrations after schema changes; custom SQL migrations capture database triggers.
+
+Run the suite with `pnpm test:integration` on Windows and Linux. The runner uses
+the package-manager launcher supplied by pnpm (`npm_execpath`), invoking JavaScript
+launchers with the current Node executable and standalone executables directly.
+This avoids spawning the Windows `pnpm.cmd` shim or enabling a shell. Direct
+`node scripts/run-integration.mjs` invocation without pnpm's environment is not
+supported. Migration failures stop the runner before Vitest, and either child's
+failure makes the command fail.
 
 `pnpm infra:down` stops both regular and test-profile containers while preserving the named development volumes. The test database uses temporary container storage and is recreated on the next `pnpm infra:test:up`.
 

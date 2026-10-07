@@ -45,6 +45,20 @@ pnpm build
 pnpm test:build-smoke
 ```
 
+`pnpm test` runs all unit tests on Linux. On Windows it runs the portable unit
+suite; `*.posix.test.ts` fixtures need Bash, executable shims or Unix file modes
+and are verified by Linux CI. Only tests with that explicit suffix are excluded
+on Windows, so portable deployment configuration, CORS validation and Lockbox
+escaping/redaction tests still run there.
+
+Use `pnpm test:portable` for the same portable suite on either platform and
+`pnpm test:posix` for the deployment/permission suite on Linux. The latter fails
+with an explicit platform error on Windows. A green Windows run covers portable
+unit tests; the Linux `checks` job continues to run the full unit suite plus
+integration/build/container checks, and the `windows-unit` job runs the default
+Windows command. Both Windows jobs, Linux `checks` and `e2e` must pass before merge. Unit tests require no
+local PostgreSQL, MinIO or cloud credentials.
+
 The integration suite requires the separate `autograph_test` PostgreSQL instance on port 5433 and local MinIO on port 9000. It rejects a database URL with another database name, applies committed migrations, and then runs against that schema and a private test bucket. CI provisions PostgreSQL and MinIO. `pnpm db:generate` generates Drizzle migrations after schema changes; custom SQL migrations capture database triggers.
 
 Run the suite with `pnpm test:integration` on Windows and Linux. The runner uses

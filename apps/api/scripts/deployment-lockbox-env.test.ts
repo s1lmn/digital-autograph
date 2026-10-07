@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,12 +49,10 @@ describe('Lockbox environment renderer', () => {
             ? "SESSION_TTL_SECONDS='1209600'\n"
             : "WORKER_LEASE_SECONDS='300'\n",
         );
-        expect(statSync(output).mode & 0o777).toBe(0o600);
         if (app === 'api') {
           expect(readFileSync(postgres, 'utf8')).toBe(
             "POSTGRES_USER='staging'\nPOSTGRES_PASSWORD='synthetic\\'password'\nPOSTGRES_DB='autograph_staging'\n",
           );
-          expect(statSync(postgres).mode & 0o777).toBe(0o600);
         }
       } finally {
         rmSync(directory, { recursive: true, force: true });
@@ -76,7 +74,7 @@ describe('Lockbox environment renderer', () => {
     );
   });
 
-  it('derives owner-only staging PostgreSQL credentials from the API DATABASE_URL without logging them', () => {
+  it('derives staging PostgreSQL credentials from the API DATABASE_URL without logging them', () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'da-lockbox-'));
     try {
       const output = path.join(directory, 'api.env');
@@ -102,7 +100,6 @@ describe('Lockbox environment renderer', () => {
       expect(readFileSync(postgres, 'utf8')).toBe(
         "POSTGRES_USER='staging'\nPOSTGRES_PASSWORD='synthetic\\'password'\nPOSTGRES_DB='autograph_staging'\n",
       );
-      expect(statSync(postgres).mode & 0o777).toBe(0o600);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
@@ -137,7 +134,7 @@ describe('Lockbox environment renderer', () => {
       }
     },
   );
-  it('writes escaped entries with owner-only permissions', () => {
+  it('writes escaped entries', () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'da-lockbox-'));
     const outputPath = path.join(directory, 'runtime.env');
     try {
@@ -155,9 +152,6 @@ describe('Lockbox environment renderer', () => {
       expect(readFileSync(outputPath, 'utf8')).toBe(
         "DATABASE_URL='postgres://user:p@ss/db'\nOAUTH_SECRET='value\\'s-safe'\n",
       );
-      if (process.platform !== 'win32') {
-        expect(statSync(outputPath).mode & 0o777).toBe(0o600);
-      }
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -26,7 +26,9 @@
     "infra:e2e:down": "docker compose --profile e2e rm --stop --force postgres-e2e minio-e2e",
     "infra:test:up": "docker compose --profile test up -d postgres-test",
     "infra:down": "docker compose --profile test down",
-    "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts"
+    "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts",
+    "test:portable": "vitest run --config vitest.portable.config.ts",
+    "test:posix": "vitest run --config vitest.posix.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

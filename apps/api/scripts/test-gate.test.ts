@@ -11,7 +11,17 @@ const release = readFileSync(
 ).replaceAll('\r\n', '\n');
 
 describe('production-critical test gate', () => {
-  it('runs Windows portable units alongside the complete Linux unit suite', () => {
+  it('runs macOS and Windows launcher checks alongside full Linux and Windows units', () => {
+    const macos = ci
+      .split('\n  macos-integration-runner:\n')[1]
+      ?.split('\n  windows-integration-runner:\n')[0];
+    expect(macos).toContain('runs-on: macos-latest');
+    expect(macos).toContain('version: 11.19.0');
+    expect(macos).toContain('node-version: 24');
+    expect(macos).toContain(
+      'run: pnpm test apps/api/scripts/integration-runner.test.ts',
+    );
+    expect(macos).not.toMatch(/\bTMPDIR\s*[:=]/);
     const launcher = ci
       .split('\n  windows-integration-runner:\n')[1]
       ?.split('\n  windows-unit:\n')[0];

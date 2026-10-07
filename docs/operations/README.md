@@ -6,3 +6,6 @@ for staging/production release, migration, and rollback procedures.
 
 See [dependency security checks](dependency-security.md) for the CI audit gate
 and the targeted dependency overrides.
+
+See [staging disk recovery](staging-disk-recovery.md) for the read-only inventory
+tool and the evidence required before capacity remediation and release recovery.

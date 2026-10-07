@@ -1,0 +1,36 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="320"
+  height="200"
+  viewBox="0 0 320 200"
+  role="img"
+  aria-labelledby="title"
+>
+  <title id="title">Empty placement history</title>
+  <rect width="320" height="200" fill="#f6f3eb" />
+  <circle
+    cx="160"
+    cy="82"
+    r="42"
+    fill="#ffffff"
+    stroke="#75857c"
+    stroke-width="2"
+  />
+  <path
+    d="M160 52v32l22 14"
+    fill="none"
+    stroke="#115c4b"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+  <text
+    x="160"
+    y="164"
+    font-family="Arial, sans-serif"
+    font-size="18"
+    fill="#52605b"
+    text-anchor="middle"
+  >
+    Your Wall story starts here
+  </text>
+</svg>

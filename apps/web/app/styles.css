@@ -1,15 +1,17 @@
+@import './brand-tokens.css';
+
 :root {
   color-scheme: light;
-  font-family: system-ui, sans-serif;
-  --color-ink: #17202a;
-  --color-muted: #53606d;
-  --color-surface: #fff;
-  --color-border: #d9dfe5;
-  --color-link: #174f90;
-  --color-focus: #0e63c7;
+  font-family: var(--brand-font-body);
+  --color-ink: var(--brand-color-ink);
+  --color-muted: var(--brand-color-muted);
+  --color-surface: var(--brand-color-surface);
+  --color-border: var(--brand-color-border);
+  --color-link: var(--brand-color-primary);
+  --color-focus: var(--brand-color-focus);
   --space-page: clamp(1rem, 4vw, 2rem);
   color: var(--color-ink);
-  background: #f6f7f8;
+  background: var(--brand-color-paper);
 }
 *,
 *::before,
@@ -50,6 +52,10 @@ textarea {
 }
 p {
   line-height: 1.5;
+}
+h1,
+h2 {
+  font-family: var(--brand-font-display);
 }
 .eyebrow {
   color: var(--color-muted);
@@ -106,7 +112,7 @@ p {
   min-height: 44px;
   padding: 0.65rem 1rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: var(--brand-radius-small);
   background: var(--color-surface);
 }
 .contentList {
@@ -118,7 +124,7 @@ p {
 .contentList li {
   padding: 1rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.75rem;
+  border-radius: var(--brand-radius-card);
   background: var(--color-surface);
 }
 @media (prefers-reduced-motion: reduce) {

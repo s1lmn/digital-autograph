@@ -86,6 +86,8 @@ jobs:
       - name: Audit all workspace dependencies for High/Critical advisories
         run: pnpm security:audit
       - run: pnpm format:check
+      - name: Verify brand tokens, exports and approved contrast pairs
+        run: pnpm brand:check
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test

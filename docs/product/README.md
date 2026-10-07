@@ -1,5 +1,9 @@
 # Product specifications
 
+[Brand Kit v1 preview (EGO-82)](../brand/README.md) provides reusable design tokens,
+visual states and export-ready assets. Final naming and messaging acceptance
+remain with EGO-80 and EGO-81.
+
 Record eligibility, cooldown, pricing, ownership, and moderation rules here before implementing their respective features. No such rules are implied by the bootstrap.
 
 [Acquiring provider readiness (EGO-99)](payment-provider-decision.md) records the

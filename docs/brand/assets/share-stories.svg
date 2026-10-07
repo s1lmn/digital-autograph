@@ -1,0 +1,99 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="1080"
+  height="1920"
+  viewBox="0 0 1080 1920"
+  role="img"
+  aria-labelledby="title"
+>
+  <title id="title">Stories share-card design specimen</title>
+  <rect width="1080" height="1920" fill="#f6f3eb" />
+  <g
+    transform="translate(72 220) scale(0.875)"
+    fill="none"
+    stroke="#115c4b"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="4" y="4" width="56" height="56" rx="12" />
+    <path d="M16 40 27 24l-2 20 15-22-3 19 11-8" />
+  </g>
+  <text
+    x="146"
+    y="258"
+    font-family="Arial, sans-serif"
+    font-size="30"
+    fill="#115c4b"
+    font-weight="700"
+  >
+    Digital Autograph
+  </text>
+  <text
+    x="72"
+    y="360"
+    font-family="Arial, sans-serif"
+    font-size="68"
+    fill="#192724"
+    font-weight="700"
+  >
+    A place on the Wall.
+  </text>
+  <text
+    x="72"
+    y="424"
+    font-family="Arial, sans-serif"
+    font-size="54"
+    fill="#52605b"
+  >
+    A mark in its history.
+  </text>
+  <rect x="72" y="620" width="936" height="480" rx="24" fill="#115c4b" />
+  <text
+    x="110"
+    y="684"
+    font-family="Arial, sans-serif"
+    font-size="24"
+    fill="#ffffff"
+  >
+    CREATOR / DEMO WALL
+  </text>
+  <g
+    transform="translate(108 764) scale(2.5)"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="4" y="4" width="56" height="56" rx="12" />
+    <path d="M16 40 27 24l-2 20 15-22-3 19 11-8" />
+  </g>
+  <text
+    x="310"
+    y="864"
+    font-family="Arial, sans-serif"
+    font-size="46"
+    fill="#ffffff"
+  >
+    Your public mark
+  </text>
+  <text
+    x="72"
+    y="1610"
+    font-family="Arial, sans-serif"
+    font-size="30"
+    fill="#115c4b"
+  >
+    Open the creator’s Wall
+  </text>
+  <text
+    x="72"
+    y="1668"
+    font-family="Arial, sans-serif"
+    font-size="20"
+    fill="#52605b"
+  >
+    Design specimen · no live ownership claim
+  </text>
+</svg>

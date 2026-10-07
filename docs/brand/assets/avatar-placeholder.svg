@@ -1,0 +1,13 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="160"
+  height="160"
+  viewBox="0 0 160 160"
+  role="img"
+  aria-labelledby="title"
+>
+  <title id="title">Anonymous avatar placeholder</title>
+  <rect width="160" height="160" rx="80" fill="#e6f0ea" />
+  <circle cx="80" cy="60" r="24" fill="#115c4b" />
+  <path d="M34 132c0-34 20-46 46-46s46 12 46 46" fill="#115c4b" />
+</svg>

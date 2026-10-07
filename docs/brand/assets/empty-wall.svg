@@ -1,0 +1,73 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="320"
+  height="200"
+  viewBox="0 0 320 200"
+  role="img"
+  aria-labelledby="title"
+>
+  <title id="title">
+    Empty Wall illustration; decorative, not a slot count
+  </title>
+  <rect width="320" height="200" fill="#f6f3eb" />
+  <rect
+    x="22"
+    y="62"
+    width="48"
+    height="64"
+    rx="8"
+    fill="#ffffff"
+    stroke="#75857c"
+    stroke-dasharray="4 4"
+  />
+  <rect
+    x="79"
+    y="62"
+    width="48"
+    height="64"
+    rx="8"
+    fill="#ffffff"
+    stroke="#75857c"
+    stroke-dasharray="4 4"
+  />
+  <rect
+    x="136"
+    y="62"
+    width="48"
+    height="64"
+    rx="8"
+    fill="#ffffff"
+    stroke="#75857c"
+    stroke-dasharray="4 4"
+  />
+  <rect
+    x="193"
+    y="62"
+    width="48"
+    height="64"
+    rx="8"
+    fill="#ffffff"
+    stroke="#75857c"
+    stroke-dasharray="4 4"
+  />
+  <rect
+    x="250"
+    y="62"
+    width="48"
+    height="64"
+    rx="8"
+    fill="#ffffff"
+    stroke="#75857c"
+    stroke-dasharray="4 4"
+  />
+  <text
+    x="160"
+    y="164"
+    font-family="Arial, sans-serif"
+    font-size="18"
+    fill="#52605b"
+    text-anchor="middle"
+  >
+    A place for your mark
+  </text>
+</svg>

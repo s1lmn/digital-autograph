@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import {
   chmodSync,
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -42,11 +43,29 @@ function release(environment: string, operation = selected, failure = '') {
       );
     const tools: Record<string, string> = {
       yc: '#!/bin/bash\necho synthetic-test-payload\n',
-      node: '#!/bin/bash\ncat >/dev/null\n',
+      node: `#!/bin/bash
+if [[ "$1" == *host-capacity.mjs ]]; then
+  printf 'capacity %s\\n' "$2" >>"$COMMAND_LOG"
+  if [[ "$2" == preflight ]]; then exec '${process.execPath}' "$@"; fi
+  printf 'retained current=%s previous=%s\\n' "$(cat "$3/current-image-tag")" "$(cat "$3/previous-image-tag")" >>"$COMMAND_LOG"
+  if [[ "$FAILURE" == retention ]]; then exit 1; fi
+else cat >/dev/null; fi
+`,
+      df: `#!/bin/bash
+if [[ "$FAILURE" == df-command ]]; then exit 1; fi
+if [[ "$FAILURE" == df-parse ]]; then echo unknown; exit 0; fi
+if [[ "$1" == --output=iavail ]]; then
+  echo IFree; if [[ "$FAILURE" == inodes ]]; then echo 0; else echo 1000000; fi
+else
+  echo Avail; if [[ "$FAILURE" == bytes ]]; then echo 1024; else echo 20000000000; fi
+fi
+`,
       curl: '#!/bin/bash\nexit 0\n',
       docker: `#!/bin/bash
 printf '%s\\n' "$*" >>"$COMMAND_LOG"
 if [[ "$1" == login ]]; then cat >/dev/null
+elif [[ "$1" == info ]]; then echo /
+elif [[ "$1" == image && "$2" == inspect ]]; then echo '[{"Size":1000000000},{"Size":1000000000},{"Size":1000000000},{"Size":1000000000}]'
 elif [[ "$1" == compose ]]; then
   case "$*" in
     *"--profile migration pull"*) if [[ "$FAILURE" == pull ]]; then exit 1; fi ;;
@@ -61,6 +80,10 @@ elif [[ "$1" == inspect ]]; then
 fi
 `,
     };
+    copyFileSync(
+      new URL('../../../deploy/host-capacity.mjs', import.meta.url),
+      path.join(root, 'host-capacity.mjs'),
+    );
     for (const [name, content] of Object.entries(tools)) {
       writeFileSync(path.join(dir, name), content);
       chmodSync(path.join(dir, name), 0o755);
@@ -87,6 +110,12 @@ fi
         path.join(state, 'current-image-tag'),
         'utf8',
       ).trim(),
+      previous: readFileSync(
+        path.join(state, 'previous-image-tag'),
+        'utf8',
+      ).trim(),
+      envCreated: readdirSync(dir).includes('env'),
+      releaseCreated: readdirSync(root).includes('release.env'),
       backups,
       modes: backups.map(
         (name) =>
@@ -99,6 +128,36 @@ fi
 }
 
 describe('staging release context and persistence', () => {
+  it.each(['bytes', 'inodes', 'df-command', 'df-parse'])(
+    'fails closed on %s before env/state writes, pull, backup and migration',
+    (failure) => {
+      const run = release('staging', selected, failure);
+      expect(run.result.status).toBe(1);
+      expect(
+        run.commands.some((line) => /login|compose|capacity retain/.test(line)),
+      ).toBe(false);
+      expect(run.active).toBe(current);
+      expect(run.previous).toBe(selected);
+      expect(run.envCreated).toBe(false);
+      expect(run.releaseCreated).toBe(false);
+      expect(run.backups).toHaveLength(3);
+    },
+  );
+  it('runs retention only after healthy deployment and recording both release tags', () => {
+    const run = release('staging');
+    expect(run.result.status, run.result.stderr).toBe(0);
+    expect(run.commands).toContain(
+      `retained current=${selected} previous=${current}`,
+    );
+    expect(run.commands).toContain('capacity retain');
+  });
+  it('reports retention failure without rolling back a healthy recorded release', () => {
+    const run = release('staging', selected, 'retention');
+    expect(run.result.status).toBe(0);
+    expect(run.result.stderr).toContain('Post-success image retention failed');
+    expect(run.active).toBe(selected);
+    expect(run.previous).toBe(current);
+  });
   it.each(['staging', 'production'])(
     'uses the same %s compose context for every command',
     (environment) => {
@@ -136,6 +195,7 @@ describe('staging release context and persistence', () => {
         ),
       ).toBe(false);
       expect(run.active).toBe(current);
+      expect(run.commands).not.toContain('capacity retain');
     },
   );
   it('backs up the available staging DB before migration and retains three owner-only dumps', () => {
@@ -161,6 +221,7 @@ describe('staging release context and persistence', () => {
     (failure) => {
       const run = release('staging', selected, failure);
       expect(run.result.status).toBe(1);
+      expect(run.commands).not.toContain('capacity retain');
       expect(run.active).toBe(current);
       expect(
         run.commands.some((line) => line.includes('up -d --remove-orphans')),
@@ -183,13 +244,16 @@ describe('staging release context and persistence', () => {
         .every((line) => line.includes('compose.staging.yaml')),
     ).toBe(true);
     expect(
-      run.commands.some((line) => /migration|pg_dump|pg_restore/.test(line)),
+      run.commands
+        .filter((line) => line.startsWith('compose '))
+        .some((line) => /migration|pg_dump|pg_restore/.test(line)),
     ).toBe(false);
     expect(run.active).toBe(selected);
   });
   it('uses the staging context during automatic application rollback without restoring the database', () => {
     const run = release('staging', selected, 'startup');
     expect(run.result.status, run.result.stderr).toBe(1);
+    expect(run.commands).not.toContain('capacity retain');
     expect(run.result.stderr).toContain('Previous application image restored');
     expect(run.active).toBe(current);
     expect(

@@ -205,6 +205,19 @@ function stepScript(name: string) {
 }
 
 describe('deployment configuration without POSIX execution', () => {
+  it('checks host capacity before installed configuration writes and ships the helper used by deploy', () => {
+    const step = stepScript('Deploy or roll back this VM');
+    expect(step.indexOf('node "$1" preflight')).toBeGreaterThan(-1);
+    expect(step.indexOf('node "$1" preflight')).toBeLessThan(
+      step.indexOf('sudo install'),
+    );
+    expect(step).toContain(
+      'deploy/render-lockbox-env.mjs deploy/host-capacity.mjs',
+    );
+    expect(deploy.indexOf('host-capacity.mjs" preflight')).toBeLessThan(
+      deploy.indexOf('install -d -m 700'),
+    );
+  });
   it('uses the selected SHA for deploy checkout, with main configuration only for rollback', () => {
     expect(workflow).toContain(
       "ref: ${{ env.RELEASE_OPERATION == 'deploy' && env.IMAGE_SHA || github.sha }}",

@@ -61,6 +61,9 @@ if [[ -n "${old_image_tag:-}" && ! "$old_image_tag" =~ ^[0-9a-f]{40}$ ]]; then
   exit 1
 fi
 
+# Fail before env/release state writes, registry login, pull, backup or migration.
+node "$root/host-capacity.mjs" preflight "$state" "$root" "$YC_REGISTRY_ID"
+
 install -d -m 700 /etc/digital-autograph/env "$state"
 umask 077
 for app in api worker; do
@@ -176,6 +179,12 @@ for attempt in $(seq 1 30); do
       chmod 600 "$state/previous-image-tag"
     fi
     echo "Deployment smoke checks passed for $image_tag"
+    # Tag state is recorded and health/exact-image checks passed before deletion.
+    # Retention errors must be visible, but must not trigger rollback of a
+    # successfully deployed application or hide an earlier deploy failure.
+    if ! node "$root/host-capacity.mjs" retain "$state" "$root" "$YC_REGISTRY_ID"; then
+      echo "Post-success image retention failed; operator capacity review required." >&2
+    fi
     exit 0
   fi
   sleep 2

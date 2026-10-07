@@ -332,6 +332,11 @@ managed backup/PITR procedure.
 
 ## Host swap and GitHub-hosted builds
 
+Release now fails before deployment mutations when byte/inode capacity is
+insufficient and selectively retains old local project images only after a
+healthy release. See [staging capacity and recovery](staging-capacity.md) for
+thresholds, protected rollback/data state and EGO-142 incident evidence.
+
 Configure swap on the VM host, never inside containers. On a newly provisioned
 Ubuntu VM with no existing `/swapfile`, an operator can configure 4 GB:
 

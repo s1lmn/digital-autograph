@@ -207,6 +207,14 @@ function stepScript(name: string) {
 describe('deployment configuration without POSIX execution', () => {
   it('checks host capacity before installed configuration writes and ships the helper used by deploy', () => {
     const step = stepScript('Deploy or roll back this VM');
+    expect(step).toContain('node "$1" preflight "$2"');
+    expect(step).toContain(
+      '_ "$PWD/deploy/host-capacity.mjs" "$RELEASE_OPERATION"',
+    );
+    expect(step).toContain('elif [[ "$RELEASE_OPERATION" == rollback ]]');
+    expect(deploy).toContain('operation=deploy');
+    expect(deploy).toContain('operation=rollback');
+    expect(deploy).toContain('preflight "$operation"');
     expect(step.indexOf('node "$1" preflight')).toBeGreaterThan(-1);
     expect(step.indexOf('node "$1" preflight')).toBeLessThan(
       step.indexOf('sudo install'),
@@ -264,4 +272,16 @@ describe('deployment configuration without POSIX execution', () => {
     expect(production).toContain('postgres-ca.pem:ro');
     expect(deploy).not.toMatch(/\bdown\b/);
   });
+});
+
+it('keeps cached rollback infrastructure refs aligned with Compose and migration profile-only', () => {
+  const helper = readFileSync(
+    new URL('../../../deploy/host-capacity.mjs', import.meta.url),
+    'utf8',
+  );
+  expect(production).toContain('image: caddy:2.10.2-alpine');
+  expect(helper).toContain("refs.push('caddy:2.10.2-alpine')");
+  expect(staging).toContain('image: postgres:17-alpine');
+  expect(helper).toContain("refs.push('postgres:17-alpine')");
+  expect(production).toContain('profiles: [migration]');
 });

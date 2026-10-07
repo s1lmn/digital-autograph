@@ -315,8 +315,8 @@ jobs:
             release_ref=$IMAGE_SHA
           fi
           # Check capacity before even replacing the installed release files.
-          sudo bash -c 'source /etc/digital-autograph/deploy.conf; node "$1" preflight /var/lib/digital-autograph /opt/digital-autograph "$YC_REGISTRY_ID"' \
-            _ "$PWD/deploy/host-capacity.mjs"
+          sudo bash -c 'source /etc/digital-autograph/deploy.conf; node "$1" preflight "$2" /var/lib/digital-autograph /opt/digital-autograph "$YC_REGISTRY_ID" "$APP_ENV"' \
+            _ "$PWD/deploy/host-capacity.mjs" "$RELEASE_OPERATION"
           sudo install -d -m 755 /opt/digital-autograph
           sudo install -m 644 deploy/compose.yaml deploy/compose.staging.yaml deploy/Caddyfile \
             /opt/digital-autograph/

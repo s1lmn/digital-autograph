@@ -271,7 +271,11 @@ independent of a developer checkout.
    operation `deploy`, that exact image SHA, and `APPROVED` confirmation.
 5. To roll back an application, dispatch the same workflow with the target
    environment and operation `rollback`. The VM redeploys its recorded
-   previous image without rerunning migrations. A failed health check during a
+   previous image without rerunning migrations or making a DB backup. Its
+   operation-specific guard checks cached api/web/worker and infrastructure
+   images with 256 MiB write reserve and 200,000 free inodes. It reuses existing
+   runtime env files, skips cloud secret fetch/registry login/pull, and uses
+   Compose `--pull never`; migration is not a required cached rollback target. A failed health check during a
    new deploy also attempts to restore the previously healthy application
    image. Compose startup errors cannot count as a successful release; smoke
    checks also verify API/web/worker containers use the requested image tags.

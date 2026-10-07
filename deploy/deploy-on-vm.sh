@@ -30,9 +30,11 @@ if [[ "$action" == rollback ]]; then
     exit 1
   fi
   rollback=true
+  operation=rollback
 elif [[ "$action" =~ ^[0-9a-f]{40}$ ]]; then
   image_tag=$action
   rollback=false
+  operation=deploy
 else
   echo "Deployment image tag must be a 40-character lowercase commit SHA" >&2
   exit 2
@@ -62,23 +64,33 @@ if [[ -n "${old_image_tag:-}" && ! "$old_image_tag" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 # Fail before env/release state writes, registry login, pull, backup or migration.
-node "$root/host-capacity.mjs" preflight "$state" "$root" "$YC_REGISTRY_ID"
+node "$root/host-capacity.mjs" preflight "$operation" "$state" "$root" "$YC_REGISTRY_ID" "$APP_ENV"
 
 install -d -m 700 /etc/digital-autograph/env "$state"
 umask 077
-for app in api worker; do
-  secret_id_var=$(printf 'YC_LOCKBOX_%s_SECRET_ID' "$app" | tr '[:lower:]' '[:upper:]')
-  secret_id=${!secret_id_var}
-  render_args=("/etc/digital-autograph/env/$app.env")
-  if [[ "$APP_ENV" == staging ]]; then
-    render_args+=(staging)
-    if [[ "$app" == api ]]; then
-      render_args+=(/etc/digital-autograph/env/postgres.env)
+if [[ "$rollback" == false ]]; then
+  for app in api worker; do
+    secret_id_var=$(printf 'YC_LOCKBOX_%s_SECRET_ID' "$app" | tr '[:lower:]' '[:upper:]')
+    secret_id=${!secret_id_var}
+    render_args=("/etc/digital-autograph/env/$app.env")
+    if [[ "$APP_ENV" == staging ]]; then
+      render_args+=(staging)
+      if [[ "$app" == api ]]; then
+        render_args+=(/etc/digital-autograph/env/postgres.env)
+      fi
     fi
+    yc lockbox payload get --id "$secret_id" --format json-rest |
+      node "$root/render-lockbox-env.mjs" "${render_args[@]}"
+  done
+else
+  # Cached recovery reuses existing env files without cloud secret fetches.
+  for app in api worker; do
+    [[ -s "/etc/digital-autograph/env/$app.env" ]] || { echo "Missing cached runtime env" >&2; exit 1; }
+  done
+  if [[ "$APP_ENV" == staging ]]; then
+    [[ -s /etc/digital-autograph/env/postgres.env ]] || { echo "Missing cached PostgreSQL env" >&2; exit 1; }
   fi
-  yc lockbox payload get --id "$secret_id" --format json-rest |
-    node "$root/render-lockbox-env.mjs" "${render_args[@]}"
-done
+fi
 
 export APP_ENV YC_REGISTRY_ID IMAGE_TAG=$image_tag WEB_DOMAIN API_DOMAIN
 release_file="$root/release.env.tmp"
@@ -119,21 +131,19 @@ function backup_staging_database() {
   done < <(find "$backup_dir" -maxdepth 1 -type f -name '*.dump' | sort -r)
 }
 
-registry_token=$(yc iam create-token)
-printf '%s' "$registry_token" |
-  docker login --username iam --password-stdin cr.yandex >/dev/null
-unset registry_token
-
-trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
 if [[ "$rollback" == false ]]; then
+  registry_token=$(yc iam create-token)
+  printf '%s' "$registry_token" |
+    docker login --username iam --password-stdin cr.yandex >/dev/null
+  unset registry_token
+
+  trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT
   # Pull every required exact-tag image before DB startup, backup or migration.
   # Missing images fail here; this VM never builds or publishes images.
   compose --profile migration pull
-else
-  compose pull
 fi
 if [[ "$APP_ENV" == staging ]]; then
-  compose up -d --wait postgres
+  compose up -d --wait --pull never postgres
 fi
 if [[ "$rollback" == false ]]; then
   if [[ "$APP_ENV" == staging ]]; then
@@ -142,7 +152,7 @@ if [[ "$rollback" == false ]]; then
   compose run --rm migration
 fi
 compose_updated=true
-if ! compose up -d --remove-orphans; then
+if ! compose up -d --remove-orphans --pull never; then
   compose_updated=false
   echo "Compose update reported an error; checking health and attempting rollback if needed." >&2
 fi
@@ -198,8 +208,7 @@ if [[ -n "${old_image_tag:-}" && "$old_image_tag" != "$image_tag" ]]; then
     >"$release_file"
   chmod 600 "$release_file"
   mv "$release_file" "$root/release.env"
-  if compose pull &&
-    compose up -d --remove-orphans; then
+  if compose up -d --remove-orphans --pull never; then
     for attempt in $(seq 1 30); do
       if application_images_match &&
         curl --fail --silent --show-error --max-time 5 \

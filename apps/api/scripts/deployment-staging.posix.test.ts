@@ -42,7 +42,7 @@ function release(environment: string, operation = selected, failure = '') {
         'old backup',
       );
     const tools: Record<string, string> = {
-      yc: '#!/bin/bash\necho synthetic-test-payload\n',
+      yc: '#!/bin/bash\necho yc >>"$COMMAND_LOG"\necho synthetic-test-payload\n',
       node: `#!/bin/bash
 if [[ "$1" == *host-capacity.mjs ]]; then
   printf 'capacity %s\\n' "$2" >>"$COMMAND_LOG"
@@ -57,7 +57,7 @@ if [[ "$FAILURE" == df-parse ]]; then echo unknown; exit 0; fi
 if [[ "$1" == --output=iavail ]]; then
   echo IFree; if [[ "$FAILURE" == inodes ]]; then echo 0; else echo 1000000; fi
 else
-  echo Avail; if [[ "$FAILURE" == bytes ]]; then echo 1024; else echo 20000000000; fi
+  echo Avail; if [[ "$FAILURE" == bytes ]]; then echo 1024; elif [[ "$FAILURE" == five-gib || "$FAILURE" == missing-image ]]; then echo 5368709120; else echo 20000000000; fi
 fi
 `,
       curl: '#!/bin/bash\nexit 0\n',
@@ -65,7 +65,10 @@ fi
 printf '%s\\n' "$*" >>"$COMMAND_LOG"
 if [[ "$1" == login ]]; then cat >/dev/null
 elif [[ "$1" == info ]]; then echo /
-elif [[ "$1" == image && "$2" == inspect ]]; then echo '[{"Size":1000000000},{"Size":1000000000},{"Size":1000000000},{"Size":1000000000}]'
+elif [[ "$1" == image && "$2" == inspect ]]; then
+  if [[ "$FAILURE" == missing-image ]]; then echo '[]'; else
+    '${process.execPath}' -e 'console.log(JSON.stringify(process.argv.slice(1).map((ref,i)=>({Id:"sha256:"+String(i+1).padStart(64,"0"),RepoTags:[ref],Size:1000000000}))))' "\${@:4}"
+  fi
 elif [[ "$1" == compose ]]; then
   case "$*" in
     *"--profile migration pull"*) if [[ "$FAILURE" == pull ]]; then exit 1; fi ;;
@@ -80,6 +83,16 @@ elif [[ "$1" == inspect ]]; then
 fi
 `,
     };
+    if (
+      operation === 'rollback' &&
+      !['bytes', 'inodes', 'df-command', 'df-parse', 'missing-image'].includes(
+        failure,
+      )
+    ) {
+      mkdirSync(path.join(dir, 'env'));
+      for (const app of ['api', 'worker', 'postgres'])
+        writeFileSync(path.join(dir, `env/${app}.env`), 'synthetic=local');
+    }
     copyFileSync(
       new URL('../../../deploy/host-capacity.mjs', import.meta.url),
       path.join(root, 'host-capacity.mjs'),
@@ -235,8 +248,17 @@ describe('staging release context and persistence', () => {
         ).toBe(false);
     },
   );
-  it('uses the staging context for rollback without migration or DB restore', () => {
-    const run = release('staging', 'rollback');
+  it('uses cached staging rollback at 5 GiB without cloud, pull, migration, backup or DB restore', () => {
+    const run = release('staging', 'rollback', 'five-gib');
+    expect(
+      run.commands.some(
+        (line) => /^(yc|login)/.test(line) || / pull(?:$| )/.test(line),
+      ),
+    ).toBe(false);
+    expect(run.backups).toHaveLength(3);
+    expect(run.commands.some((line) => line.includes('--pull never'))).toBe(
+      true,
+    );
     expect(run.result.status, run.result.stderr).toBe(0);
     expect(
       run.commands
@@ -249,6 +271,29 @@ describe('staging release context and persistence', () => {
         .some((line) => /migration|pg_dump|pg_restore/.test(line)),
     ).toBe(false);
     expect(run.active).toBe(selected);
+  });
+  it.each(['bytes', 'inodes', 'df-command', 'df-parse', 'missing-image'])(
+    'failed rollback %s preserves state and performs no mutation or retention',
+    (failure) => {
+      const run = release('staging', 'rollback', failure);
+      expect(run.result.status).toBe(1);
+      expect(run.active).toBe(current);
+      expect(run.previous).toBe(selected);
+      expect(run.envCreated).toBe(false);
+      expect(run.releaseCreated).toBe(false);
+      expect(run.backups).toHaveLength(3);
+      expect(
+        run.commands.some((line) =>
+          /^(yc|login|compose)|capacity retain/.test(line),
+        ),
+      ).toBe(false);
+    },
+  );
+  it('fails deploy at 5 GiB before mutation', () => {
+    const run = release('staging', selected, 'five-gib');
+    expect(run.result.status).toBe(1);
+    expect(run.envCreated).toBe(false);
+    expect(run.releaseCreated).toBe(false);
   });
   it('uses the staging context during automatic application rollback without restoring the database', () => {
     const run = release('staging', selected, 'startup');

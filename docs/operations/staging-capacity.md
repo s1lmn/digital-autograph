@@ -16,20 +16,20 @@ The stale GitHub staging deployment `6911512084` was honestly marked failure:
 
 Read-only diagnosis after restoring temporary SSH access (one staging reboot):
 
-| Consumer / capacity         | Before emergency cleanup   | After                      |
-| --------------------------- | -------------------------- | -------------------------- |
-| Root filesystem total       | 25,303,613,440 bytes       | unchanged                  |
-| Root used                   | 24,539,787,264 bytes (98%) | 16,487,583,744 bytes (66%) |
-| Root available              | 747,048,960 bytes          | 8,799,252,480 bytes        |
-| Root free inodes            | 2,641,448 (18% used)       | 2,866,352 (11% used)       |
-| Docker images               | 41 / 15.8 GB               | 21 / 7.746 GB              |
-| Build cache                 | 0 bytes                    | unchanged                  |
-| Active volumes              | 3 / ~50 MB                 | preserved                  |
-| Runner `_diag`              | 4 MB / 27 logs             | preserved                  |
-| Runner `_work`              | 8.7 MB                     | preserved                  |
-| Runner installation         | 691 MB (597 MB externals)  | preserved                  |
-| Journal / all `/var/log`    | 98.5 MB / 342 MB           | preserved                  |
-| Backups / application state | 3 × 120,167 bytes / 376 KB | preserved                  |
+| Consumer / capacity         | Before cleanup / resize    | After cleanup, before resize |
+| --------------------------- | -------------------------- | ---------------------------- |
+| Root filesystem total       | 25,303,613,440 bytes       | unchanged                    |
+| Root used                   | 24,539,787,264 bytes (98%) | 16,487,583,744 bytes (66%)   |
+| Root available              | 747,048,960 bytes          | 8,799,252,480 bytes          |
+| Root free inodes            | 2,641,448 (18% used)       | 2,866,352 (11% used)         |
+| Docker images               | 41 / 15.8 GB               | 21 / 7.746 GB                |
+| Build cache                 | 0 bytes                    | unchanged                    |
+| Active volumes              | 3 / ~50 MB                 | preserved                    |
+| Runner `_diag`              | 4 MB / 27 logs             | preserved                    |
+| Runner `_work`              | 8.7 MB                     | preserved                    |
+| Runner installation         | 691 MB (597 MB externals)  | preserved                    |
+| Journal / all `/var/log`    | 98.5 MB / 342 MB           | preserved                    |
+| Backups / application state | 3 × 120,167 bytes / 376 KB | preserved                    |
 
 `/var/lib/containerd` used 15 GB; Docker's configured `/var/lib/docker` used
 only 50 MB. All required paths were on the root filesystem. Other top-level
@@ -64,15 +64,25 @@ keys. Recovery user-data and temporary OS Login metadata were removed. Remove
 the temporary guest key after technical verification. Do not put passwords or
 private keys in metadata, reports, source control or runner diagnostics.
 
+## Infrastructure resize — pending guest verification
+
+The owner enlarged the staging boot disk. Read-only Cloud API on 2026-10-07
+reports **53,687,091,200 bytes (50 GiB)**, READY. This is block-device capacity,
+not proof that the root filesystem expanded. SSH currently rejects the revoked
+temporary key. New filesystem total/used/free bytes, inodes, `lsblk` and storage
+mount coverage remain unverified until read-only guest access is restored.
+The preceding incident figures are historical **before resize**, not current
+capacity. No resize, format, metadata change or restart was performed here.
+
 ## Fail-fast preflight
 
-`deploy/host-capacity.mjs preflight <state-dir> <release-dir> <registry-id>`
+`deploy/host-capacity.mjs preflight <deploy|rollback> <state-dir> <release-dir> <registry-id> <staging|production>`
 checks GNU `df` bytes and available inodes for release/state directories,
 Docker's configured storage directory, `/var/lib/containerd`, and runner home.
 For a not-yet-created directory, it checks its nearest existing parent. Errors,
 malformed output, absent recorded images or unknown capacity fail closed.
 
-The minimum is **7 GiB available and 200,000 available inodes on every checked
+For **deploy**, the minimum is **7 GiB available and 200,000 available inodes on every checked
 filesystem**. The measured full image set totals ~2.92 GB. Two copies for
 download/unpacking plus 1 GiB for backup/migration/transient logs need ~6.91 GB;
 7 GiB provides rounding headroom. When the healthy image set grows, the byte
@@ -82,7 +92,30 @@ changed Docker/containerd storage paths or larger runner installations require
 reviewing this budget and mount coverage before deployment. The inode reserve
 covers more than three observed release-set increments (~45,000 each).
 
-The workflow checks before installing release configuration. The deploy script
+For **cached manual rollback**, the minimum is **256 MiB** with the same
+**200,000 free inode** guard on every checked filesystem. This reserves 64 MiB
+for each of runner logs, container writable layers, Compose metadata and
+release/state writes. Observed runner logs were 4 MB and state 376 KB; this
+allows substantial transient-write headroom without charging recovery for
+image download/unpack or backup/migration. It is not a guarantee against
+unbounded application writes; monitoring remains required.
+
+Rollback requires valid recorded current/previous SHAs and locally resolvable
+previous **api/web/worker** references, plus `caddy:2.10.2-alpine` and (staging)
+`postgres:17-alpine`. Docker inventory errors, missing references or invalid
+image IDs fail closed before writes. Migration is profile-only and is not used
+by manual rollback, so its absence must not block cached application recovery.
+Retention still protects all four current/previous project targets and fails
+closed with an operator warning if that larger protected inventory is missing.
+
+Manual rollback reuses existing nonempty api/worker/postgres env files (no
+Lockbox request), skips registry login/pull, and starts Compose with
+`--pull never`. It requires the compatible existing runtime configuration;
+expand/deploy/contract still applies. HTTPS health checks remain required, but
+registry/cloud availability is not used as evidence of local image completeness.
+A failed new deploy also restores its old application with `--pull never`.
+
+The workflow passes the validated operation explicitly before installing release configuration. The deploy script
 checks again before writing runtime env/release state, authenticating/pulling,
 starting PostgreSQL, backup, migration or application replacement. Failed
 preflight leaves current/previous tags, DB and application unchanged; it does

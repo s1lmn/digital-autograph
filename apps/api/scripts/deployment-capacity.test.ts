@@ -4,8 +4,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   checkCapacity,
-  minimumBytes,
+  deployMinimumBytes,
   minimumInodes,
+  rollbackMinimumBytes,
+  preflight,
   parseAvailable,
   retainImages,
   retentionPlan,
@@ -28,7 +30,7 @@ const images = [current, previous, old, running].flatMap((tag, release) =>
 describe('deployment capacity fails closed without mutation', () => {
   it('rejects byte/inode header mixups rather than treating byte capacity as free inodes', () => {
     expect(() =>
-      checkCapacity(['/root'], () => `Avail\n${minimumBytes}`),
+      checkCapacity(['/root'], () => `Avail\n${deployMinimumBytes}`),
     ).toThrow('Invalid filesystem');
   });
   it('accepts enough bytes/inodes across every storage path', () => {
@@ -39,7 +41,7 @@ describe('deployment capacity fails closed without mutation', () => {
         paths.push(args.at(-1)!);
         return args.includes('--output=iavail')
           ? `IFree\n${minimumInodes}`
-          : `Avail\n${minimumBytes}`;
+          : `Avail\n${deployMinimumBytes}`;
       },
     );
     expect(paths).toEqual([
@@ -61,7 +63,7 @@ describe('deployment capacity fails closed without mutation', () => {
           if (failure === 'malformed') return 'unparseable';
           return args.includes('--output=iavail')
             ? `IFree\n${failure === 'inodes' ? 0 : minimumInodes}`
-            : `Avail\n${failure === 'bytes' ? minimumBytes - 1n : minimumBytes}`;
+            : `Avail\n${failure === 'bytes' ? deployMinimumBytes - 1n : deployMinimumBytes}`;
         });
         mutated = true;
       }).toThrow();
@@ -84,8 +86,8 @@ describe('deployment capacity fails closed without mutation', () => {
         (_: string, args: string[]) =>
           args.includes('--output=iavail')
             ? `IFree\n${minimumInodes}`
-            : `Avail\n${minimumBytes}`,
-        minimumBytes + 1n,
+            : `Avail\n${deployMinimumBytes}`,
+        deployMinimumBytes + 1n,
       ),
     ).toThrow('Insufficient');
   });
@@ -214,5 +216,91 @@ describe('project-specific rollback-safe image retention', () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('operation-aware cached rollback preflight', () => {
+  function fixture(
+    failure = '',
+    operation = 'rollback',
+    bytes = 5n * 1024n ** 3n,
+  ) {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'da-preflight-'));
+    const commands: string[][] = [];
+    writeFileSync(path.join(dir, 'current-image-tag'), current);
+    if (failure !== 'missing-state')
+      writeFileSync(
+        path.join(dir, 'previous-image-tag'),
+        failure === 'state' ? 'main' : previous,
+      );
+    try {
+      const budget = preflight(
+        operation,
+        dir,
+        dir,
+        'registry',
+        'staging',
+        (program: string, args: string[]) => {
+          commands.push([program, ...args]);
+          if (program === 'df')
+            return args.includes('--output=iavail')
+              ? `IFree\n${failure === 'inodes' ? minimumInodes - 1n : minimumInodes}`
+              : `Avail\n${bytes}`;
+          if (args[0] === 'info') return dir;
+          if (failure === 'malformed') return '{}';
+          const inventory = args.slice(3).map((ref, index) => ({
+            Id: failure === 'id' ? 'bad' : id(index + 1),
+            RepoTags: [ref],
+            Size: failure === 'large' ? 3_000_000_000 : 100_000_000,
+          }));
+          if (failure === 'missing') inventory.pop();
+          if (failure === 'wrong-ref') inventory[0].RepoTags = ['other:tag'];
+          return JSON.stringify(inventory);
+        },
+      );
+      return { budget, commands };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  it('rejects deploy at 5 GiB but accepts complete cached rollback', () => {
+    expect(() => fixture('', 'deploy')).toThrow('Insufficient');
+    const result = fixture();
+    expect(result.budget).toBe(rollbackMinimumBytes);
+    const refs = result.commands.find((args) => args[1] === 'image')!.slice(4);
+    expect(refs).toEqual(
+      ['api', 'web', 'worker']
+        .map((target) => `${base}${target}:${previous}`)
+        .concat(['caddy:2.10.2-alpine', 'postgres:17-alpine']),
+    );
+    expect(
+      result.commands.every(
+        (args) => !args.includes('rm') && !args.includes('pull'),
+      ),
+    ).toBe(true);
+  });
+  it.each([
+    'missing',
+    'wrong-ref',
+    'id',
+    'malformed',
+    'missing-state',
+    'state',
+    'inodes',
+  ])('fails closed on %s', (failure) => {
+    expect(() => fixture(failure)).toThrow();
+  });
+  it('rejects capacity below rollback reserve', () => {
+    expect(() => fixture('', 'rollback', rollbackMinimumBytes - 1n)).toThrow(
+      'Insufficient',
+    );
+  });
+  it('rejects an invalid operation before Docker or filesystem commands', () => {
+    expect(() => fixture('', 'unknown')).toThrow('Invalid preflight operation');
+  });
+  it('keeps deploy budget dynamic', () => {
+    expect(fixture('large', 'deploy', 30n * 1024n ** 3n).budget).toBe(
+      24_000_000_000n + 1024n ** 3n,
+    );
   });
 });

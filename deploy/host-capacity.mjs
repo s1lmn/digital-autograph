@@ -7,7 +7,10 @@ import { pathToFileURL } from 'node:url';
 
 // Observed four-image set: ~2.92 GB. Allow two copies for download/unpack,
 // plus >=1 GiB for backup, migration, runner logs and transient writes.
-export const minimumBytes = 7n * 1024n ** 3n;
+export const deployMinimumBytes = 7n * 1024n ** 3n;
+// Cached recovery needs no download/unpack, backup or migration. Reserve
+// 64 MiB each for logs, writable layers, Compose metadata and state writes.
+export const rollbackMinimumBytes = 256n * 1024n ** 2n;
 export const minimumInodes = 200_000n;
 const sha = /^[0-9a-f]{40}$/;
 const imageId = /^sha256:[0-9a-f]{64}$/;
@@ -40,7 +43,7 @@ export function parseAvailable(output, header = 'Avail') {
 export function checkCapacity(
   paths,
   run = command,
-  requiredBytes = minimumBytes,
+  requiredBytes = deployMinimumBytes,
 ) {
   for (const location of paths) {
     const bytes = parseAvailable(
@@ -187,14 +190,57 @@ function existingParent(location) {
   return location;
 }
 
-function preflight(state, root, registry) {
-  let requiredBytes = minimumBytes;
+export function preflight(
+  operation,
+  state,
+  root,
+  registry,
+  environment,
+  run = command,
+) {
+  if (!['deploy', 'rollback'].includes(operation))
+    throw new CapacityError('Invalid preflight operation');
+  if (!['staging', 'production'].includes(environment))
+    throw new CapacityError('Invalid deployment environment');
+  const base = prefix(registry);
+  let requiredBytes = deployMinimumBytes;
+  if (operation === 'rollback') {
+    const tag = recordedTag(state, 'previous-image-tag');
+    recordedTag(state, 'current-image-tag');
+    // Migration is profile-only, never used by manual rollback.
+    const refs = ['api', 'web', 'worker'].map(
+      (target) => `${base}${target}:${tag}`,
+    );
+    refs.push('caddy:2.10.2-alpine');
+    if (environment === 'staging') refs.push('postgres:17-alpine');
+    const images = JSON.parse(
+      run('docker', ['image', 'inspect', '--', ...refs]),
+    );
+    if (
+      !Array.isArray(images) ||
+      images.length !== refs.length ||
+      images.some(
+        (image, index) =>
+          !imageId.test(image.Id) ||
+          !Array.isArray(image.RepoTags) ||
+          image.RepoTags.some((ref) => typeof ref !== 'string') ||
+          !image.RepoTags.includes(refs[index]),
+      )
+    )
+      throw new CapacityError(
+        'Cached rollback image set is incomplete or invalid',
+      );
+    requiredBytes = rollbackMinimumBytes;
+  }
   // Grow the budget automatically if the last healthy image set grew.
-  if (existsSync(path.join(state, 'current-image-tag'))) {
+  if (
+    operation === 'deploy' &&
+    existsSync(path.join(state, 'current-image-tag'))
+  ) {
     const tag = recordedTag(state, 'current-image-tag');
     const base = prefix(registry);
     const sizes = JSON.parse(
-      command('docker', [
+      run('docker', [
         'image',
         'inspect',
         '--',
@@ -214,7 +260,7 @@ function preflight(state, root, registry) {
       1024n ** 3n;
     if (estimate > requiredBytes) requiredBytes = estimate;
   }
-  const dockerRoot = command('docker', [
+  const dockerRoot = run('docker', [
     'info',
     '--format',
     '{{.DockerRootDir}}',
@@ -225,12 +271,10 @@ function preflight(state, root, registry) {
     [root, state, dockerRoot, '/var/lib/containerd', '/home/da-runner'].map(
       existingParent,
     ),
-    command,
+    run,
     requiredBytes,
   );
-  console.log(
-    `Deployment capacity preflight passed (required bytes=${requiredBytes}, inodes=${minimumInodes})`,
-  );
+  return requiredBytes;
 }
 
 if (
@@ -238,15 +282,23 @@ if (
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
   try {
-    const [operation, state, root, registry] = process.argv.slice(2);
-    if (!state || !root || !registry)
-      throw new CapacityError('Missing capacity arguments');
-    if (operation === 'preflight') preflight(state, root, registry);
-    else if (operation === 'retain')
+    const [action, ...args] = process.argv.slice(2);
+    if (action === 'preflight' && args.length === 5 && args.every(Boolean)) {
+      const [operation, state, root, registry, environment] = args;
+      const budget = preflight(operation, state, root, registry, environment);
+      console.log(
+        `${operation} capacity preflight passed (required bytes=${budget}, inodes=${minimumInodes})`,
+      );
+    } else if (
+      action === 'retain' &&
+      args.length === 3 &&
+      args.every(Boolean)
+    ) {
+      const [state, , registry] = args;
       console.log(
         `Post-success retention removed ${retainImages(state, registry)} obsolete project tags`,
       );
-    else throw new CapacityError('Invalid capacity operation');
+    } else throw new CapacityError('Invalid capacity arguments or operation');
   } catch (error) {
     // Inventory/CLI stdout, stderr and environment values are never logged.
     console.error(

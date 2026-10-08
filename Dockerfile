@@ -17,6 +17,9 @@ RUN pnpm install --frozen-lockfile \
     && pnpm --filter @digital-autograph/worker deploy --legacy --prod /out/worker
 
 FROM node:24-bookworm-slim AS api
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/api/ ./

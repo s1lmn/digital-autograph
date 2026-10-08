@@ -17,6 +17,7 @@
     "@digital-autograph/domain": "workspace:*",
     "@digital-autograph/integrations": "workspace:*",
     "pg": "^8.16.0",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "@digital-autograph/notifications": "workspace:*"
   }
 }

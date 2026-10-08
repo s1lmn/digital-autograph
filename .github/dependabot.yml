@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Europe/Moscow
+    open-pull-requests-limit: 3
+    assignees:
+      - s1lmn
+    # Keep reviewed history stable; maintainers synchronize from fresh main.
+    rebase-strategy: disabled

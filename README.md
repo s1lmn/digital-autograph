@@ -56,7 +56,7 @@ Use `pnpm test:portable` for the same portable suite on either platform and
 with an explicit platform error on Windows. A green Windows run covers portable
 unit tests; the Linux `checks` job continues to run the full unit suite plus
 integration/build/container checks, and the `windows-unit` job runs the default
-Windows command. The `macos-integration-runner` job verifies the launcher with
+Windows command. The `macos-integration-runner` job verifies the launcher and staging capacity fixtures with
 the default macOS temporary directory and real directory aliases. Fixtures use
 canonical paths so symlink aliases do not cause false cwd failures; paths with
 spaces and ampersands are still exercised. Both Windows jobs, the macOS launcher

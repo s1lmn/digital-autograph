@@ -19,7 +19,7 @@ describe('production-critical test gate', () => {
     expect(macos).toContain('version: 11.19.0');
     expect(macos).toContain('node-version: 24');
     expect(macos).toContain(
-      'run: pnpm test apps/api/scripts/integration-runner.test.ts',
+      'run: pnpm test apps/api/scripts/integration-runner.test.ts apps/api/scripts/deployment-staging.posix.test.ts',
     );
     expect(macos).not.toMatch(/\bTMPDIR\s*[:=]/);
     const launcher = ci

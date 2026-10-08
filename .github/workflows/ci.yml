@@ -18,8 +18,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Check integration launcher with default macOS TMPDIR and directory aliases
-        run: pnpm test apps/api/scripts/integration-runner.test.ts
+      - name: Check launcher and staging fixtures with default macOS TMPDIR and directory aliases
+        run: pnpm test apps/api/scripts/integration-runner.test.ts apps/api/scripts/deployment-staging.posix.test.ts
   windows-integration-runner:
     runs-on: windows-latest
     steps:

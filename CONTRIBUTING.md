@@ -85,7 +85,7 @@ the scopes explicitly. POSIX-only tests must use `*.posix.test.ts`; preserve
 portable assertions in ordinary test files when splitting a mixed fixture.
 Do not classify a failing portable test as POSIX-only to hide a regression.
 Windows unit success does not replace Linux deployment, integration or E2E
-evidence. The `macos-integration-runner` job also verifies the launcher with the
+evidence. The `macos-integration-runner` job also verifies the launcher and staging capacity fixtures with the
 default macOS TMPDIR and directory aliases; it does not certify the full macOS
 application or deployment suite. CI must pass `checks`, `windows-unit`,
 `windows-integration-runner`, `macos-integration-runner`, `e2e` and PR Policy

@@ -112,6 +112,21 @@ function fixture() {
 }
 
 describe('read-only staging disk inventory', () => {
+  it.skipIf(process.platform === 'linux')(
+    'rejects an unsupported host before any executable or filesystem probe',
+    () => {
+      const result = spawnSync(process.execPath, [fileURLToPath(script)], {
+        encoding: 'utf8',
+        env: { ...process.env, PATH: '/nonexistent-da-inventory-path' },
+      });
+      expect(result.status).toBe(2);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toBe(
+        'Inventory requires Linux; no probes were executed.\n',
+      );
+    },
+  );
+
   it('preserves inode/byte, rollback image and mounted volume evidence without secret fields or backup contents', () => {
     const f = fixture();
     try {

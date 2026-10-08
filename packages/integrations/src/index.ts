@@ -11,3 +11,4 @@ export {
   type TelegramOidcConfig,
 } from './telegram';
 export { createYookassaProvider } from './yookassa';
+export { createTelegramNotificationSender } from './telegram-notifications';

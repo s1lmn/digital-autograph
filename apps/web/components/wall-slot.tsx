@@ -27,7 +27,12 @@ export function WallSlot({
   const showMedia = Boolean(mediaPath && failedPath !== mediaPath);
 
   return (
-    <li className={styles.slot} aria-label={`Slot ${number}`}>
+    <li
+      id={`slot-${slot.id}`}
+      tabIndex={-1}
+      className={styles.slot}
+      aria-label={`Slot ${number}`}
+    >
       <span className={styles.slotNumber}>Slot {number}</span>
       {slot.occupied ? (
         <div className={styles.slotContent}>

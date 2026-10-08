@@ -7,10 +7,21 @@ import {
 import { createPrivateS3Storage } from '@digital-autograph/integrations/private-s3';
 import { restrictWorkerImageLoaders } from './image-processing';
 import { runWorker } from './worker';
+import { createPgNotificationRepository } from '@digital-autograph/db';
+import { notificationCycle } from '@digital-autograph/notifications';
+import { createTelegramNotificationSender } from '@digital-autograph/integrations/telegram-notifications';
+import { loadNotificationTelegramWorkerConfig } from '@digital-autograph/config';
 
 async function main(): Promise<void> {
   const config = loadWorkerConfig();
+  const telegramConfig = loadNotificationTelegramWorkerConfig();
   const database = createDatabase(config.DATABASE_URL);
+  const notificationRepository = createPgNotificationRepository(database.pool);
+  const sender = telegramConfig
+    ? createTelegramNotificationSender(
+        telegramConfig.NOTIFICATION_TELEGRAM_BOT_TOKEN,
+      )
+    : undefined;
   const storage = createPrivateS3Storage({
     endpoint: config.S3_ENDPOINT,
     region: config.S3_REGION,
@@ -38,6 +49,12 @@ async function main(): Promise<void> {
         leaseSeconds: config.WORKER_LEASE_SECONDS,
         pollIntervalMs: config.WORKER_POLL_INTERVAL_MS,
         cleanupGraceSeconds: config.UPLOAD_CLEANUP_GRACE_SECONDS,
+        notifications: () =>
+          notificationCycle(
+            notificationRepository,
+            sender,
+            telegramConfig?.WEB_ORIGIN,
+          ),
       },
     );
   } finally {

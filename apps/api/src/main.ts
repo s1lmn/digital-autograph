@@ -2,6 +2,7 @@ import { PaymentService } from '@digital-autograph/payments';
 import { createPgPaymentRepository } from '@digital-autograph/db';
 import { createYookassaProvider } from '@digital-autograph/integrations';
 import { loadApiConfig, loadPaymentConfig } from '@digital-autograph/config';
+import { runtimeFailureRecord } from '@digital-autograph/observability';
 import {
   IdentityService,
   OAuthAttemptService,
@@ -194,7 +195,10 @@ async function main(): Promise<void> {
       await database.close();
       storage.close();
     } catch (error) {
-      app.log.error(error, 'API shutdown failed');
+      app.log.error(
+        { err: error, event: 'API_SHUTDOWN_FAILED' },
+        'API shutdown failed',
+      );
       process.exitCode = 1;
     }
   };
@@ -205,13 +209,16 @@ async function main(): Promise<void> {
   try {
     await app.listen({ host: config.API_HOST, port: config.API_PORT });
   } catch (error) {
-    app.log.error(error, 'API startup failed');
+    app.log.error(
+      { err: error, event: 'API_STARTUP_FAILED' },
+      'API startup failed',
+    );
     await shutdown();
     process.exitCode = 1;
   }
 }
 
 void main().catch((error: unknown) => {
-  console.error(error);
+  console.error(JSON.stringify(runtimeFailureRecord('api', error)));
   process.exitCode = 1;
 });

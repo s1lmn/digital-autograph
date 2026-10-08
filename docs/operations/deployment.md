@@ -86,7 +86,9 @@ immutable-image Container Registry:
   Docker Buildx is used on the hosted builder, not required by the VM deploy path. Configure the VM's attached service
   account for `yc`, Lockbox, and the registry credential helper. The runner
   user must be trusted with Docker/root access and non-interactive `sudo`;
-  configure the helper/token profile for the same root context.
+  configure the helper/token profile for the same root context. Provision the
+  reviewed [runner authorization contract](runner-authorization.md) before
+  enabling Release; never grant an unrestricted sudo shell to the runner.
 - Domain A records for `WEB_DOMAIN` and `API_DOMAIN` pointed at that
   environment's VM. Caddy obtains and renews HTTPS certificates; ensure ports
   80/443 and outbound ACME traffic are available.
@@ -277,6 +279,11 @@ independent of a developer checkout.
 2. The dedicated VM job checks out/verifies the exact published (or manually
    validated) SHA and creates its deployment record. It has only GitHub contents
    read/deployments write, no publishing OIDC permission or publisher token.
+   Before installing any release config, the job verifies the administrator-owned
+   preflight entrypoint/helper match the checkout and calls the fixed entrypoint
+   with `sudo -n` and the explicit operation. Missing/stale provisioning or denied
+   authorization fails closed before writes. All subsequent sudo calls also use
+   `-n`; their exact commands are versioned in `deploy/runner.sudoers`.
    The VM obtains the API and worker payloads from its environment's Lockbox,
    writes owner-only runtime environment files, pulls the SHA-tagged images,
    and uses one environment-selected Compose helper for pull, startup, migration,
@@ -298,7 +305,11 @@ independent of a developer checkout.
    operation `deploy`, that exact image SHA, and `APPROVED` confirmation.
 5. To roll back an application, dispatch the same workflow with the target
    environment and operation `rollback`. The VM redeploys its recorded
-   previous image without rerunning migrations. A failed health check during a
+   previous image without rerunning migrations or making a DB backup. Its
+   operation-specific guard checks cached api/web/worker and infrastructure
+   images with 256 MiB write reserve and 200,000 free inodes. It reuses existing
+   runtime env files, skips cloud secret fetch/registry login/pull, and uses
+   Compose `--pull never`; migration is not a required cached rollback target. A failed health check during a
    new deploy also attempts to restore the previously healthy application
    image. Compose startup errors cannot count as a successful release; smoke
    checks also verify API/web/worker containers use the requested image tags.
@@ -358,6 +369,11 @@ restore over the active staging DB automatically. Production continues its
 managed backup/PITR procedure.
 
 ## Host swap and GitHub-hosted builds
+
+Release now fails before deployment mutations when byte/inode capacity is
+insufficient and selectively retains old local project images only after a
+healthy release. See [staging capacity and recovery](staging-capacity.md) for
+thresholds, protected rollback/data state and EGO-142 incident evidence.
 
 Configure swap on the VM host, never inside containers. On a newly provisioned
 Ubuntu VM with no existing `/swapfile`, an operator can configure 4 GB:

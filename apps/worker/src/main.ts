@@ -1,4 +1,5 @@
 import { loadWorkerConfig } from '@digital-autograph/config';
+import { runtimeFailureRecord } from '@digital-autograph/observability';
 import {
   createDatabase,
   createPgAutographProcessingRepository,
@@ -63,6 +64,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  console.error(error);
+  console.error(JSON.stringify(runtimeFailureRecord('worker', error)));
   process.exitCode = 1;
 });

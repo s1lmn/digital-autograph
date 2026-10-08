@@ -199,10 +199,14 @@ async function callback(
   query.set('state', override.state ?? started.state);
   if (code !== null) query.set('code', code);
   if (override.error) query.set('error', override.error);
-  return app.inject({
+  const response = await app.inject({
     url: `/auth/telegram/callback?${query}`,
     headers: { cookie: override.cookies ?? started.cookies },
   });
+  expect(response.headers['referrer-policy']).toBe('no-referrer');
+  expect(response.headers['cache-control']).toBe('no-store');
+  expect(response.headers['x-frame-options']).toBe('DENY');
+  return response;
 }
 
 function sessionCookie(

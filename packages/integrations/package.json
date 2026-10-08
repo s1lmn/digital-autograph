@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./private-s3": "./src/private-s3.ts"
+    "./private-s3": "./src/private-s3.ts",
+    "./telegram-notifications": "./src/telegram-notifications.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

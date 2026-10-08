@@ -170,8 +170,9 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
           )}
           <p>
             You can turn off all channels or individual events. Telegram also
-            accepts /stop. No more than one event of each type per Wall in 10
-            minutes and 20 per channel per hour.
+            accepts /stop. Ordinary notices of the same type are limited to one
+            per Wall in 10 minutes. Financial notices are not combined by that
+            short window. All channels remain limited to 20 notices per hour.
           </p>
           <h2>Inbox</h2>
           {items.length === 0 ? (

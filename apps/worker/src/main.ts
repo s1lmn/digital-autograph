@@ -9,7 +9,7 @@ import { restrictWorkerImageLoaders } from './image-processing';
 import { runWorker } from './worker';
 import { createPgNotificationRepository } from '@digital-autograph/db';
 import { notificationCycle } from '@digital-autograph/notifications';
-import { createTelegramNotificationSender } from '@digital-autograph/integrations';
+import { createTelegramNotificationSender } from '@digital-autograph/integrations/telegram-notifications';
 import { loadNotificationTelegramWorkerConfig } from '@digital-autograph/config';
 
 async function main(): Promise<void> {

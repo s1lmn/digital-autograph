@@ -1,8 +1,9 @@
 # EGO-94: notifications, deep links and sharing
 
-Base: merged EGO-93/EGO-100 on main `7e4c50d`. EGO-95 remains outside scope.
+Base: merged EGO-93/EGO-100 and the current security/diagnostics baseline.
+EGO-95 remains outside scope.
 The owner explicitly reselected EGO-94 after the dependency review. EGO-82 is
-still Backlog: cards use a provisional text template/current application styles,
+still awaiting final acceptance: cards use a provisional text template/current application styles,
 not an approved final brand kit. No EGO-82 deliverable is claimed.
 
 ## Authority and event capture

@@ -6,6 +6,34 @@ on:
     branches: [main]
 
 jobs:
+  windows-integration-runner:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check integration launcher and database guard on Windows
+        run: pnpm test apps/api/scripts/integration-runner.test.ts
+  windows-unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # On Windows the default command runs every portable unit test.
+      - run: pnpm test
   checks:
     runs-on: ubuntu-latest
     services:
@@ -55,6 +83,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Audit all workspace dependencies for High/Critical advisories
+        run: pnpm security:audit
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
@@ -82,6 +112,8 @@ jobs:
           YC_REGISTRY_ID: ci-placeholder
           IMAGE_TAG: ci-placeholder
         run: docker buildx bake --file deploy/docker-bake.hcl release
+      - name: Verify runner sudo authorization without TTY
+        run: pnpm test:runner-authorization
       - name: Run migration image twice without TTY on clean PostgreSQL
         run: pnpm test:migration-image
   e2e:

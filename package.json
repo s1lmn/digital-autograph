@@ -13,8 +13,10 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck && tsc -p tsconfig.tests.json && tsc -p tsconfig.e2e.json",
     "test": "vitest run --config vitest.config.ts",
+    "security:audit": "pnpm audit --audit-level high",
     "test:integration": "dotenv -e .env -- node scripts/run-integration.mjs",
     "test:build-smoke": "dotenv -e .env -- node scripts/smoke-built-api.mjs",
+    "test:runner-authorization": "node scripts/smoke-runner-authorization.mjs",
     "test:migration-image": "node scripts/smoke-migration-image.mjs",
     "e2e:setup": "tsx apps/api/scripts/e2e-setup.ts",
     "test:e2e": "playwright test",
@@ -25,7 +27,9 @@
     "infra:e2e:down": "docker compose --profile e2e rm --stop --force postgres-e2e minio-e2e",
     "infra:test:up": "docker compose --profile test up -d postgres-test",
     "infra:down": "docker compose --profile test down",
-    "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts"
+    "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts",
+    "test:portable": "vitest run --config vitest.portable.config.ts",
+    "test:posix": "vitest run --config vitest.posix.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

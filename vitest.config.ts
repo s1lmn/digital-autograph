@@ -1,13 +1,17 @@
 import { defineConfig } from 'vitest/config';
+import {
+  posixTestInclude,
+  unitTestExclude,
+  unitTestInclude,
+} from './vitest.unit';
 
 export default defineConfig({
   esbuild: { jsx: 'automatic' },
   test: {
-    include: [
-      'apps/**/*.test.ts',
-      'apps/**/*.test.tsx',
-      'packages/**/*.test.ts',
+    include: unitTestInclude,
+    exclude: [
+      ...unitTestExclude,
+      ...(process.platform === 'win32' ? posixTestInclude : []),
     ],
-    exclude: ['**/node_modules/**', '**/dist/**'],
   },
 });

@@ -95,7 +95,11 @@ describe.skipIf(
         report.probes.containers.data.find(
           (container: { id: string }) => container.id === containerId,
         ),
-      ).toMatchObject({ status: 'created', service: 'caddy', volumes: [name] });
+      ).toMatchObject({
+        status: 'created',
+        service: 'caddy',
+        volumes: expect.arrayContaining([name]),
+      });
       expect(JSON.stringify(report)).not.toContain(canary);
       expect(docker(['inspect', '--format', '{{.State.Status}}', name])).toBe(
         'created',
@@ -108,7 +112,7 @@ describe.skipIf(
         );
       }
     } finally {
-      spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
+      spawnSync('docker', ['rm', '-fv', name], { encoding: 'utf8' });
       spawnSync('docker', ['volume', 'rm', name], { encoding: 'utf8' });
       rmSync(directory, { recursive: true, force: true });
     }

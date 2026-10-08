@@ -314,14 +314,22 @@ jobs:
           else
             release_ref=$IMAGE_SHA
           fi
-          sudo install -d -m 755 /opt/digital-autograph
-          sudo install -m 644 deploy/compose.yaml deploy/compose.staging.yaml deploy/Caddyfile \
+          # The administrator provisions this root-owned read-only entrypoint.
+          # Fail closed on drift before writes or privileged execution.
+          if ! cmp --silent deploy/runner-preflight.sh /usr/local/sbin/digital-autograph-preflight 2>/dev/null ||
+             ! cmp --silent deploy/host-capacity.mjs /usr/local/lib/digital-autograph/host-capacity.mjs 2>/dev/null; then
+            echo "Runner preflight provisioning is missing or differs; administrator refresh required" >&2
+            exit 1
+          fi
+          sudo -n /usr/local/sbin/digital-autograph-preflight "$RELEASE_OPERATION"
+          sudo -n install -d -m 755 /opt/digital-autograph
+          sudo -n install -m 644 deploy/compose.yaml deploy/compose.staging.yaml deploy/Caddyfile \
             /opt/digital-autograph/
-          sudo install -m 755 deploy/deploy-on-vm.sh \
+          sudo -n install -m 755 deploy/deploy-on-vm.sh \
             /opt/digital-autograph/
-          sudo install -m 644 deploy/render-lockbox-env.mjs \
+          sudo -n install -m 644 deploy/render-lockbox-env.mjs deploy/host-capacity.mjs \
             /opt/digital-autograph/
-          sudo /opt/digital-autograph/deploy-on-vm.sh "$release_ref"
+          sudo -n /opt/digital-autograph/deploy-on-vm.sh "$release_ref"
 
       - name: Mark deployment successful
         if: always() && steps.deployment.outputs.id != '' && steps.deploy.outcome == 'success'

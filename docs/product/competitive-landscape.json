@@ -1,0 +1,658 @@
+{
+  "issue": "EGO-68",
+  "checkedAt": "2026-10-05",
+  "timezone": "Europe/Moscow",
+  "baseline": "45a0e600563a8825bd0bebbae0a97fdf8d57d106",
+  "method": "Desk research: official public pages only; no purchases, private account access or interviews. Audience, scarcity, retention, sharing and creator incentive are analytical interpretations of documented mechanics, not measured outcomes. Moderation unknown means not established by the cited sources, not absent. Feature presence does not prove demand, retention or Russian payment availability. Historical examples are not claims of current operations.",
+  "sources": [
+    {
+      "id": "S01",
+      "title": "Reddit: Looking Back at r/Place (2017)",
+      "url": "https://redditinc.com/news/place-part-two",
+      "supports": "Historical collaborative canvas, five-minute tile limit, community coordination."
+    },
+    {
+      "id": "S02",
+      "title": "Reddit: Bringing Back r/place (2022)",
+      "url": "https://redditinc.com/news/april-fools-on-reddit-is-no-joke-bringing-back-r-place",
+      "supports": "Public viewing, logged-in placement, event duration; historical mechanism, not an active 2026 event."
+    },
+    {
+      "id": "S03",
+      "title": "The Million Dollar Homepage",
+      "url": "https://milliondollarhomepage.com/",
+      "supports": "Historical advertising canvas: one million pixels, one dollar per pixel. FAQ unavailable; onboarding and moderation not established."
+    },
+    {
+      "id": "S04",
+      "title": "Streamily: VTuber autograph catalog",
+      "url": "https://streamily.com/vtuber",
+      "supports": "Personalized autograph offerings including digital signature and livestream formats; catalog is not fulfillment evidence."
+    },
+    {
+      "id": "S05",
+      "title": "Streamily: Warren Kole official autograph product",
+      "url": "https://streamily.com/warrenkole/44578",
+      "supports": "Current catalog offers livestream and off-camera signing plus optional personalization instructions. Product availability is not verified fulfillment or demand evidence. The former sign-types FAQ returned HTTP 404 during review on 2026-10-08; its wider fulfillment claims are not treated as current evidence."
+    },
+    {
+      "id": "S06",
+      "title": "Streamily: personalization",
+      "url": "https://help.streamily.com/article/12-how-does-order-personalization-work",
+      "supports": "Special instructions; name and personalization at talent discretion."
+    },
+    {
+      "id": "S07",
+      "title": "Streamily: livestream priority",
+      "url": "https://help.streamily.com/article/17-my-order-wasnt-signed-on-livestream",
+      "supports": "Only VIP/priority orders guaranteed on camera; upgrades during a livestream are not guaranteed on that stream."
+    },
+    {
+      "id": "S08",
+      "title": "vShout: help center",
+      "url": "https://vshout.com/apps/help-center",
+      "supports": "Signed item plus video, mail-in process, personalization notes, restrictions on commercial promotion."
+    },
+    {
+      "id": "S09",
+      "title": "Cameo: how it works",
+      "url": "https://www.cameo.com/",
+      "supports": "Choose talent, submit request, receive personalized video and share it; purchase rather than exclusive public space."
+    },
+    {
+      "id": "S10",
+      "title": "Cameo: community guidelines",
+      "url": "https://legal.cameo.com/communityguidelines",
+      "supports": "Automated screening and human review, reporting, appeals, impersonation/shilling and investment-promotion constraints."
+    },
+    {
+      "id": "S11",
+      "title": "Patreon: joining as a paid member",
+      "url": "https://support.patreon.com/hc/en-us/articles/203913709-Joining-a-creator-s-Patreon-as-a-paid-member",
+      "supports": "Paid tiers, account joining, monthly/annual billing, community guidelines."
+    },
+    {
+      "id": "S12",
+      "title": "Patreon: get started",
+      "url": "https://support.patreon.com/hc/en-us/articles/16263061573645-Get-started-on-Patreon",
+      "supports": "Free/public posts, paid memberships, one-time media, creator page and community."
+    },
+    {
+      "id": "S13",
+      "title": "Boosty: official product page",
+      "url": "https://boosty.to/",
+      "supports": "Creator blog, subscription levels, donations, paid messages and posting; promotional income claims are not empirical evidence."
+    },
+    {
+      "id": "S14",
+      "title": "Fourthwall: memberships",
+      "url": "https://fourthwall.com/memberships",
+      "supports": "Branded site, recurring tiers/perks, posts, comments, Discord roles and creator analytics."
+    },
+    {
+      "id": "S15",
+      "title": "Fourthwall: free accounts and tiers",
+      "url": "https://help.fourthwall.com/memberships/getting-started-with-memberships/free-membership-accounts-and-tiers-for-your-supporters",
+      "supports": "Anonymous public feed, free account signup, upgrade to paid tiers and return to free account on cancellation."
+    },
+    {
+      "id": "S16",
+      "title": "Ko-fi: pricing and features",
+      "url": "https://ko-fi.com/pricing",
+      "supports": "Tips, memberships, commissions, shop, goals, sharing widgets and direct PayPal/Stripe payment model. Rates vary by plan; not used as our unit economics."
+    },
+    {
+      "id": "S17",
+      "title": "Buy Me a Coffee: how it works",
+      "url": "https://help.buymeacoffee.com/en/articles/10182730-what-is-buy-me-a-coffee-and-how-does-it-work",
+      "supports": "One-time support, membership perks, optional member limits, public supporter-count controls, creator setup."
+    },
+    {
+      "id": "S18",
+      "title": "Buy Me a Coffee: memberships guide",
+      "url": "https://help.buymeacoffee.com/en/articles/9969554-a-simple-guide-to-get-started-with-memberships",
+      "supports": "Creator chooses tiers, price and perks; recurring support model."
+    },
+    {
+      "id": "S19",
+      "title": "DonationAlerts: broadcaster terms",
+      "url": "https://www.donationalerts.com/terms-of-service/broadcasters",
+      "supports": "Broadcaster/user support platform and contractual service boundary; no equivalence to our seller model inferred."
+    },
+    {
+      "id": "S20",
+      "title": "DonationAlerts: statistics and information",
+      "url": "https://www.donationalerts.com/help/statistics-and-info",
+      "supports": "Stream messages, deletion, dashboard, payout history and manually added messages."
+    },
+    {
+      "id": "S21",
+      "title": "DonationAlerts: message did not reach streamer",
+      "url": "https://www.donationalerts.com/help/payment-did-not-show-up",
+      "supports": "Delivery support and dependency on streamer text-to-speech settings; payment does not guarantee spoken response."
+    },
+    {
+      "id": "S22",
+      "title": "Twitch: cheering with Bits",
+      "url": "https://help.twitch.tv/s/article/guide-to-cheering-with-bits?language=en_US",
+      "supports": "Purchased virtual goods, chat recognition, badges, leaderboards, message moderation and bans."
+    },
+    {
+      "id": "S23",
+      "title": "Twitch: supporting with subscriptions",
+      "url": "https://help.twitch.tv/s/article/support-subscriptions?language=en_US",
+      "supports": "Subscription perks, emotes, channel badges, limited founder badges; no retention uplift established."
+    },
+    {
+      "id": "S24",
+      "title": "Twitch: subscription badges and resub messages",
+      "url": "https://help.twitch.tv/s/article/Changes-to-Subscription-Badges-and-Resub-Messages?language=en_US",
+      "supports": "Tenure, optional streak sharing, privacy settings, current/expired subscription management."
+    },
+    {
+      "id": "S25",
+      "title": "YouTube: Super Chat eligibility and policies",
+      "url": "https://support.google.com/youtube/answer/9277801?hl=en",
+      "supports": "Highlighted paid live messages, eligibility and geographic restrictions, community guidelines; not a donation tool."
+    },
+    {
+      "id": "S26",
+      "title": "YouTube: buying Super Chat",
+      "url": "https://support.google.com/youtube/answer/9178363?hl=en",
+      "supports": "Viewer purchase and chat moderation; no guaranteed creator response."
+    },
+    {
+      "id": "S27",
+      "title": "YouTube: channel membership levels and perks",
+      "url": "https://support.google.com/youtube/answer/7544492?hl=en",
+      "supports": "Recurring levels, badges/emotes/content, prepublication perk review and creator delivery responsibility."
+    },
+    {
+      "id": "S28",
+      "title": "YouTube: join/change/cancel membership",
+      "url": "https://support.google.com/youtube/answer/6304294/become-a-channel-member-on-youtube-computer?co=GENIE.Platform%3DDesktop&hl=en-GB",
+      "supports": "Adult joining, regional/payment eligibility, recurring payment and visibility of membership status."
+    },
+    {
+      "id": "S29",
+      "title": "Discord: server subscriptions for members",
+      "url": "https://support.discord.com/hc/en-us/articles/4415163187607-Server-Subscriptions-for-Members",
+      "supports": "Monthly paid server tiers, perks controlled by admins, joining/cancellation and billing support."
+    },
+    {
+      "id": "S30",
+      "title": "Discord: monetization policy",
+      "url": "https://support.discord.com/hc/en-us/articles/10575066024983-Monetization-Policy",
+      "supports": "Monetization eligibility, restrictions and account security requirements."
+    },
+    {
+      "id": "S31",
+      "title": "Telegram: paid media (2024)",
+      "url": "https://telegram.org/blog/mini-app-bar-paid-media-and-more",
+      "supports": "Paid photo/video unlock in Stars, creator Toncoin/ad rewards; historical launch announcement, not a current fee quotation."
+    },
+    {
+      "id": "S32",
+      "title": "Telegram: collectible gifts (2025)",
+      "url": "https://telegram.org/blog/collectible-gifts-and-more",
+      "supports": "Upgrade in Stars, random traits/rarity, transfer and NFT marketplace auctions; historical announcement."
+    },
+    {
+      "id": "S33",
+      "title": "NBA Top Shot 101",
+      "url": "https://about.nbatopshot.com/nba-top-shot-101",
+      "supports": "Account, packs, challenges and buying/selling licensed Moments."
+    },
+    {
+      "id": "S34",
+      "title": "NBA Top Shot: pack marketplace",
+      "url": "https://support.nbatopshot.com/hc/en-us/articles/21194143434003-Pack-Marketplace",
+      "supports": "Pack listings, supply information, resale, collection and checkout."
+    },
+    {
+      "id": "S35",
+      "title": "NBA Top Shot: code of conduct",
+      "url": "https://blog.nbatopshot.com/posts/trade-code-conduct",
+      "supports": "Anti-bot and marketplace abuse constraints; policy presence is not proof of effective enforcement."
+    },
+    {
+      "id": "S36",
+      "title": "Weverse: new guidelines",
+      "url": "https://weverse.io/notice/2949",
+      "supports": "Official artist fan communities, LIVE, posts/comments/chat, behavior rules and restrictions."
+    },
+    {
+      "id": "S37",
+      "title": "Weverse: membership terms update (2026)",
+      "url": "https://weverse.io/notice/36924",
+      "supports": "Artist-specific paid fanclub memberships and renewal/refund terms; perks vary by artist."
+    },
+    {
+      "id": "S38",
+      "title": "Weverse: SB19 content guidelines",
+      "url": "https://weverse.io/sb19/notice/34386",
+      "supports": "Example of artist-specific external sharing limits; not generalized to every Weverse community."
+    }
+  ],
+  "analogs": [
+    {
+      "id": "A01",
+      "name": "Reddit r/place",
+      "category": "Совместный холст",
+      "relation": "Близкая механика, другая экономика",
+      "strongSubstitute": true,
+      "audience": "Фандомы и сообщества Reddit, коллективная идентичность.",
+      "coreLoop": "Поставить пиксель → ждать cooldown → согласовать рисунок → восстановить перекрашенное.",
+      "monetization": "В описанной механике placement бесплатен; плата за takeover не подтверждена.",
+      "scarcity": "Ограниченные координаты, время действия и частота хода.",
+      "retention": "Интерпретация: защита общего рисунка в рамках события; межсобытийное удержание неизвестно.",
+      "sharing": "Интерпретация: итоговый рисунок и истории команд как повод для распространения.",
+      "creatorIncentive": "Интерпретация: внимание к сообществу; revenue share автору не установлен.",
+      "moderation": "Не установлена по S01–S02; нельзя считать публичную войну пикселей безопасной UGC-моделью.",
+      "onboarding": "Просмотр без входа; размещение после входа в Reddit.",
+      "mvpRecommendation": "C01/C03: Drop вокруг сообщества; бесплатный вход, понятный cooldown. Бесплатное перекрашивание не доказывает спрос на оплату.",
+      "sources": ["S01", "S02"]
+    },
+    {
+      "id": "A02",
+      "name": "The Million Dollar Homepage",
+      "category": "Совместный холст",
+      "relation": "Исторический пространственный аналог",
+      "strongSubstitute": false,
+      "audience": "Интерпретация: рекламодатели и посетители интернет-события 2005 года.",
+      "coreLoop": "Купить рекламные пиксели → занять часть общей страницы.",
+      "monetization": "Историческая продажа пикселей; не тариф для нашего MVP.",
+      "scarcity": "Конечная площадь в один миллион пикселей.",
+      "retention": "Не установлено; источник не доказывает повторные покупки или жизнеспособность клонов.",
+      "sharing": "Интерпретация: ссылка на необычную страницу и её рекламные блоки.",
+      "creatorIncentive": "Продажа площади владельцем сайта; relationship с creator отсутствует в установленной механике.",
+      "moderation": "Не установлена; FAQ недоступен при проверке.",
+      "onboarding": "Исторический процесс покупки не установлен; открытая страница доступна.",
+      "mvpRecommendation": "C01/C06: не продавать пустую площадь как ценность; проверять социальный повод, а не копировать историческую цену.",
+      "sources": ["S03"]
+    },
+    {
+      "id": "A03",
+      "name": "Streamily",
+      "category": "Автограф и внимание",
+      "relation": "Смежный autograph-сервис",
+      "strongSubstitute": true,
+      "audience": "Фанаты актёров, персонажей и VTubers.",
+      "coreLoop": "Выбрать талант/формат → заказать персонализацию → получить подписанный предмет или цифровой формат.",
+      "monetization": "Продажа autograph; приоритетные форматы.",
+      "scarcity": "Время таланта и события; только отдельные приоритетные заказы гарантированы на камеру.",
+      "retention": "Интерпретация: новые signing events и коллекция; измеренное удержание неизвестно.",
+      "sharing": "Интерпретация: запись события/покупка; права на распространение каждого формата не установлены.",
+      "creatorIncentive": "Продажа персонализации; точная доля таланта неизвестна.",
+      "moderation": "Персонализация на усмотрение таланта; полный UGC-процесс не установлен.",
+      "onboarding": "Каталог → формат → инструкции к заказу → checkout; физическим заказам нужна доставка.",
+      "mvpRecommendation": "C02/C05: явно назвать автограф пользователя; не обещать подпись или личный ответ автора без отдельной услуги.",
+      "sources": ["S04", "S05", "S06", "S07"]
+    },
+    {
+      "id": "A04",
+      "name": "vShout",
+      "category": "Автограф и внимание",
+      "relation": "Автограф с видеоподтверждением",
+      "strongSubstitute": false,
+      "audience": "Коллекционеры и фанаты знаменитостей.",
+      "coreLoop": "Заказ/отправка предмета → подпись с персонализацией → предмет и video shoutout.",
+      "monetization": "Оплата autograph-заказа с fulfillment.",
+      "scarcity": "Окно signing и время знаменитости.",
+      "retention": "Интерпретация: коллекционирование и следующие signing events; показатели неизвестны.",
+      "sharing": "Видео доставляется по email; публичная лицензия на sharing не установлена.",
+      "creatorIncentive": "Оплата времени и доступа к фанатам; коммерческий split неизвестен.",
+      "moderation": "Запросы запрещено использовать для продвижения компаний/товаров; другие процедуры неизвестны.",
+      "onboarding": "Заказ, примечания и адрес/предмет для отправки; это больше действий, чем web claim.",
+      "mvpRecommendation": "C02: объяснить, кто подписывает и что именно приобретается. Логистику и экономику signing не переносить.",
+      "sources": ["S08"]
+    },
+    {
+      "id": "A05",
+      "name": "Cameo",
+      "category": "Автограф и внимание",
+      "relation": "Сильный заменитель личного внимания",
+      "strongSubstitute": true,
+      "audience": "Фанаты и покупатели персональных поздравлений.",
+      "coreLoop": "Выбрать знаменитость → написать запрос → получить персональное видео → показать получателю.",
+      "monetization": "Разовая покупка персонального видео.",
+      "scarcity": "Время и доступность таланта, без взаимного вытеснения покупателей.",
+      "retention": "Интерпретация: новые поводы/подарки; не защита позиции.",
+      "sharing": "Пересылка готового видео предусмотрена продуктовым сценарием.",
+      "creatorIncentive": "Монетизация личного времени; split не используется в нашей экономике.",
+      "moderation": "Правила, screening, human review, reports и appeals.",
+      "onboarding": "Каталог → имя/повод/запрос → покупка → ожидание результата.",
+      "mvpRecommendation": "C02/C05: проверить, достаточно ли видимости без личного ответа; не продавать implied endorsement.",
+      "sources": ["S09", "S10"]
+    },
+    {
+      "id": "A06",
+      "name": "Patreon",
+      "category": "Подписка и сообщество",
+      "relation": "Сильный заменитель поддержки/принадлежности",
+      "strongSubstitute": true,
+      "audience": "Постоянные поклонники creators.",
+      "coreLoop": "Присоединиться бесплатно/платно → получать контент и общаться → продлевать.",
+      "monetization": "Подписки и разовые media purchases.",
+      "scarcity": "Доступ к tier/perks, не конечная площадь Wall.",
+      "retention": "Интерпретация: последовательная ценность контента/общения; автопродление не равно лояльности.",
+      "sharing": "Публичные посты и приглашение по ссылке; закрытый контент не считать свободным для копирования.",
+      "creatorIncentive": "Регулярные поступления при обязанности создавать ценность.",
+      "moderation": "Community Guidelines; правила для взаимодействий и контента.",
+      "onboarding": "Страница creator → аккаунт → tier → оплата; возможен бесплатный вход.",
+      "mvpRecommendation": "C01/C05: Wall должен давать иной мотив, чем подписка. Проверить нагрузку Drop на автора.",
+      "sources": ["S11", "S12"]
+    },
+    {
+      "id": "A07",
+      "name": "Boosty",
+      "category": "Подписка и сообщество",
+      "relation": "Локально релевантный заменитель",
+      "strongSubstitute": true,
+      "audience": "Creators и их аудитории, в том числе русскоязычные.",
+      "coreLoop": "Автор публикует → фанат подписывается/покупает доступ/поддерживает → получает следующий материал.",
+      "monetization": "Подписки, донаты, платные сообщения и контент.",
+      "scarcity": "Paywall доступа, а не эксклюзивность одного места.",
+      "retention": "Интерпретация: новые публикации и повторяющаяся подписка.",
+      "sharing": "Продвижение блога собственной аудитории; публичная републикация paid media не установлена.",
+      "creatorIncentive": "Монетизация существующего контента и контакта с аудиторией.",
+      "moderation": "Не установлена по продуктовой странице; рекламные обещания не описывают safety-процесс.",
+      "onboarding": "Автор создаёт блог и уровни; фанат приходит на страницу и выбирает поддержку/доступ.",
+      "mvpRecommendation": "C05/C06: в интервью сравнить Drop с привычной подпиской на того же автора; платежную доступность проверять отдельно.",
+      "sources": ["S13"]
+    },
+    {
+      "id": "A08",
+      "name": "Fourthwall",
+      "category": "Подписка и сообщество",
+      "relation": "Заменитель creator-owned площадки",
+      "strongSubstitute": false,
+      "audience": "Creators с собственной брендированной страницей и сообществом.",
+      "coreLoop": "Публичная лента → free account → платный tier → контент/perks.",
+      "monetization": "Подписки, связанные магазины и цифровые продукты.",
+      "scarcity": "Доступ к perks/tier; ограниченный Slot не установлен.",
+      "retention": "Интерпретация: новые посты/роли; после отмены paid account становится free.",
+      "sharing": "Брендированный сайт и публичная лента.",
+      "creatorIncentive": "Бренд, recurring income и subscriber analytics.",
+      "moderation": "Полный процесс не установлен по S14–S15.",
+      "onboarding": "Посетитель смотрит без аккаунта; автор настраивает сайт/tier и приглашает фанатов.",
+      "mvpRecommendation": "C01/C07: публично показывать смысл до регистрации; не строить магазин и memberships в scope Wall MVP.",
+      "sources": ["S14", "S15"]
+    },
+    {
+      "id": "A09",
+      "name": "Ko-fi",
+      "category": "Донаты и поддержка",
+      "relation": "Сильный заменитель простого спасибо",
+      "strongSubstitute": true,
+      "audience": "Аудитории creators, желающие разово поддержать.",
+      "coreLoop": "Открыть ссылку автора → отправить tip либо выбрать membership/commission.",
+      "monetization": "Tips, tiers, commissions и shop; средства идут в PayPal/Stripe автора.",
+      "scarcity": "У tips конечного места нет; custom commission ограничена временем автора.",
+      "retention": "Интерпретация: привязанность к автору, новые работы и perks.",
+      "sharing": "Widgets, embeds и shareable links.",
+      "creatorIncentive": "Поддержка без необходимости продавать соперничество за позицию.",
+      "moderation": "Детали не установлены по S16; считать процессом проекта нельзя.",
+      "onboarding": "Creator page и подключение PayPal/Stripe; fan выбирает способ поддержки.",
+      "mvpRecommendation": "C05/C06: takeover должен давать понятную добавочную ценность к tip. Прямые выплаты автору не копировать.",
+      "sources": ["S16"]
+    },
+    {
+      "id": "A10",
+      "name": "Buy Me a Coffee",
+      "category": "Донаты и поддержка",
+      "relation": "Заменитель благодарности и membership",
+      "strongSubstitute": true,
+      "audience": "Читатели, зрители и поклонники creators.",
+      "coreLoop": "Разово поблагодарить или вступить в tier → получить thank-you/perks → вернуться.",
+      "monetization": "Разовая поддержка, memberships, shop.",
+      "scarcity": "Tips не ограничены; creator может ограничить число members.",
+      "retention": "Интерпретация: поддержка и новые perks; фактический churn неизвестен.",
+      "sharing": "Creator link и опциональная публичная видимость supporter count.",
+      "creatorIncentive": "Простой вход в поддержку с возможностью recurring offerings.",
+      "moderation": "Не установлена по S17–S18.",
+      "onboarding": "Автор создаёт страницу/tier; посетитель выбирает разовую поддержку или perks.",
+      "mvpRecommendation": "C04/C07: признание и публичность добровольны; не превращать все подписи в денежный leaderboard.",
+      "sources": ["S17", "S18"]
+    },
+    {
+      "id": "A11",
+      "name": "DonationAlerts",
+      "category": "Донаты и поддержка",
+      "relation": "Сильный заменитель live-внимания",
+      "strongSubstitute": true,
+      "audience": "Стримеры и зрители, поддерживающие эфир.",
+      "coreLoop": "Отправить поддержку с сообщением → сообщение появляется в эфире при нужных настройках.",
+      "monetization": "Donation/support flow; собственные комиссии/вывод, не наш seller contract.",
+      "scarcity": "Интерпретация: эфирное внимание; конечных эксклюзивных координат нет.",
+      "retention": "Интерпретация: повторные эфиры и благодарность стримера.",
+      "sharing": "Интерпретация: эпизод эфира/реакция; встроенное внешнее sharing не установлено.",
+      "creatorIncentive": "Поддержка прямо в существующем live-формате.",
+      "moderation": "Сообщения можно удалять; ручное добавление не является платёжным доказательством.",
+      "onboarding": "Автор настраивает сообщения/вывод; зритель отправляет сообщение через страницу поддержки.",
+      "mvpRecommendation": "C05/C08: проверять увиденное участие, а не только successful payment; сообщения не меняют финансовую истину.",
+      "sources": ["S19", "S20", "S21"]
+    },
+    {
+      "id": "A12",
+      "name": "Twitch Bits / Cheers",
+      "category": "Платная видимость",
+      "relation": "Сильный заменитель публичного признания",
+      "strongSubstitute": true,
+      "audience": "Зрители монетизируемых Twitch-каналов.",
+      "coreLoop": "Купить Bits → Cheer в чате → получить визуальное признание/badge.",
+      "monetization": "Покупная виртуальная единица с поддержкой streamer.",
+      "scarcity": "Видимость в быстро меняющемся чате; leaderboard/badge, не ownership координаты.",
+      "retention": "Интерпретация: следующие эфиры и накопление признания.",
+      "sharing": "Признание внутри чата/канала; внешняя пересылка не установлена.",
+      "creatorIncentive": "Доход при продолжении эфира; тарифы не переносим.",
+      "moderation": "AutoMod, banned words, удаление paid messages, bans/timeouts.",
+      "onboarding": "Twitch account → купить Bits → поддерживаемый канал → Cheer.",
+      "mvpRecommendation": "C04/C08: paid UGC подчиняется правилам. Не добавлять внутреннюю валюту ради подражания.",
+      "sources": ["S22"]
+    },
+    {
+      "id": "A13",
+      "name": "Twitch subscriptions",
+      "category": "Подписка и сообщество",
+      "relation": "Заменитель статуса давнего фаната",
+      "strongSubstitute": true,
+      "audience": "Постоянные зрители Twitch creators.",
+      "coreLoop": "Подписаться → использовать emotes/badge/perks → продлить или вернуться позднее.",
+      "monetization": "Платная подписка и gifts; не одноразовый takeover.",
+      "scarcity": "Обычно perks; founder badges ограничены для первых subscribers.",
+      "retention": "Интерпретация: контент и tenure; прошлый tenure сохраняется, измерений эффекта нет.",
+      "sharing": "Emotes на Twitch; badge в канале, optional resub/streak message.",
+      "creatorIncentive": "Поддержка регулярных эфиров без обязательного вытеснения фанатов.",
+      "moderation": "Модераторы видят часть subscriber данных; полный процесс по этим статьям не установлен.",
+      "onboarding": "Выбрать поддерживаемый канал и tier; управление текущими/истёкшими subscriptions.",
+      "mvpRecommendation": "C03/C04: history сохраняет прошлое участие; возвращение должно быть добровольным, без обнуления заслуг.",
+      "sources": ["S23", "S24"]
+    },
+    {
+      "id": "A14",
+      "name": "YouTube Super Chat / Super Stickers",
+      "category": "Платная видимость",
+      "relation": "Сильный заменитель заметности в событии",
+      "strongSubstitute": true,
+      "audience": "Зрители eligible live streams и Premieres.",
+      "coreLoop": "Купить выделение сообщения/стикер → быть заметнее в текущем чате.",
+      "monetization": "Разовая покупка выделения, не donation и не гарантированный ответ.",
+      "scarcity": "Внимание live-чата; не эксклюзивный постоянный Slot.",
+      "retention": "Интерпретация: следующие эфиры; повторная оплата не следует из одной покупки.",
+      "sharing": "Виден live-чат; внешний share-механизм по S25–S26 не установлен.",
+      "creatorIncentive": "Монетизация уже собранной аудитории.",
+      "moderation": "Community Guidelines, удаление сообщений и eligibility restrictions.",
+      "onboarding": "Аккаунт, eligible канал/видео/страна и оплата в чате.",
+      "mvpRecommendation": "C01/C02: видимость имеет смысл в событии; назвать предмет услуги без обещания ответа. Географию не переносить.",
+      "sources": ["S25", "S26"]
+    },
+    {
+      "id": "A15",
+      "name": "YouTube channel memberships",
+      "category": "Подписка и сообщество",
+      "relation": "Заменитель участия и perks",
+      "strongSubstitute": false,
+      "audience": "Совершеннолетние постоянные viewers eligible каналов.",
+      "coreLoop": "Join tier → получить badge/emotes/content → ежемесячно продлевать.",
+      "monetization": "Recurring membership.",
+      "scarcity": "Закрытые perks, не ограниченная площадь.",
+      "retention": "Интерпретация: текущая ценность perks и контента.",
+      "sharing": "Member status может быть публичен; распространение private content не обещается.",
+      "creatorIncentive": "Регулярная поддержка за исполняемые perks.",
+      "moderation": "Перки проверяются до публикации, должны отвечать membership policies.",
+      "onboarding": "Вход → eligible канал → Join → tier/payment; возрастные/географические условия.",
+      "mvpRecommendation": "C02/C05: чётко описать исполняемую услугу и её срок; memberships не добавлять к takeover в MVP.",
+      "sources": ["S27", "S28"]
+    },
+    {
+      "id": "A16",
+      "name": "Discord Server Subscriptions",
+      "category": "Подписка и сообщество",
+      "relation": "Заменитель платного места в сообществе",
+      "strongSubstitute": false,
+      "audience": "Участники creator/community servers.",
+      "coreLoop": "Войти на сервер → выбрать tier → получить доступ/perks → общаться и продлевать.",
+      "monetization": "Ежемесячный tier сервера.",
+      "scarcity": "Доступ и роли; дефицит одного видимого места не установлен.",
+      "retention": "Интерпретация: общение, текущие perks и привычка.",
+      "sharing": "Интерпретация: приглашение на сервер; paid content не считать открытым.",
+      "creatorIncentive": "Поддержка community, ответственность admin за обещанные perks.",
+      "moderation": "Monetization Policy и требования безопасности; фактическая эффективность неизвестна.",
+      "onboarding": "Discord account, сервер, tier/payment; creators должны соответствовать monetization requirements.",
+      "mvpRecommendation": "C01/C05: аудитория и community нужны раньше платежа; не строить второй Discord для pilot.",
+      "sources": ["S29", "S30"]
+    },
+    {
+      "id": "A17",
+      "name": "Telegram paid media",
+      "category": "Доступ и коллекция",
+      "relation": "Заменитель простой покупки у автора",
+      "strongSubstitute": false,
+      "audience": "Подписчики creator-каналов Telegram.",
+      "coreLoop": "Увидеть закрытое фото/видео → потратить Stars → открыть контент.",
+      "monetization": "Оплата в Stars; автору доступны Toncoin/ad rewards в описанном объявлении.",
+      "scarcity": "Paywall доступа; ограниченное число покупателей не установлено.",
+      "retention": "Интерпретация: новые публикации в привычном канале.",
+      "sharing": "Разблокировка не доказывает право републикации.",
+      "creatorIncentive": "Монетизация публикации с каналом распространения.",
+      "moderation": "Не установлена по S31; нельзя наследовать safety от наличия Stars.",
+      "onboarding": "Telegram account/channel → Stars → unlock.",
+      "mvpRecommendation": "C06/C07: учитывать стоимость ухода из привычного канала; Stars/crypto не переносить в RUB web-first MVP.",
+      "sources": ["S31"]
+    },
+    {
+      "id": "A18",
+      "name": "Telegram collectible gifts",
+      "category": "Доступ и коллекция",
+      "relation": "Заменитель статуса/цифрового подарка",
+      "strongSubstitute": false,
+      "audience": "Пользователи, покупающие подарки и коллекционные варианты.",
+      "coreLoop": "Подарить → upgrade за Stars → получить traits → хранить/передать/торговать.",
+      "monetization": "Подарки и upgrade; торговля/NFT-вывод относятся к иной модели.",
+      "scarcity": "Разная редкость traits/номера, не временная видимость подписи.",
+      "retention": "Интерпретация: коллекция и gift occasions; влияние speculation не измерено.",
+      "sharing": "Передача/пересылка подарка другому пользователю.",
+      "creatorIncentive": "Прямое вознаграждение нашим creators из gift-механики не установлено.",
+      "moderation": "Gift-market abuse controls не установлены по S32.",
+      "onboarding": "Telegram → gift → Stars upgrade; external NFT route требует другого контура.",
+      "mvpRecommendation": "C06: сохранять воспоминание об участии без random rarity, resale, crypto и инвестиционных обещаний.",
+      "sources": ["S32"]
+    },
+    {
+      "id": "A19",
+      "name": "NBA Top Shot",
+      "category": "Доступ и коллекция",
+      "relation": "Коллекционный, не ownership-аналог",
+      "strongSubstitute": false,
+      "audience": "NBA collectors и фанаты спортивных Moments.",
+      "coreLoop": "Аккаунт → pack/Moment → коллекция/challenge → новые drops или marketplace resale.",
+      "monetization": "Продажа packs и marketplace; лицензированный collectible/NFT-контур.",
+      "scarcity": "Supply pack/Moment и коллекционный контекст, не cooldown оплаченного Slot.",
+      "retention": "Интерпретация: наборы/challenges/drops; trade-volume не доказательство fan engagement.",
+      "sharing": "Интерпретация: демонстрация коллекции; measured referral неизвестен.",
+      "creatorIncentive": "Лицензированная спортивная экосистема, не заработок независимого автора Wall.",
+      "moderation": "Code of conduct, антибот-ограничения pack drops/marketplace.",
+      "onboarding": "Top Shot account, pack/marketplace checkout и collection.",
+      "mvpRecommendation": "C06/C08: использовать понятный артефакт события, не переносить pack randomness, вторичный рынок и ликвидность.",
+      "sources": ["S33", "S34", "S35"]
+    },
+    {
+      "id": "A20",
+      "name": "Weverse",
+      "category": "Подписка и сообщество",
+      "relation": "Заменитель официальной принадлежности",
+      "strongSubstitute": false,
+      "audience": "Музыкальные фандомы и поклонники официальных artist communities.",
+      "coreLoop": "Вступить в community → читать/писать/смотреть LIVE → выбрать artist membership.",
+      "monetization": "Artist-specific memberships; не единая цена за публичный Slot.",
+      "scarcity": "Membership benefits зависят от артиста; конечная площадь не установлена.",
+      "retention": "Интерпретация: artist updates и общение с фандомом.",
+      "sharing": "Есть artist-specific ограничения: SB19 разрешает внешнее sharing только открытого контента.",
+      "creatorIncentive": "Официальный fan relationship; contracts/revenue split независимого creator неизвестны.",
+      "moderation": "Правила профилей/постов/LIVE/comments, ограничения за нарушения.",
+      "onboarding": "Weverse account → community; отдельно membership по условиям конкретного артиста.",
+      "mvpRecommendation": "C01/C05/C08: подтвердить, что Wall запущен самим автором; sharing не отменяет контентные права.",
+      "sources": ["S36", "S37", "S38"]
+    }
+  ],
+  "differentiators": [
+    {
+      "id": "D01",
+      "dimension": "Объект покупки",
+      "comparison": "Cameo/Streamily: личный результат от знаменитости; донаты: поддержка; memberships: доступ.",
+      "project": "Временное публичное размещение собственной подписи пользователя на Wall creator.",
+      "status": "Принятый core loop, спрос не подтверждён.",
+      "implication": "C02/H02: до оплаты назвать подписанта, срок видимости и отсутствие обещанного ответа."
+    },
+    {
+      "id": "D02",
+      "dimension": "Дефицит",
+      "comparison": "r/place: бесплатные координаты/ходы; collectibles: экземпляры; memberships: perks.",
+      "project": "Ограниченные Slots, takeover конкретного Placement после гарантированной видимости.",
+      "status": "Механика реализована; коммерческие параметры EGO-65/66 открыты.",
+      "implication": "C03/H04: проверить удовольствие от смены места и бюджет, не считать искусственный дефицит ценностью."
+    },
+    {
+      "id": "D03",
+      "dimension": "Первое участие",
+      "comparison": "r/place бесплатно; tip сразу требует денег; memberships иногда имеют free tier.",
+      "project": "Один успешный free claim на User/Wall, затем участие остаётся в истории.",
+      "status": "Правило main: free claim одноразовый даже после displacement.",
+      "implication": "C07/H03: показывать Wall без регистрации; проверить путь до готового moderated autograph."
+    },
+    {
+      "id": "D04",
+      "dimension": "Память после вытеснения",
+      "comparison": "Live messages исчезают из внимания; collectible остаётся; subscription хранит tenure.",
+      "project": "История Placement сохраняет факт/время участия; не обещает бессрочную публичность изображения.",
+      "status": "Persisted history есть; public Wall зависит от lifecycle, privacy и moderation.",
+      "implication": "C03/H04: явно различить текущее место и запись в истории; уважать archived/private state."
+    },
+    {
+      "id": "D05",
+      "dimension": "Нагрузка автора",
+      "comparison": "Cameo/signing требуют каждого ответа; memberships требуют регулярных perks.",
+      "project": "Автор задаёт и продвигает Drop, без обязательства отвечать каждому покупателю.",
+      "status": "Гипотеза о меньшей нагрузке, не доказанное преимущество.",
+      "implication": "C05/H06: измерить подготовку, promotion, moderation/support и желание повторить."
+    },
+    {
+      "id": "D06",
+      "dimension": "Финансовый контур",
+      "comparison": "Ko-fi: direct-to-creator; Telegram: Stars/crypto; Top Shot: resale.",
+      "project": "RUB web-first, платформа как прямой продавец в целевой модели, отдельное creator вознаграждение; без resale/NFT.",
+      "status": "MVP-границы приняты; legal/KYB/receipts/refunds/payout gates не закрыты.",
+      "implication": "C06/H08: считать все расходы; launch требует EGO-72/77/99/101/102/103/104 и readiness review."
+    },
+    {
+      "id": "D07",
+      "dimension": "Модерация и приватность",
+      "comparison": "Платные чаты модерируются; public identity имеет самостоятельную цену.",
+      "project": "Оригинал private; только подтверждённый и moderated derivative; публичный alias/share требует отдельной оценки/согласия.",
+      "status": "Private originals, approval chain и EGO-94 sharing merged; реальный Telegram/social-client smoke ещё не подтверждён.",
+      "implication": "C08/H07: не обходить safety ради conversion; не обещать опубликованный оригинал."
+    }
+  ],
+  "reviewedAt": "2026-10-08"
+}

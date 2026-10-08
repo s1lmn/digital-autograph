@@ -3,5 +3,5 @@
 export const frontendCapabilities = {
   paidTakeover: false,
   creatorDashboard: false,
-  notifications: false,
+  notifications: true,
 } as const;

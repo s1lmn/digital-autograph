@@ -15,6 +15,7 @@ import { ReadyAutographPicker } from './ready-autograph-picker';
 import { WallPlacementHistory } from './placement-history';
 import { WallSlot } from './wall-slot';
 import { WallCountdown } from './wall-countdown';
+import { ShareControls } from './share-controls';
 import styles from '../app/walls/[id]/page.module.css';
 
 type AuthState = 'checking' | 'anonymous' | 'authenticated' | 'unavailable';
@@ -418,6 +419,11 @@ export function PublicWallScreen({
         wallId={wall.id}
         apiOrigin={apiOrigin}
         refreshVersion={historyVersion}
+      />
+      <ShareControls
+        apiOrigin={apiOrigin}
+        wallId={wall.id}
+        slots={wall.slots}
       />
     </main>
   );

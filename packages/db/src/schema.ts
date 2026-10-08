@@ -24,6 +24,8 @@ import {
   uniqueIndex,
   uuid,
   varchar,
+  boolean,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 const id = () => uuid('id').defaultRandom().primaryKey();
@@ -31,6 +33,130 @@ const createdAt = () =>
   timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () =>
   timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
+
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id),
+    web: boolean('web').notNull().default(true),
+    telegram: boolean('telegram').notNull().default(false),
+    mutedKinds: jsonb('muted_kinds').$type<string[]>().notNull().default([]),
+    chatId: text('chat_id'),
+    consentAt: timestamp('consent_at', { withTimezone: true }),
+    linkHash: text('link_hash'),
+    linkExpiresAt: timestamp('link_expires_at', { withTimezone: true }),
+    linkedAt: timestamp('linked_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('notification_chat_uidx').on(t.chatId),
+    check(
+      'notification_telegram_consent',
+      sql`NOT ${t.telegram} OR (${t.chatId} IS NOT NULL AND ${t.consentAt} IS NOT NULL)`,
+    ),
+  ],
+);
+export const notificationSubscriptions = pgTable(
+  'notification_subscriptions',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.wallId] })],
+);
+export const notificationEvents = pgTable(
+  'notification_events',
+  {
+    id: id(),
+    sourceKey: text('source_key').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    kind: text('kind').notNull(),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id),
+    slotId: uuid('slot_id').references(() => slots.id),
+    detail: text('detail'),
+    createdAt: createdAt(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('notification_event_source_uidx').on(t.sourceKey),
+    index('notification_event_pending_idx').on(t.processedAt, t.createdAt),
+  ],
+);
+export const notificationDeliveries = pgTable(
+  'notification_deliveries',
+  {
+    id: id(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => notificationEvents.id),
+    channel: text('channel').notNull(),
+    state: text('state').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    availableAt: timestamp('available_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    leaseToken: uuid('lease_token'),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    attemptAt: timestamp('attempt_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('notification_delivery_identity').on(t.eventId, t.channel),
+    index('notification_delivery_queue').on(t.state, t.availableAt),
+    check(
+      'notification_delivery_state',
+      sql`${t.channel} IN ('web','telegram') AND ${t.state} IN ('queued','sending','sent','retry','uncertain','failed','suppressed') AND ${t.attempts} BETWEEN 0 AND 5`,
+    ),
+  ],
+);
+export const shareLinks = pgTable(
+  'share_links',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    wallId: uuid('wall_id')
+      .notNull()
+      .references(() => walls.id),
+    slotId: uuid('slot_id').references(() => slots.id),
+    placementId: uuid('placement_id').references(() => placements.id),
+    publicAlias: varchar('public_alias', { length: 40 }),
+    event: text('event').notNull(),
+    createdAt: createdAt(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [index('share_links_user_time_idx').on(t.userId, t.createdAt)],
+);
+export const shareInteractions = pgTable(
+  'share_interactions',
+  {
+    shareId: uuid('share_id')
+      .notNull()
+      .references(() => shareLinks.id),
+    kind: text('kind').notNull(),
+    dedupeKey: uuid('dedupe_key').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.shareId, t.kind, t.dedupeKey] }),
+    check(
+      'share_interaction_kind',
+      sql`${t.kind} IN ('share_clicked','referral_arrived')`,
+    ),
+  ],
+);
 
 export const userStatus = pgEnum('user_status', userStatuses);
 export const wallStatus = pgEnum('wall_status', wallStatuses);

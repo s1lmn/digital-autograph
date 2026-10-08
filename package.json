@@ -6,6 +6,8 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "brand:export": "node scripts/brand-kit.mjs",
+    "brand:check": "node scripts/brand-kit.mjs --check",
     "dev": "dotenv -e .env -- concurrently -k -n api,worker,web \"pnpm --filter @digital-autograph/api dev\" \"pnpm --filter @digital-autograph/worker dev\" \"pnpm --filter @digital-autograph/web dev\"",
     "build": "dotenv -e .env -- pnpm -r --if-present build",
     "lint": "eslint .",

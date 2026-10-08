@@ -10,14 +10,14 @@
 
 .editor p {
   margin: 0;
-  color: #53606d;
+  color: var(--brand-color-muted);
   line-height: 1.45;
 }
 
 .editor .photoHint {
   margin-top: 0.35rem;
   font-size: 0.875rem;
-  color: #53606d;
+  color: var(--brand-color-muted);
   line-height: 1.4;
 }
 
@@ -39,10 +39,10 @@
 
 .actions button,
 .controls button {
-  border: 1px solid #7b8793;
+  border: 1px solid var(--brand-color-control);
   border-radius: 0.5rem;
-  background: white;
-  color: #17202a;
+  background: var(--brand-color-surface);
+  color: var(--brand-color-ink);
   padding: 0.65rem 0.9rem;
   font: inherit;
   cursor: pointer;
@@ -64,9 +64,9 @@
   width: 100%;
   max-width: 45rem;
   aspect-ratio: 2 / 1;
-  border: 1px solid #7b8793;
+  border: 1px solid var(--brand-color-control);
   border-radius: 0.5rem;
-  background: white;
+  background: var(--brand-color-mediaPaper);
   touch-action: none;
   cursor: grab;
 }
@@ -92,9 +92,9 @@
   gap: 0.75rem;
   max-width: 45rem;
   padding: 1rem;
-  border: 1px solid #d9dfe5;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.6rem;
-  background: white;
+  background: var(--brand-color-surface);
 }
 
 .preview img {
@@ -102,11 +102,11 @@
   width: 100%;
   max-height: 20rem;
   object-fit: contain;
-  background: #f6f7f8;
+  background: var(--brand-color-mediaPaper);
 }
 
 .error {
-  color: #9a3027 !important;
+  color: var(--brand-color-danger) !important;
   font-weight: 600;
 }
 

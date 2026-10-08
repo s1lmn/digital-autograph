@@ -5,7 +5,7 @@
 .modeTabs {
   display: flex;
   gap: 0.5rem;
-  border-bottom: 1px solid #d9dfe5;
+  border-bottom: 1px solid var(--brand-color-border);
   padding-bottom: 0.5rem;
 }
 .tab,
@@ -18,15 +18,15 @@
   cursor: pointer;
 }
 .tab {
-  color: #53606d;
+  color: var(--brand-color-muted);
   background: transparent;
 }
 .tab:hover:not(:disabled) {
-  background: #f2f4f6;
+  background: var(--brand-color-surface);
 }
 .activeTab {
-  color: white;
-  background: #17202a;
+  color: var(--brand-color-onPrimary);
+  background: var(--brand-color-primary);
 }
 .tab:disabled,
 .activeTab:disabled {
@@ -37,8 +37,8 @@
   justify-self: start;
   border: 0;
   border-radius: 0.6rem;
-  background: #17202a;
-  color: white;
+  background: var(--brand-color-primary);
+  color: var(--brand-color-onPrimary);
   padding: 0.85rem 1.2rem;
   font: inherit;
   font-weight: 650;
@@ -52,7 +52,7 @@
   display: grid;
   gap: 0.6rem;
   padding: 0.9rem;
-  background: #eaf3fc;
+  background: var(--brand-color-primarySoft);
   border-radius: 0.5rem;
   margin: 0;
 }
@@ -64,8 +64,8 @@
 }
 .error {
   padding: 1rem;
-  background: #fff1ef;
-  border: 1px solid #eab3aa;
+  background: var(--brand-color-dangerSoft);
+  border: 1px solid var(--brand-color-danger);
   border-radius: 0.5rem;
 }
 .error p {
@@ -77,10 +77,10 @@
   flex-wrap: wrap;
 }
 .actions button {
-  border: 1px solid #7b8793;
+  border: 1px solid var(--brand-color-control);
   border-radius: 0.5rem;
-  background: white;
-  color: #17202a;
+  background: var(--brand-color-surface);
+  color: var(--brand-color-ink);
   padding: 0.6rem 0.9rem;
   cursor: pointer;
 }
@@ -90,9 +90,9 @@
 }
 .preview {
   padding: 1.25rem;
-  border: 1px solid #d9dfe5;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.75rem;
-  background: white;
+  background: var(--brand-color-surface);
 }
 .preview h2 {
   margin-top: 0;
@@ -104,21 +104,21 @@
   max-height: 24rem;
   object-fit: contain;
   margin: 1.25rem 0;
-  background: #f6f7f8;
-  border: 1px solid #d9dfe5;
+  background: var(--brand-color-mediaPaper);
+  border: 1px solid var(--brand-color-border);
 }
 .approval {
-  border: 1px solid #d9dfe5;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.6rem;
   padding: 1rem;
   margin: 1rem 0;
-  background: #fff8ed;
+  background: var(--brand-color-secondarySoft);
 }
 .approval p {
   line-height: 1.45;
 }
 .approval [role='alert'] {
-  color: #9a3027;
+  color: var(--brand-color-danger);
   font-weight: 600;
 }
 .preview .status h3 {

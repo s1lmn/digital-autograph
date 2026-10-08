@@ -6,7 +6,7 @@
 }
 .queue {
   padding: 1rem;
-  border: 1px solid #ccd5df;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.6rem;
 }
 .queue ul {
@@ -23,7 +23,7 @@
 }
 .review {
   padding: 1rem;
-  border: 1px solid #ccd5df;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.6rem;
   min-width: 0;
 }
@@ -32,7 +32,7 @@
   max-width: 100%;
   max-height: 22rem;
   margin: 1rem 0;
-  background: #f7f8f9;
+  background: var(--brand-color-mediaPaper);
 }
 .actions {
   display: flex;
@@ -45,7 +45,7 @@
   padding: 0.6rem;
 }
 .error {
-  color: #a32525;
+  color: var(--brand-color-danger);
 }
 @media (max-width: 45rem) {
   .layout {

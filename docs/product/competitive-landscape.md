@@ -31,10 +31,11 @@ price ladder. Значимость автора, реальная аудитор
   unit economics, launch gates, интервью, общий Risk Register и позиционирование
   ещё не приняты. Этот документ передаёт им input, не закрывает их.
 - GitHub после fetch: `origin/main` =
-  `7e4c50d8c88ff95146e9d0ab8bdb408d421311e6`; EGO-97/98/100 уже merged.
+  `45a0e600563a8825bd0bebbae0a97fdf8d57d106`; EGO-97/98/100/94 уже merged.
   Sandbox payment orchestration есть; live readiness не следует из статуса Done.
-  [PR #28 / EGO-94](https://github.com/s1lmn/digital-autograph/pull/28) открыт,
-  поэтому notification/share-функции из него не считаются merged-возможностями.
+  [PR #28 / EGO-94](https://github.com/s1lmn/digital-autograph/pull/28) merged.
+  Notification/share-функции реализованы; реальный Telegram/social-client smoke
+  и результаты retention/virality пока не подтверждены.
 - В чате «Исправить PR #27 по EGO-94» EGO-68 ранее проверена как независимая
   исследовательская задача. Правила workflow подтверждены в CONTRIBUTING и
   Linear-документе «Парная разработка — инструкция разработчику и reviewer».
@@ -66,7 +67,7 @@ Telegram paid media vs gifts). Это **20 аналогов механизмов
 при повторном review 8 октября S05 заменён текущей официальной product page:
 прежний sign-types FAQ возвращает HTTP 404. Более широкие claims о fulfillment
 из недоступного FAQ не считаются актуально подтверждёнными.
-исторические launch-посты Reddit/Telegram и Million Dollar Homepage не
+Исторические launch-посты Reddit/Telegram и Million Dollar Homepage не
 представляются как описание действующего события 2026 года. Search snippets и
 официальные страницы описывают заявленные функции, а не проверенный fulfillment.
 Тарифы, GMV, conversion, retention, revenue share, эффективность модерации и

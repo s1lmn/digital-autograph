@@ -2,7 +2,7 @@
   "issue": "EGO-68",
   "checkedAt": "2026-10-05",
   "timezone": "Europe/Moscow",
-  "baseline": "7e4c50d8c88ff95146e9d0ab8bdb408d421311e6",
+  "baseline": "45a0e600563a8825bd0bebbae0a97fdf8d57d106",
   "method": "Desk research: official public pages only; no purchases, private account access or interviews. Audience, scarcity, retention, sharing and creator incentive are analytical interpretations of documented mechanics, not measured outcomes. Moderation unknown means not established by the cited sources, not absent. Feature presence does not prove demand, retention or Russian payment availability. Historical examples are not claims of current operations.",
   "sources": [
     {
@@ -650,7 +650,7 @@
       "dimension": "Модерация и приватность",
       "comparison": "Платные чаты модерируются; public identity имеет самостоятельную цену.",
       "project": "Оригинал private; только подтверждённый и moderated derivative; публичный alias/share требует отдельной оценки/согласия.",
-      "status": "Private originals и approval chain есть; EGO-94 sharing ещё в открытом PR #28.",
+      "status": "Private originals, approval chain и EGO-94 sharing merged; реальный Telegram/social-client smoke ещё не подтверждён.",
       "implication": "C08/H07: не обходить safety ради conversion; не обещать опубликованный оригинал."
     }
   ],

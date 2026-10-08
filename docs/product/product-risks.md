@@ -91,7 +91,7 @@ risk score. Все evidence references — [матрица A/S/D](competitive-la
   cleaned image, public placement, alias и third-party share/cache.
 - Evidence: A10 опциональная публичность, A13 privacy, A20 sharing rights; D07.
 - Mitigation C08: private originals всегда; отдельные понятные publication/share
-  решения, отказ не лишает базового участия; H07. Share PR #28 пока не merged.
+  решения, отказ не лишает базового участия; H07. Share PR #28 merged; реальный Telegram/social-client smoke ещё не подтверждён.
 - Proposed owner: privacy/UX; EGO-74/75/94/110.
 - Close criterion: H07 и privacy review; copied social cache нельзя обещать удалить.
 

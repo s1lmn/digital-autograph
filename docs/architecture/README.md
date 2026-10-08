@@ -1,5 +1,8 @@
 # Architecture boundaries
 
+[Notifications, deep links and sharing](notifications-sharing.md) describes the
+durable outbox, preferences, optional Telegram channel, and public text cards.
+
 [Baseline HTTP response security](http-security.md) documents application
 headers, their compatibility boundaries and remaining pre-launch hardening.
 

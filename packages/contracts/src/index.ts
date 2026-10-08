@@ -8,3 +8,4 @@ export * from './autograph';
 export * from './moderation';
 export * from './pricing';
 export * from './reservation';
+export * from './notifications';

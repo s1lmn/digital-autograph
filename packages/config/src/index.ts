@@ -375,3 +375,58 @@ export function loadPaymentConfig(environment = process.env) {
     throw new Error('Invalid payment configuration (values redacted)');
   }
 }
+
+function loadNotificationTelegram<
+  T extends { APP_ENV: string; WEB_ORIGIN: string },
+>(schema: z.ZodType<T>, keys: string[], environment: NodeJS.ProcessEnv) {
+  if (keys.every((key) => environment[key] === undefined)) return null;
+  try {
+    const result = schema.parse(environment);
+    if (
+      ['staging', 'production'].includes(result.APP_ENV) &&
+      !result.WEB_ORIGIN.startsWith('https://')
+    )
+      throw new Error();
+    return result;
+  } catch {
+    throw new Error(
+      'Invalid notification Telegram configuration (values redacted)',
+    );
+  }
+}
+
+export function loadNotificationTelegramApiConfig(environment = process.env) {
+  return loadNotificationTelegram(
+    z.object({
+      APP_ENV: appEnvironment,
+      WEB_ORIGIN: exactOrigin,
+      NOTIFICATION_TELEGRAM_BOT_USERNAME: z
+        .string()
+        .regex(/^[A-Za-z0-9_]{5,32}$/),
+      NOTIFICATION_TELEGRAM_WEBHOOK_SECRET: z
+        .string()
+        .regex(/^[A-Za-z0-9_-]{32,256}$/),
+    }),
+    [
+      'NOTIFICATION_TELEGRAM_BOT_USERNAME',
+      'NOTIFICATION_TELEGRAM_WEBHOOK_SECRET',
+    ],
+    environment,
+  );
+}
+
+export function loadNotificationTelegramWorkerConfig(
+  environment = process.env,
+) {
+  return loadNotificationTelegram(
+    z.object({
+      APP_ENV: appEnvironment,
+      WEB_ORIGIN: exactOrigin,
+      NOTIFICATION_TELEGRAM_BOT_TOKEN: z
+        .string()
+        .regex(/^[0-9]+:[A-Za-z0-9_-]{20,}$/),
+    }),
+    ['NOTIFICATION_TELEGRAM_BOT_TOKEN'],
+    environment,
+  );
+}

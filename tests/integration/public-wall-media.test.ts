@@ -247,6 +247,8 @@ describe('public Placement media and ready selection with PostgreSQL and MinIO',
     expect(response.headers['content-disposition']).toBe('inline');
     expect(response.headers['x-content-type-options']).toBe('nosniff');
     expect(response.headers['cache-control']).toBe('public, max-age=60');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+    expect(response.headers['referrer-policy']).toBe('no-referrer');
     expect(response.rawPayload).toEqual(autograph.cleaned);
     expect(response.rawPayload).not.toEqual(autograph.original);
     const browserImage = await app.inject({

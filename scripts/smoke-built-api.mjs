@@ -82,3 +82,5 @@ try {
     });
   });
 }
+
+await import('./smoke-safe-errors.mjs');

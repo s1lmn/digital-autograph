@@ -4,15 +4,36 @@ import { describe, expect, it } from 'vitest';
 const ci = readFileSync(
   new URL('../../../.github/workflows/ci.yml', import.meta.url),
   'utf8',
-);
+).replaceAll('\r\n', '\n');
 const release = readFileSync(
   new URL('../../../.github/workflows/release.yml', import.meta.url),
   'utf8',
-);
+).replaceAll('\r\n', '\n');
 
 describe('production-critical test gate', () => {
+  it('runs Windows portable units alongside the complete Linux unit suite', () => {
+    const launcher = ci
+      .split('\n  windows-integration-runner:\n')[1]
+      ?.split('\n  windows-unit:\n')[0];
+    expect(launcher).toContain('runs-on: windows-latest');
+    expect(launcher).toContain(
+      'run: pnpm test apps/api/scripts/integration-runner.test.ts',
+    );
+    const windows = ci
+      .split('\n  windows-unit:\n')[1]
+      ?.split('\n  checks:\n')[0];
+    const linux = ci.split('\n  checks:\n')[1]?.split('\n  e2e:\n')[0];
+    expect(windows).toContain('runs-on: windows-latest');
+    expect(windows).toContain('version: 11.19.0');
+    expect(windows).toContain('node-version: 24');
+    expect(windows).toMatch(/^\s+- run: pnpm test$/m);
+    expect(linux).toContain('runs-on: ubuntu-latest');
+    expect(linux).toMatch(/^\s+- run: pnpm test$/m);
+    expect(linux).not.toContain('run: pnpm test:portable');
+  });
   it('keeps every critical suite in mandatory CI jobs without failure masking', () => {
     for (const command of [
+      'pnpm security:audit',
       'pnpm format:check',
       'pnpm lint',
       'pnpm typecheck',

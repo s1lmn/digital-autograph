@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -25,10 +26,38 @@ describe.skipIf(
     const directory = mkdtempSync(
       path.join(os.tmpdir(), 'da-inventory-linux-'),
     );
+    const name = `da-inventory-${randomUUID()}`;
+    const canary = 'synthetic-private-bind-and-env-canary';
+    const docker = (args: string[]) => {
+      const result = spawnSync('docker', args, {
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      expect(result.status, result.stderr).toBe(0);
+      return result.stdout.trim();
+    };
     try {
       mkdirSync(path.join(directory, 'staging-backups'));
       writeFileSync(path.join(directory, 'current-image-tag'), 'a'.repeat(40));
       writeFileSync(path.join(directory, 'previous-image-tag'), 'b'.repeat(40));
+      writeFileSync(path.join(directory, canary), canary);
+      docker(['volume', 'create', name]);
+      // Match staging Caddy: bind mounts lack Name, named volumes have it.
+      // The container stays stopped; no application/database is started.
+      const containerId = docker([
+        'create',
+        '--name',
+        name,
+        '--label',
+        'com.docker.compose.service=caddy',
+        '-e',
+        `PRIVATE_FIXTURE=${canary}`,
+        '--mount',
+        `type=bind,source=${path.join(directory, canary)},target=/run/secrets/fixture,readonly`,
+        '--mount',
+        `type=volume,source=${name},target=/fixture-volume`,
+        'postgres:17-alpine',
+      ]);
       const report = collectInventory({
         stateRoot: directory,
         runnerRoot: directory,
@@ -62,6 +91,15 @@ describe.skipIf(
         Number(report.probes.runnerUsage.data.allocatedBytes),
       ).toBeGreaterThan(0);
       expect(report.probes.containers.data.length).toBeGreaterThan(0);
+      expect(
+        report.probes.containers.data.find(
+          (container: { id: string }) => container.id === containerId,
+        ),
+      ).toMatchObject({ status: 'created', service: 'caddy', volumes: [name] });
+      expect(JSON.stringify(report)).not.toContain(canary);
+      expect(docker(['inspect', '--format', '{{.State.Status}}', name])).toBe(
+        'created',
+      );
       for (const container of report.probes.containers.data) {
         expect(Object.keys(container).sort()).toEqual(
           ['id', 'imageId', 'status', 'volumes']
@@ -70,6 +108,8 @@ describe.skipIf(
         );
       }
     } finally {
+      spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
+      spawnSync('docker', ['volume', 'rm', name], { encoding: 'utf8' });
       rmSync(directory, { recursive: true, force: true });
     }
   });

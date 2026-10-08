@@ -4,7 +4,10 @@ EGO-142 records a failed release at main SHA
 `de5b81ee44160a303151989770f1bb022bc502fa`: the runner could not write its
 diagnostic log (`No space left on device`). Successful HTTPS readiness alone
 does not prove that release finished or that the intended images are running.
-The integration queue remains stopped until recovery is verified.
+That incident required the integration queue to stop until recovery was verified.
+Recovery was accepted in EGO-142 on 2026-10-08 after exact-main CI, staging
+Release and measured VM acceptance; the initial failure below remains useful
+for future diagnosis, not a claim that the queue is currently stopped.
 
 ## Collect evidence after operator access is restored
 
@@ -30,7 +33,8 @@ Each command has a 30-second timeout and 1 MiB output cap. GNU `df` and `du`
 provide byte/inode availability and allocated directory size; directory scans
 stay on their filesystem and may consume disk I/O. Docker inspection uses a
 field projection and reports IDs, status, recognized service names and named
-volumes. No container logs, environment variables, command arguments, bind-mount
+volumes. Bind mounts do not have a Docker `Name` field; their paths are never
+requested, and only named-volume names enter the report. No container logs, environment variables, command arguments, bind-mount
 paths, secret configuration or backup/object contents are returned. Command
 errors are deliberately suppressed; unavailable probes need operator follow-up.
 Backup entries report filename/size/time only: a `.dump` suffix proves neither
@@ -56,8 +60,8 @@ existing deployment/restore procedure; this tool does not query PostgreSQL.
 
 Use collected evidence to propose a narrowly scoped, separately reviewed
 cleanup/retention change with explicit targets, retained rollback/backup set and
-capacity requirements. No universal retention or free-space threshold has been
-approved. Do not run blanket Docker/image/volume prune or remove database files,
+capacity requirements. The accepted staging-specific preflight and retention bounds are documented in
+[staging capacity](staging-capacity.md); they are not universal host thresholds. Do not run blanket Docker/image/volume prune or remove database files,
 objects or backup dumps. This PR adds no cleanup, preflight, service restart or
 release rerun.
 
@@ -68,5 +72,9 @@ the normal workflow. Verify the exact trusted main SHA, actual running API/web/
 worker image references, database/migration/backup state, readiness and successful
 GitHub deployment status. Document measured capacity, the identified consumer,
 the retained rollback/backup evidence and the chosen prevention guard in EGO-142.
-Keep EGO-142 and the integration queue open/stopped until that evidence exists.
-EGO-143 delivers the diagnosis tool; its green CI does not close the incident.
+For a new incident, keep its recovery task and the integration queue open/stopped
+until that evidence exists. EGO-143 delivers the diagnosis tool; its green CI
+does not by itself certify recovery. A root directory scan on the staging HDD
+can exceed the bounded 30-second probe budget: it stays `unavailable`, with exit
+1, rather than presenting partial totals as complete evidence. Other successful
+probes remain usable; a full root scan requires separate operator investigation.

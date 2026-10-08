@@ -228,7 +228,7 @@ export function collectInventory({
     if (!ids.length) return [];
     // Project only these fields in Docker itself, never retrieve Env, Args or arbitrary labels.
     const format =
-      '{"id":{{json .Id}},"imageId":{{json .Image}},"status":{{json .State.Status}},"service":{{json (index .Config.Labels "com.docker.compose.service")}},"volumes":[{{range $i, $m := .Mounts}}{{if $i}},{{end}}{"type":{{json $m.Type}},"name":{{json $m.Name}}}{{end}}]}';
+      '{"id":{{json .Id}},"imageId":{{json .Image}},"status":{{json .State.Status}},"service":{{json (index .Config.Labels "com.docker.compose.service")}},"volumes":[{{range $i, $m := .Mounts}}{{if $i}},{{end}}{"type":{{json $m.Type}}{{if eq $m.Type "volume"}},"name":{{json $m.Name}}{{end}}}{{end}}]}';
     return rows(
       command('docker', ['container', 'inspect', '--format', format, ...ids]),
     ).map((row) => {

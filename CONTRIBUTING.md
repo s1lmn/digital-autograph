@@ -79,6 +79,15 @@ pnpm build
 pnpm test:build-smoke
 ```
 
+On Windows, `pnpm test` runs portable unit tests; Linux runs the full unit suite.
+Use `pnpm test:portable` on either platform and `pnpm test:posix` on Linux to run
+the scopes explicitly. POSIX-only tests must use `*.posix.test.ts`; preserve
+portable assertions in ordinary test files when splitting a mixed fixture.
+Do not classify a failing portable test as POSIX-only to hide a regression.
+Windows unit success does not replace Linux deployment, integration or E2E
+evidence. CI must pass `checks`, `windows-unit`, `windows-integration-runner`, `e2e` and PR Policy at the final
+head before merge.
+
 If schema changed, also run:
 
 ```bash

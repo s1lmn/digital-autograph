@@ -1,0 +1,9 @@
+# Install only through the reviewed administrator provisioning procedure.
+# Literal installation commands; anchored argument regexes for fixed entrypoints.
+da-runner ALL=(root) NOPASSWD: NOSETENV: \
+    /usr/local/sbin/digital-autograph-preflight ^(deploy|rollback)$, \
+    /usr/bin/install -d -m 755 /opt/digital-autograph, \
+    /usr/bin/install -m 644 deploy/compose.yaml deploy/compose.staging.yaml deploy/Caddyfile /opt/digital-autograph/, \
+    /usr/bin/install -m 755 deploy/deploy-on-vm.sh /opt/digital-autograph/, \
+    /usr/bin/install -m 644 deploy/render-lockbox-env.mjs deploy/host-capacity.mjs /opt/digital-autograph/, \
+    /opt/digital-autograph/deploy-on-vm.sh ^([0-9a-f]{40}|rollback)$

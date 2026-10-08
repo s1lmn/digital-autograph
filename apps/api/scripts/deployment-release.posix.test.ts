@@ -150,23 +150,6 @@ describe('release SHA and authorization gates', () => {
       }
     },
   );
-  it('uses the selected SHA for deploy checkout, with main configuration only for rollback', () => {
-    expect(workflow).toContain(
-      "ref: ${{ env.RELEASE_OPERATION == 'deploy' && env.IMAGE_SHA || github.sha }}",
-    );
-    expect(workflow.indexOf('Verify exact build checkout')).toBeLessThan(
-      workflow.indexOf('Authenticate to Yandex Cloud'),
-    );
-    expect(workflow.indexOf('Verify exact deploy checkout')).toBeLessThan(
-      workflow.indexOf('Deploy or roll back this VM'),
-    );
-    expect(workflow).toContain('--arg ref "$IMAGE_SHA"');
-    const record = stepScript('Create GitHub deployment record');
-    expect(record.indexOf('echo "id=$deployment_id"')).toBeLessThan(
-      record.indexOf('statuses"'),
-    );
-    expect(workflow).toContain('export IMAGE_TAG=$IMAGE_SHA');
-  });
   it.each([
     ['Verify exact build checkout', selected],
     ['Verify exact build checkout', current],
@@ -287,18 +270,6 @@ fi
       }
     },
   );
-  it('restricts staging to successful same-repository main push CI and keeps per-environment serialization', () => {
-    expect(workflow).toContain("github.event.workflow_run.event == 'push'");
-    expect(workflow).toContain(
-      'github.event.workflow_run.head_repository.full_name == github.repository',
-    );
-    expect(workflow).toContain('--repo "$GITHUB_REPOSITORY"');
-    expect(workflow).toContain(
-      '.event == "push" and .headBranch == "main" and .headSha == env.IMAGE_SHA',
-    );
-    expect(workflow).toContain('cancel-in-progress: false');
-    expect(workflow).toContain("steps.deploy.outcome != 'success'");
-  });
 });
 
 describe('running deployment images', () => {

@@ -8,6 +8,7 @@ import type { Database } from '@digital-autograph/db';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
+import { apiLoggerOptions, registerSafeApiErrors } from './logging';
 import {
   registerGoogleRoutes,
   type GoogleHttpConfig,
@@ -70,23 +71,9 @@ export function buildApi(
   payments?: PaymentService,
 ) {
   const app = Fastify({
-    logger: {
-      serializers: {
-        req(request) {
-          return {
-            method: request.method,
-            url: request.url?.split('?')[0],
-            host: request.headers.host,
-            remoteAddress: request.ip,
-          };
-        },
-      },
-      redact: {
-        paths: ['req.headers.cookie', 'req.headers.authorization'],
-        censor: '[REDACTED]',
-      },
-    },
+    logger: apiLoggerOptions(),
   });
+  registerSafeApiErrors(app);
 
   app.addHook('onSend', async (_request, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');

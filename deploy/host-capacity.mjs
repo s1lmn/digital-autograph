@@ -12,20 +12,33 @@ export const deployMinimumBytes = 7n * 1024n ** 3n;
 // 64 MiB each for logs, writable layers, Compose metadata and state writes.
 export const rollbackMinimumBytes = 256n * 1024n ** 2n;
 export const minimumInodes = 200_000n;
+// Removing an unpacked migration image on the staging HDD can exceed 30s.
+// Keep inventory reads short, but give each guarded removal a bounded budget.
+export const imageRemovalTimeoutMs = 5 * 60_000;
 const sha = /^[0-9a-f]{40}$/;
 const imageId = /^sha256:[0-9a-f]{64}$/;
 const targets = ['api', 'web', 'worker', 'migration'];
 class CapacityError extends Error {}
 
-function command(program, args) {
+function command(program, args, { timeout = 30_000 } = {}) {
   const result = spawnSync(program, args, {
     encoding: 'utf8',
-    timeout: 30_000,
+    timeout,
     maxBuffer: 16 * 1024 * 1024,
     env: { ...process.env, LC_ALL: 'C' },
   });
-  if (result.error || result.status !== 0)
-    throw new CapacityError(`Capacity/retention command failed: ${program}`);
+  if (result.error || result.status !== 0) {
+    const operation =
+      program === 'docker' ? ` ${args.slice(0, 2).join(' ')}` : '';
+    const reason =
+      result.error?.code === 'ETIMEDOUT'
+        ? `timeout after ${timeout} ms`
+        : `exit ${result.status ?? 'unavailable'}`;
+    // Do not include command arguments, stdout/stderr or runtime env values.
+    throw new CapacityError(
+      `Capacity/retention command failed: ${program}${operation} (${reason})`,
+    );
+  }
   return result.stdout;
 }
 
@@ -174,7 +187,9 @@ export function retainImages(state, registry, run = command) {
       ).includes(ref)
     )
       continue;
-    run('docker', ['image', 'rm', '--', ref]);
+    run('docker', ['image', 'rm', '--', ref], {
+      timeout: imageRemovalTimeoutMs,
+    });
     removed++;
   }
   return removed;

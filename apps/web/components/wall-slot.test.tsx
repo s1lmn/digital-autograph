@@ -28,7 +28,7 @@ it('keeps paid takeover disabled without requests, and retries failed public med
   expect(frontendCapabilities).toEqual({
     paidTakeover: false,
     creatorDashboard: false,
-    notifications: false,
+    notifications: true,
   });
   const paid = screen.getByRole('button', { name: 'Paid takeover' });
   expect(paid).toHaveProperty('disabled', true);

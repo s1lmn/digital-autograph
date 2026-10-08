@@ -33,6 +33,7 @@ export default function RootLayout({
             <a href="/autograph/create">Create autograph</a>
             <a href="/me">Your account</a>
             <a href="/me/placements">Placement history</a>
+            <a href="/me/notifications">Notifications</a>
           </nav>
         </header>
         <div id="main-content" tabIndex={-1}>

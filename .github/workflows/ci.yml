@@ -6,6 +6,20 @@ on:
     branches: [main]
 
 jobs:
+  macos-integration-runner:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check launcher and staging fixtures with default macOS TMPDIR and directory aliases
+        run: pnpm test apps/api/scripts/integration-runner.test.ts apps/api/scripts/deployment-staging.posix.test.ts
   windows-integration-runner:
     runs-on: windows-latest
     steps:

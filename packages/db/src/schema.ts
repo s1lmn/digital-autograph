@@ -347,6 +347,54 @@ export const consentRecords = pgTable(
   ],
 );
 
+export const legalEvidenceEvents = pgTable(
+  'legal_evidence_events',
+  {
+    id: id(),
+    sequence: bigint('sequence', { mode: 'bigint' })
+      .notNull()
+      .generatedAlwaysAsIdentity(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    documentType: varchar('document_type', { length: 64 }).notNull(),
+    documentVersion: varchar('document_version', { length: 64 }).notNull(),
+    documentHash: varchar('document_hash', { length: 64 }).notNull(),
+    action: varchar('action', { length: 16 }).notNull(),
+    source: varchar('source', { length: 64 }).notNull(),
+    context: varchar('context', { length: 64 }).notNull(),
+    purpose: varchar('purpose', { length: 64 }).notNull().default('contract'),
+    scope:
+      jsonb('scope').$type<import('@digital-autograph/domain').LegalScope>(),
+    previousEventId: uuid('previous_event_id'),
+    occurredAt: timestamp('occurred_at', { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    uniqueIndex('legal_evidence_sequence_uidx').on(t.sequence),
+    index('legal_evidence_stream_idx').on(
+      t.userId,
+      t.documentType,
+      t.purpose,
+      t.sequence,
+    ),
+    check('legal_evidence_hash', sql`${t.documentHash} ~ '^[a-f0-9]{64}$'`),
+    check(
+      'legal_evidence_version',
+      sql`${t.documentVersion} ~ '^[a-zA-Z0-9._-]{1,64}$'`,
+    ),
+    check(
+      'legal_evidence_context',
+      sql`${t.source} ~ '^[a-z][a-z0-9_]{0,63}$' AND ${t.context} ~ '^[a-z][a-z0-9_]{0,63}$'`,
+    ),
+    check(
+      'legal_evidence_semantics',
+      sql`(${t.documentType} IN ('terms_of_use','community_guidelines','public_offer','refund_policy') AND ${t.action} = 'accepted' AND ${t.scope} IS NULL AND ${t.purpose} = 'contract') OR (${t.documentType} IN ('personal_data_consent','personal_data_dissemination_consent') AND ${t.action} IN ('granted','withdrawn') AND ${t.scope} IS NOT NULL AND jsonb_typeof(${t.scope}) = 'object' AND (${t.scope}->>'purpose' = ${t.purpose}) IS TRUE AND ${t.purpose} ~ '^[a-z][a-z0-9_]{0,63}$' AND ${t.purpose} <> 'contract')`,
+    ),
+  ],
+);
+
 export const creators = pgTable(
   'creators',
   {
@@ -915,12 +963,22 @@ export const paymentOrders = pgTable(
     amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
     currency: varchar('currency', { length: 3 }).notNull(),
     creatorShareBps: integer('creator_share_bps').notNull(),
+    offerVersion: varchar('offer_version', { length: 64 }),
+    offerHash: varchar('offer_hash', { length: 64 }),
+    contentRulesVersion: varchar('content_rules_version', { length: 64 }),
+    contentRulesHash: varchar('content_rules_hash', { length: 64 }),
+    refundPolicyVersion: varchar('refund_policy_version', { length: 64 }),
+    refundPolicyHash: varchar('refund_policy_hash', { length: 64 }),
     status: paymentState('status').notNull().default('created'),
     placementId: uuid('placement_id').references(() => placements.id),
     fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
+    check(
+      'payment_orders_legal_snapshot',
+      sql`(${t.offerVersion} IS NULL AND ${t.offerHash} IS NULL AND ${t.contentRulesVersion} IS NULL AND ${t.contentRulesHash} IS NULL AND ${t.refundPolicyVersion} IS NULL AND ${t.refundPolicyHash} IS NULL) OR (${t.offerVersion} IS NOT NULL AND ${t.offerHash} IS NOT NULL AND ${t.contentRulesVersion} IS NOT NULL AND ${t.contentRulesHash} IS NOT NULL AND ${t.refundPolicyVersion} IS NOT NULL AND ${t.refundPolicyHash} IS NOT NULL AND ${t.offerVersion} ~ '^[a-zA-Z0-9._-]{1,64}$' AND ${t.contentRulesVersion} ~ '^[a-zA-Z0-9._-]{1,64}$' AND ${t.refundPolicyVersion} ~ '^[a-zA-Z0-9._-]{1,64}$' AND ${t.offerHash} ~ '^[a-f0-9]{64}$' AND ${t.contentRulesHash} ~ '^[a-f0-9]{64}$' AND ${t.refundPolicyHash} ~ '^[a-f0-9]{64}$')`,
+    ),
     uniqueIndex('payment_orders_reservation_uidx').on(t.reservationId),
     uniqueIndex('payment_orders_placement_uidx').on(t.placementId),
     check(

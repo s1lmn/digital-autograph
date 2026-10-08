@@ -1,3 +1,4 @@
+import { syntheticLegalDocuments } from './legal-fixtures';
 import { randomUUID, createHash } from 'node:crypto';
 import { beforeEach, afterAll, it, expect } from 'vitest';
 import { createYookassaProvider } from '../../packages/integrations/src/yookassa';
@@ -68,7 +69,9 @@ const provider: PaymentProvider = {
     return { ...p };
   },
 };
-const repo = createPgPaymentRepository(database.pool);
+const repo = createPgPaymentRepository(database.pool, {
+  legalDocuments: syntheticLegalDocuments,
+});
 function service(repository = repo) {
   return new PaymentService(repository, provider, settings);
 }
@@ -304,7 +307,11 @@ it('50 duplicate handlers across instances plus reconciliation fulfill exactly o
   succeed(f.providerId);
   const other = createDatabase(url!);
   try {
-    const s2 = service(createPgPaymentRepository(other.pool));
+    const s2 = service(
+      createPgPaymentRepository(other.pool, {
+        legalDocuments: syntheticLegalDocuments,
+      }),
+    );
     await Promise.allSettled(
       Array.from({ length: 50 }, (_, i) =>
         i % 3 === 0
@@ -505,6 +512,7 @@ it('transaction fault rolls back old placement, new placement, earning, order; r
   succeed(f.providerId);
   const bad = service(
     createPgPaymentRepository(database.pool, {
+      legalDocuments: syntheticLegalDocuments,
       afterPlacementInsert: async () => {
         throw new Error('simulated crash');
       },
@@ -1244,4 +1252,113 @@ it('uses one post-User-lock fulfillment instant and preserves paid visibility af
     blocker.release();
     await processing;
   }
+});
+
+it('pins trusted Offer/Rules/Refund snapshots and rejects rewriting, removal or partial values', async () => {
+  const f = await started();
+  const result = await database.pool.query(
+    'SELECT offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash FROM payment_orders WHERE id=$1',
+    [f.orderId],
+  );
+  const offer = syntheticLegalDocuments.find((d) => d.type === 'public_offer')!;
+  const rules = syntheticLegalDocuments.find(
+    (d) => d.type === 'community_guidelines',
+  )!;
+  const refund = syntheticLegalDocuments.find(
+    (d) => d.type === 'refund_policy',
+  )!;
+  expect(result.rows[0]).toEqual({
+    offer_version: offer.version,
+    offer_hash: offer.hash,
+    content_rules_version: rules.version,
+    content_rules_hash: rules.hash,
+    refund_policy_version: refund.version,
+    refund_policy_hash: refund.hash,
+  });
+  for (const column of [
+    'offer_version',
+    'offer_hash',
+    'content_rules_version',
+    'content_rules_hash',
+    'refund_policy_version',
+    'refund_policy_hash',
+  ]) {
+    await expect(
+      database.pool.query(
+        `UPDATE payment_orders SET ${column}=NULL WHERE id=$1`,
+        [f.orderId],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  }
+  const configured = createPgPaymentRepository(database.pool, {
+    legalDocuments: syntheticLegalDocuments.map((d) => ({
+      ...d,
+      version: 'test-v2',
+      hash: 'c'.repeat(64),
+    })),
+  });
+  expect(
+    (
+      await configured.create(
+        f.buyer.id,
+        f.reservationId,
+        f.autographId,
+        settings,
+      )
+    ).orderId,
+  ).toBe(f.orderId);
+  expect(
+    (
+      await database.pool.query(
+        'SELECT offer_hash FROM payment_orders WHERE id=$1',
+        [f.orderId],
+      )
+    ).rows[0].offer_hash,
+  ).toBe(offer.hash);
+  succeed(f.providerId);
+  await service().webhook(f.providerId, 'payment.succeeded');
+  await service().webhook(f.providerId, 'payment.succeeded');
+  expect(
+    (
+      await database.pool.query(
+        'SELECT offer_hash,status FROM payment_orders WHERE id=$1',
+        [f.orderId],
+      )
+    ).rows[0],
+  ).toEqual({ offer_hash: offer.hash, status: 'fulfilled' });
+});
+it('unpublished contractual documents prevent a new order before provider calls', async () => {
+  const f = await setup();
+  const calls = creates;
+  const blocked = createPgPaymentRepository(database.pool, {
+    legalDocuments: syntheticLegalDocuments.map((d) => ({
+      ...d,
+      ready: false,
+    })),
+  });
+  await expect(
+    service(blocked).create(f.buyer.id, f.reservationId, f.autographId),
+  ).rejects.toThrow('LEGAL_DOCUMENT_UNAVAILABLE');
+  const app = api(service(blocked));
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/payments/orders',
+      headers: {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      },
+      payload: { reservationId: f.reservationId, autographId: f.autographId },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: { code: 'LEGAL_DOCUMENT_UNAVAILABLE' },
+    });
+  } finally {
+    await app.close();
+  }
+  expect(creates).toBe(calls);
+  expect(
+    (await database.pool.query('SELECT id FROM payment_orders')).rowCount,
+  ).toBe(0);
 });

@@ -1,3 +1,5 @@
+import { loadLegalDocuments } from '@digital-autograph/config';
+import { createPgLegalRepository } from '@digital-autograph/db';
 import { PaymentService } from '@digital-autograph/payments';
 import { createPgPaymentRepository } from '@digital-autograph/db';
 import { createYookassaProvider } from '@digital-autograph/integrations';
@@ -183,6 +185,10 @@ async function main(): Promise<void> {
             secret: notificationTelegram.NOTIFICATION_TELEGRAM_WEBHOOK_SECRET,
           }
         : undefined,
+    },
+    {
+      repository: createPgLegalRepository(database.pool),
+      documents: loadLegalDocuments(),
     },
   );
   let closing = false;

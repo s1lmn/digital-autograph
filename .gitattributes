@@ -1,0 +1,2 @@
+# Canonical legal bytes must be identical across Windows/Linux/macOS checkouts.
+docs/legal/**/*.md text eol=lf

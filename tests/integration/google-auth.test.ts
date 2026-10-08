@@ -67,7 +67,7 @@ class FakeGoogle implements GoogleOidcClient {
       'http://127.0.0.1:4000/auth/google/callback',
     );
     url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', 'openid email profile');
+    url.searchParams.set('scope', 'openid');
     url.searchParams.set('state', input.state);
     url.searchParams.set('nonce', input.nonce);
     return url.toString();
@@ -195,9 +195,7 @@ describe('Google Authentication with PostgreSQL', () => {
       );
       expect(url.searchParams.get('response_type')).toBe('code');
       expect(url.searchParams.get('scope')?.split(' ').sort()).toEqual([
-        'email',
         'openid',
-        'profile',
       ]);
       expect(first.result.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(first.result.nonce).toMatch(/^[A-Za-z0-9_-]{43}$/);

@@ -1,3 +1,4 @@
+import { LegalError } from '@digital-autograph/domain';
 import { z } from 'zod';
 import { PaymentError, type PaymentService } from '@digital-autograph/payments';
 import type {
@@ -21,6 +22,8 @@ const webhook = z.object({
   object: z.object({ id: z.uuid() }),
 });
 function sendError(error: unknown, reply: FastifyReply) {
+  if (error instanceof LegalError)
+    return reply.code(409).send({ error: { code: error.code } });
   if (!(error instanceof PaymentError))
     return reply.code(503).send({ error: { code: 'PAYMENT_UNAVAILABLE' } });
   const code = error.code;

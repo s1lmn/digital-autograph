@@ -92,3 +92,4 @@ export {
   type WallConfiguration,
 } from './wall';
 export * from './notifications';
+export * from './legal';

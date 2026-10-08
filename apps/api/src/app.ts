@@ -1,3 +1,4 @@
+import { registerLegalRoutes, type LegalHttp } from './legal-http';
 import type { PaymentService } from '@digital-autograph/payments';
 import { registerPaymentRoutes } from './payments/http';
 import {
@@ -80,6 +81,7 @@ export function buildApi(
     shares: ShareRepository;
     telegram?: { username: string; secret: string };
   },
+  legal?: LegalHttp,
 ) {
   const app = Fastify({
     logger: apiLoggerOptions(),
@@ -134,6 +136,7 @@ export function buildApi(
   });
 
   registerAuthRoutes(app, sessions, authConfig);
+  if (legal) registerLegalRoutes(app, legal);
   if (testAuth) {
     registerTestAuthRoutes(
       app,

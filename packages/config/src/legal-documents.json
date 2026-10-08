@@ -1,0 +1,65 @@
+[
+  {
+    "type": "terms_of_use",
+    "version": "1.0",
+    "hash": "d05ea92089545f8dd823dbb93fd291df6441f54538149bba63f37d9b857c3f5b",
+    "path": "/legal/documents/terms_of_use/1.0",
+    "file": "user-agreement-v1.md",
+    "ready": false,
+    "current": true
+  },
+  {
+    "type": "community_guidelines",
+    "version": "1.0",
+    "hash": "491a04094596ed6710d7957040e583755a564d8d86cb338c925874248a8af3f1",
+    "path": "/legal/documents/community_guidelines/1.0",
+    "file": "content-rules-v1.md",
+    "ready": false,
+    "current": true
+  },
+  {
+    "type": "public_offer",
+    "version": "1.0",
+    "hash": "9c382276d7f44aa25ac2fe9f189c6bbafc6fd088a4e580563272d6a6b6ef0367",
+    "path": "/legal/documents/public_offer/1.0",
+    "file": "public-offer-v1.md",
+    "ready": false,
+    "current": true
+  },
+  {
+    "type": "refund_policy",
+    "version": "1.0",
+    "hash": "0c39a13bae00ff48e15958158e727de8b966b0193a87c9cea1b1b3c96bbb5e08",
+    "path": "/legal/documents/refund_policy/1.0",
+    "file": "refund-policy-v1.md",
+    "ready": false,
+    "current": true
+  },
+  {
+    "type": "privacy_policy",
+    "version": "1.0",
+    "hash": "0c8d6bf406936b961467baf249ad962799562812baeedf5186ff64d750d2507d",
+    "path": "/legal/documents/privacy_policy/1.0",
+    "file": "privacy-policy-v1.md",
+    "ready": false,
+    "current": true
+  },
+  {
+    "type": "personal_data_consent",
+    "version": "1.0",
+    "hash": "d89694ffc6e68d1d9303934e908d78a3f195f5d12f769e096150f811e56e370e",
+    "path": "/legal/documents/personal_data_consent/1.0",
+    "file": "personal-data-consent-v1.md",
+    "ready": false,
+    "current": true
+  },
+  {
+    "type": "personal_data_dissemination_consent",
+    "version": "1.0",
+    "hash": "7a54dd4790cbf0787667e978a58c1fb9025f29cb7ab3d5a3d5af0836d645ed3c",
+    "path": "/legal/documents/personal_data_dissemination_consent/1.0",
+    "file": "dissemination-consent-v1.md",
+    "ready": false,
+    "current": true
+  }
+]

@@ -430,3 +430,4 @@ export function loadNotificationTelegramWorkerConfig(
     environment,
   );
 }
+export { loadLegalDocuments } from './legal';

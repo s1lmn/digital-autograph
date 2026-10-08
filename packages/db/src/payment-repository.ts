@@ -1,3 +1,8 @@
+import { loadLegalDocuments } from '@digital-autograph/config';
+import {
+  requireLegalDocument,
+  type LegalDocument,
+} from '@digital-autograph/domain';
 import { randomUUID } from 'node:crypto';
 import { AutographError } from '@digital-autograph/autographs';
 import {
@@ -205,8 +210,12 @@ async function eligible(
 }
 export function createPgPaymentRepository(
   pool: Pool,
-  options: { afterPlacementInsert?: () => Promise<void> } = {},
+  options: {
+    afterPlacementInsert?: () => Promise<void>;
+    legalDocuments?: readonly LegalDocument[];
+  } = {},
 ): PaymentRepository {
+  const legalDocuments = options.legalDocuments ?? loadLegalDocuments();
   async function create(
     userId: string,
     reservationId: string,
@@ -249,10 +258,16 @@ export function createPgPaymentRepository(
         !(await eligible(db, r, target)).eligible
       )
         throw new PaymentError('RESERVATION_NOT_ELIGIBLE');
+      const offer = requireLegalDocument(legalDocuments, 'public_offer');
+      const rules = requireLegalDocument(
+        legalDocuments,
+        'community_guidelines',
+      );
+      const refunds = requireLegalDocument(legalDocuments, 'refund_policy');
       const id = randomUUID();
       await db.query(
-        `INSERT INTO payment_orders (id,user_id,reservation_id,quote_id,wall_id,slot_id,target_placement_id,autograph_id,creator_id,pricing_config_id,amount_minor,currency,creator_share_bps)
-    SELECT $2::uuid,r.user_id,r.id,r.quote_id,r.wall_id,r.slot_id,r.target_placement_id,$3::uuid,$4::uuid,r.pricing_config_id,r.amount_minor,r.currency,$5
+        `INSERT INTO payment_orders (id,user_id,reservation_id,quote_id,wall_id,slot_id,target_placement_id,autograph_id,creator_id,pricing_config_id,amount_minor,currency,creator_share_bps,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash)
+    SELECT $2::uuid,r.user_id,r.id,r.quote_id,r.wall_id,r.slot_id,r.target_placement_id,$3::uuid,$4::uuid,r.pricing_config_id,r.amount_minor,r.currency,$5,$6,$7,$8,$9,$10,$11
     FROM takeover_reservations r WHERE r.id=$1::uuid`,
         [
           reservationId,
@@ -260,6 +275,12 @@ export function createPgPaymentRepository(
           autographId,
           target.wall.creator_id,
           settings.creatorShareBps,
+          offer.version,
+          offer.hash,
+          rules.version,
+          rules.hash,
+          refunds.version,
+          refunds.hash,
         ],
       );
       const returnUrl = new URL(settings.returnUrl);

@@ -1,0 +1,56 @@
+[
+  {
+    "file": "public/public-offer-v1.md",
+    "sourceFile": "01_public_offer_v1_final.docx",
+    "sourceDocxSha256": "e1085feed99f2fae5d29d3b8e96e0c19998ebdadc006a305b394cbd6e7f139a5",
+    "wordingSha256": "250b28c0298a78c80f5d2dc4810d13bd787e269783a454e840b8eb7370d3dfeb"
+  },
+  {
+    "file": "public/user-agreement-v1.md",
+    "sourceFile": "02_user_agreement_v1_final.docx",
+    "sourceDocxSha256": "9c17b265ab3050d9874f98fae8241a76c95eda895005a8c4d542c80f8affd621",
+    "wordingSha256": "acf2213dfe5bb470d3768f2484ed135fbd1bad69c04562a07b42ac80f60f5124"
+  },
+  {
+    "file": "public/content-rules-v1.md",
+    "sourceFile": "03_content_rules_v1_final.docx",
+    "sourceDocxSha256": "7a908a8cd1f62ffa0ea483b0aec43631febb2994584d4abd11a61617b92eb3c3",
+    "wordingSha256": "f268bb83953367f4297527a942624cfbde6646ce2c5452944b98f691ca865827"
+  },
+  {
+    "file": "public/refund-policy-v1.md",
+    "sourceFile": "04_refund_policy_v1_final.docx",
+    "sourceDocxSha256": "8795847c3bf569f9445fbcf37bdcddecc7dd5122fd0154a706e6dec1fb6e2ad0",
+    "wordingSha256": "5375b50bda1c1aca4edd79554e506ad16706ebd2284cbaaa9b2da856b7adbf6f"
+  },
+  {
+    "file": "public/privacy-policy-v1.md",
+    "sourceFile": "05_privacy_policy_v1_final.docx",
+    "sourceDocxSha256": "5f065c7af5111288558ad16e6a97c11d5244f07112b64c41f3e1b05342eca928",
+    "wordingSha256": "4b384aa2ef2fa119840881ef99626076eb49effd9f6311d3457ab4f48c6088a9"
+  },
+  {
+    "file": "public/personal-data-consent-v1.md",
+    "sourceFile": "06_consent_personal_data_v1_final.docx",
+    "sourceDocxSha256": "d98a37f36471c751267b02c19e807c874c2784a569cb50e1f6865c17c00fd317",
+    "wordingSha256": "7da250df443ed10e962a80ec609bae15d972963401472af6ae7d3cd24f3e2918"
+  },
+  {
+    "file": "public/dissemination-consent-v1.md",
+    "sourceFile": "07_consent_dissemination_v1_final.docx",
+    "sourceDocxSha256": "96dc8bfcdb55805f9bb09a17e8c30660728dd06970670e724ce3ab59d9d1f49a",
+    "wordingSha256": "61b25b3f9e21efe6f6f9a38dc70378d7d761b89e7f9fac99a65a95a94e7f723f"
+  },
+  {
+    "file": "internal/privacy-data-map-v1.md",
+    "sourceFile": "privacy_data_map_v1_internal.docx",
+    "sourceDocxSha256": "5f65df15b629929eda02d20ced88e12ab0b40a37b3c2e0fed663b8d4865f19f4",
+    "wordingSha256": "8e81b5ccac91a4bf8be95289493d687d7962aa74909d66df9500012fb9292c7b"
+  },
+  {
+    "file": "internal/consent-ux-spec-v1.md",
+    "sourceFile": "consent_ux_spec_v1_internal.docx",
+    "sourceDocxSha256": "3f8b5bf6f80788776ab6ccde2ecb8fe1f2752aa1b65ecdda0b62e43e28913ff1",
+    "wordingSha256": "843f530acd4ed8e0bfa48d12b0435e82fbb4ab455aa4ecf78570383958e0e787"
+  }
+]

@@ -38,7 +38,10 @@ remain accepted. See [official redirect examples](https://yookassa.ru/developers
 
 An owned active Reservation plus an owned `ready` Autograph creates one immutable
 Order snapshot: reservation/quote, wall/slot/current target, buyer, autograph,
-creator, pricing version, amount/currency and creator share. The Reservation is
+creator, pricing version, amount/currency and creator share. Future Orders also pin
+the trusted Offer, content-rules and Refund Policy version/hash; legacy rows retain
+null legal fields without fabricated backfill. Incomplete legal publication blocks
+new Orders. See [privacy foundation](privacy-consent-foundation.md). The Reservation is
 the idempotency identity: same reservation + autograph returns the same Order;
 changing the autograph conflicts. No client price/currency/return URL is accepted.
 

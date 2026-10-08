@@ -10,3 +10,7 @@ packages/db/drizzle/meta/
 CONTRIBUTING.md
 .github/pull_request_template.md
 .github/workflows/pr-policy.yml
+
+# Preserve approved legal wording/list numbering and exact canonical hash bytes.
+docs/legal/public/*.md
+docs/legal/internal/*.md

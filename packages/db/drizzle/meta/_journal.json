@@ -120,6 +120,13 @@
       "when": 1791140778677,
       "tag": "0016_regular_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791479380331,
+      "tag": "0017_legal_evidence",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v4
@@ -24,7 +24,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v4
@@ -38,7 +38,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v4
@@ -89,7 +89,7 @@ jobs:
       UPLOAD_URL_TTL_SECONDS: 300
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v4
@@ -176,7 +176,7 @@ jobs:
       E2E_WEB_URL: http://127.0.0.1:3000
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v4

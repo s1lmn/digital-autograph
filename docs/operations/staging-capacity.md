@@ -64,15 +64,37 @@ keys. Recovery user-data and temporary OS Login metadata were removed. Remove
 the temporary guest key after technical verification. Do not put passwords or
 private keys in metadata, reports, source control or runner diagnostics.
 
-## Infrastructure resize — pending guest verification
+## Infrastructure resize — guest verified
 
-The owner enlarged the staging boot disk. Read-only Cloud API on 2026-10-07
-reports **53,687,091,200 bytes (50 GiB)**, READY. This is block-device capacity,
-not proof that the root filesystem expanded. SSH currently rejects the revoked
-temporary key. New filesystem total/used/free bytes, inodes, `lsblk` and storage
-mount coverage remain unverified until read-only guest access is restored.
-The preceding incident figures are historical **before resize**, not current
-capacity. No resize, format, metadata change or restart was performed here.
+The owner enlarged the staging boot disk to **53,687,091,200 bytes (50 GiB)**.
+Read-only guest verification on 2026-10-07 confirmed `/dev/vda1` partition
+**53,049,540,096 bytes**, expanded **ext4** filesystem total **51,304,554,496
+bytes**, available **34,783,006,720 bytes**, free inodes **6,143,149**.
+Containerd, runner home and application state all share this root filesystem.
+No filesystem resize/format commands were performed. The preceding incident
+and emergency-cleanup figures are historical **before resize**.
+
+Premerge exact-head helper ran read-only through stdin: deploy required
+7,516,192,768 bytes PASS; cached rollback required 268,435,456 bytes PASS;
+inode threshold 200,000. The cached previous application/infrastructure set,
+persistent PostgreSQL volume and three valid mode-600 backups were preserved.
+
+## Recovery release authorization blocker
+
+PR #37 merged as `dc89f8d12a73adf62c4f4640e7bf5d1ed5b4c7f8`. Main CI
+37683301349 passed; automatic Release 37684119725 published all four images,
+but failed at the first `sudo bash -c` preflight: the runner's old narrow
+NOPASSWD allowlist did not permit it. The new combined helper install command
+was also absent. Deployment 6920479555 is failure; the original failed
+deployment remains historical failure. No config/env/pull/backup/migration/
+retention mutation occurred; actual current remained `98ca1ef26e89645fefea12a1abea7abe350233f3`.
+Post-failure root free was 34,765,287,424 bytes / 6,143,169 inodes. This is an
+authorization-contract failure, not insufficient resized capacity.
+
+Use the reviewed [runner authorization provisioning](runner-authorization.md)
+with a fixed root-owned read-only entrypoint; no unrestricted sudo shell.
+The Release workflow verifies that provisioned code matches the exact checkout
+before running it and retains both operation-aware capacity guards.
 
 ## Fail-fast preflight
 

@@ -158,7 +158,7 @@ describe('hosted image publication and self-hosted deployment boundary', () => {
     );
     expect(deploy).not.toContain('actions: read');
     expect(deploy).toContain(
-      'sudo /opt/digital-autograph/deploy-on-vm.sh "$release_ref"',
+      'sudo -n /opt/digital-autograph/deploy-on-vm.sh "$release_ref"',
     );
     expect(job('prepare')).not.toContain('id-token:');
   });
@@ -207,18 +207,23 @@ function stepScript(name: string) {
 describe('deployment configuration without POSIX execution', () => {
   it('checks host capacity before installed configuration writes and ships the helper used by deploy', () => {
     const step = stepScript('Deploy or roll back this VM');
-    expect(step).toContain('node "$1" preflight "$2"');
     expect(step).toContain(
-      '_ "$PWD/deploy/host-capacity.mjs" "$RELEASE_OPERATION"',
+      'sudo -n /usr/local/sbin/digital-autograph-preflight "$RELEASE_OPERATION"',
+    );
+    expect(step).not.toContain('sudo bash');
+    expect(step).toContain(
+      'cmp --silent deploy/host-capacity.mjs /usr/local/lib/digital-autograph/host-capacity.mjs',
     );
     expect(step).toContain('elif [[ "$RELEASE_OPERATION" == rollback ]]');
     expect(deploy).toContain('operation=deploy');
     expect(deploy).toContain('operation=rollback');
     expect(deploy).toContain('preflight "$operation"');
-    expect(step.indexOf('node "$1" preflight')).toBeGreaterThan(-1);
-    expect(step.indexOf('node "$1" preflight')).toBeLessThan(
-      step.indexOf('sudo install'),
-    );
+    expect(
+      step.indexOf('sudo -n /usr/local/sbin/digital-autograph-preflight'),
+    ).toBeGreaterThan(-1);
+    expect(
+      step.indexOf('sudo -n /usr/local/sbin/digital-autograph-preflight'),
+    ).toBeLessThan(step.indexOf('sudo -n install'));
     expect(step).toContain(
       'deploy/render-lockbox-env.mjs deploy/host-capacity.mjs',
     );
@@ -284,4 +289,37 @@ it('keeps cached rollback infrastructure refs aligned with Compose and migration
   expect(staging).toContain('image: postgres:17-alpine');
   expect(helper).toContain("refs.push('postgres:17-alpine')");
   expect(production).toContain('profiles: [migration]');
+});
+
+it('keeps runner authorization restricted to fixed release entrypoints and exact install commands', () => {
+  const policy = readFileSync(
+    new URL('../../../deploy/runner.sudoers', import.meta.url),
+    'utf8',
+  );
+  const entrypoint = readFileSync(
+    new URL('../../../deploy/runner-preflight.sh', import.meta.url),
+    'utf8',
+  );
+  expect(policy).toContain(
+    '/usr/local/sbin/digital-autograph-preflight ^(deploy|rollback)$',
+  );
+  expect(policy).toContain(
+    '/opt/digital-autograph/deploy-on-vm.sh ^([0-9a-f]{40}|rollback)$',
+  );
+  expect(policy).toContain(
+    '/usr/bin/install -m 644 deploy/render-lockbox-env.mjs deploy/host-capacity.mjs /opt/digital-autograph/',
+  );
+  expect(policy).toContain('NOSETENV:');
+  expect(policy).not.toMatch(/NOPASSWD: ALL|\/bin\/bash|\/usr\/bin\/node|\*/);
+  expect(entrypoint).toContain('/usr/bin/env -i');
+  expect(entrypoint).toContain(
+    '/usr/bin/node /usr/local/lib/digital-autograph/host-capacity.mjs',
+  );
+  expect(entrypoint).not.toMatch(/eval|\$2/);
+  expect(
+    readFileSync(
+      new URL('../../../.github/workflows/ci.yml', import.meta.url),
+      'utf8',
+    ),
+  ).toContain('pnpm test:runner-authorization');
 });

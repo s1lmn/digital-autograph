@@ -58,3 +58,48 @@ Do not add broad release-age exceptions or disable package-manager protections.
 
 Command options and registry behavior are described in the
 [official pnpm audit documentation](https://pnpm.io/cli/audit).
+
+## GitHub Actions update proposals (EGO-145)
+
+`.github/dependabot.yml` checks the workflow Actions every Monday at 09:00
+Europe/Moscow. Version updates have at most three open PRs, with one dependency
+per PR; `s1lmn` is assigned to triage them. Security update PRs have a separate
+GitHub limit. No runtime package or container updates are configured here.
+
+Dependabot's `reviewers` option was removed; assignment is not an approval or a
+review request. The maintainer requests the other developer's review manually.
+See the [GitHub options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference)
+and [reviewer migration notice](https://github.blog/changelog/2025-08-08-dependabot-reviewers-configuration-option-is-replaced-by-code-owners/).
+
+For each proposal:
+
+1. Create or select a separate ready Linear issue for that update. Add its
+   identifier to the PR title/body and fill the repository PR template, including
+   compatibility risks and validation. Do not reuse EGO-145 or its parent as the
+   task for all subsequent upgrades.
+2. Review the upstream release notes, changed workflow permissions/inputs and
+   Node/runtime requirements. Dependabot's metadata is not compatibility proof.
+3. Synchronize the proposal with fresh `main` using a normal merge and rerun all
+   current CI and Policy jobs. Automatic rebasing is disabled to preserve review
+   history; keep the existing bot branch for this PR.
+4. Request an independent developer's review. Merge only after final-head CI,
+   Policy, approval and blocking-thread gates pass; verify main CI and applicable
+   staging release afterward before marking the update's Linear issue Done.
+
+PR Policy permits the `dependabot/github_actions/` branch namespace only for
+`dependabot[bot]` proposals in this repository. It still requires a Linear ID,
+the full template, the `main` target and the existing secret-pattern checks. A
+fresh bot proposal is expected to fail Policy until human triage fills these
+fields. This setup adds no automatic approval, merge or metadata-writing job.
+
+The existing `pull_request` CI uses isolated fixtures and public dependencies.
+Keep its read-only token and secret boundary: do not introduce privileged
+`pull_request_target` execution or copy cloud/production secrets into Dependabot
+to make an update pass. See [Dependabot on GitHub Actions](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions).
+
+As checked on 8 October 2026, GitHub's supported-version table lists pnpm v7–v10;
+this workspace requires pnpm 11.19.0. npm/pnpm automation is therefore deferred
+until support and a representative lockfile update are verified. Continue the
+manual audit, targeted-update and frozen-lockfile process above, preserving
+overrides and release-age protections. EGO-88's broader dependency-maintenance
+and developer-workflow acceptance remains open.

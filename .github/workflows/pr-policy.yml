@@ -46,7 +46,12 @@ jobs:
             }
 
             const allowedBranch = /^(ego-\d+-[a-z0-9-]+|codex\/[a-z0-9._/-]+|chore\/[a-z0-9._/-]+|fix\/[a-z0-9._/-]+)$/;
-            if (!allowedBranch.test(branch)) {
+            const dependabotActionsBranch =
+              pr.user?.login === 'dependabot[bot]' &&
+              Boolean(pr.base.repo?.full_name) &&
+              pr.head.repo?.full_name === pr.base.repo?.full_name &&
+              /^dependabot\/github_actions\/[a-zA-Z0-9._/-]+$/.test(branch);
+            if (!allowedBranch.test(branch) && !dependabotActionsBranch) {
               errors.push(`Branch '${branch}' does not match the repository workflow. Prefer ego-<NUMBER>-<slug>.`);
             }
 

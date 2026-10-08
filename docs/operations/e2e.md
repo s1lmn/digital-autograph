@@ -98,16 +98,19 @@ traces can include short-lived private presigned URLs. There are zero retries.
 
 The authoritative commands are the actual `.github/workflows/ci.yml` jobs:
 
-| CI job                       | Required validation                                                                                                                                                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `checks`                     | `pnpm security:audit`, `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, full portable + POSIX `pnpm test`, `pnpm test:integration`, `pnpm build`, `pnpm test:build-smoke` |
-| `checks`                     | All four release container targets via `docker buildx bake --file deploy/docker-bake.hcl release`; `pnpm test:migration-image` (clean PostgreSQL, twice, no TTY)             |
-| `e2e`                        | Isolated setup, critical Playwright user and creator flows via `pnpm test:e2e`                                                                                               |
-| `windows-integration-runner` | Launcher, isolated-database guard and child-failure regression tests on Windows via `pnpm test apps/api/scripts/integration-runner.test.ts`                                  |
-| `windows-unit`               | All portable unit tests through the default Windows `pnpm test`; POSIX deployment fixtures remain mandatory in Linux `checks`                                                |
-| PR Policy / `policy`         | Issue reference, scoped review sections, main base, branch naming and secret-pattern checks before merge                                                                     |
+| CI job                       | Required validation                                                                                                                                                                      |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checks`                     | `pnpm security:audit`, `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, full portable + POSIX `pnpm test`, `pnpm test:integration`, `pnpm build`, `pnpm test:build-smoke`             |
+| `checks`                     | All four release container targets via `docker buildx bake --file deploy/docker-bake.hcl release`; `pnpm test:migration-image` (clean PostgreSQL, twice, no TTY)                         |
+| `e2e`                        | Isolated setup, critical Playwright user and creator flows via `pnpm test:e2e`                                                                                                           |
+| `macos-integration-runner`   | Launcher, database guard, child-failure and staging capacity tests with default macOS TMPDIR and real symlink aliases; canonical fixture paths preserve literal space/ampersand coverage |
+| `windows-integration-runner` | Launcher, isolated-database guard and child-failure regression tests on Windows via `pnpm test apps/api/scripts/integration-runner.test.ts`                                              |
+| `windows-unit`               | All portable unit tests through the default Windows `pnpm test`; POSIX deployment fixtures remain mandatory in Linux `checks`                                                            |
+| PR Policy / `policy`         | Issue reference, scoped review sections, main base, branch naming and secret-pattern checks before merge                                                                                 |
 
-All four CI jobs must finish successfully at the reviewed SHA. The Windows jobs
+All five CI jobs must finish successfully at the reviewed SHA. The macOS job
+checks the launcher and staging fixtures under default TMPDIR without overriding it to hide
+path aliases; it does not replace the Linux full suite. The Windows jobs
 check portable units and runner portability without DB/storage; `checks` runs the full PostgreSQL
 and MinIO integration suite on Linux. No critical suite may
 be skipped, made continue-on-error, retried to hide flakiness, or replaced by a
@@ -127,6 +130,6 @@ returns HTTP 403 for branch protection/rulesets. CI and PR Policy report failure
 but GitHub does not server-enforce required checks before a maintainer merge.
 The operational merge gate is fresh exact-head checks + review + explicit merge
 authorization. To meet a strictly automatic merge-blocking DoD, enable protected
-main / required checks on a supporting GitHub plan, including `checks`, `e2e`, `windows-integration-runner`, `windows-unit`,
+main / required checks on a supporting GitHub plan, including `checks`, `e2e`, `windows-integration-runner`, `macos-integration-runner`, `windows-unit`,
 `policy`, and review requirements. Do not claim that protection already exists;
 this PR does not alter repository billing, visibility, IAM or authorization.

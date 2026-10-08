@@ -31,9 +31,9 @@
     },
     {
       "id": "S05",
-      "title": "Streamily: sign types",
-      "url": "https://help.streamily.com/article/25-sign-types",
-      "supports": "Livestream, video, off-camera, physical and shoutout fulfillment formats."
+      "title": "Streamily: Warren Kole official autograph product",
+      "url": "https://streamily.com/warrenkole/44578",
+      "supports": "Current catalog offers livestream and off-camera signing plus optional personalization instructions. Product availability is not verified fulfillment or demand evidence. The former sign-types FAQ returned HTTP 404 during review on 2026-10-08; its wider fulfillment claims are not treated as current evidence."
     },
     {
       "id": "S06",
@@ -279,7 +279,7 @@
       "strongSubstitute": true,
       "audience": "Фанаты актёров, персонажей и VTubers.",
       "coreLoop": "Выбрать талант/формат → заказать персонализацию → получить подписанный предмет или цифровой формат.",
-      "monetization": "Продажа autograph/shoutout; приоритетные форматы.",
+      "monetization": "Продажа autograph; приоритетные форматы.",
       "scarcity": "Время таланта и события; только отдельные приоритетные заказы гарантированы на камеру.",
       "retention": "Интерпретация: новые signing events и коллекция; измеренное удержание неизвестно.",
       "sharing": "Интерпретация: запись события/покупка; права на распространение каждого формата не установлены.",
@@ -653,5 +653,6 @@
       "status": "Private originals и approval chain есть; EGO-94 sharing ещё в открытом PR #28.",
       "implication": "C08/H07: не обходить safety ради conversion; не обещать опубликованный оригинал."
     }
-  ]
+  ],
+  "reviewedAt": "2026-10-08"
 }

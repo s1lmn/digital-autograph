@@ -8,20 +8,20 @@
   margin: 0.25rem 0 0.75rem;
 }
 .intro {
-  color: #53606d;
+  color: var(--brand-color-muted);
   font-size: 1.05rem;
 }
 .warning {
-  border-left: 4px solid #bf7720;
-  background: #fff8ed;
+  border-left: 4px solid var(--brand-color-secondary);
+  background: var(--brand-color-secondarySoft);
   padding: 0.85rem 1rem;
   margin: 1.5rem 0 2rem;
   line-height: 1.45;
 }
 .auth {
   padding: 1.25rem;
-  background: white;
-  border: 1px solid #d9dfe5;
+  background: var(--brand-color-surface);
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.75rem;
 }
 .auth h2 {
@@ -36,8 +36,8 @@
   min-height: 44px;
   display: inline-block;
   padding: 0.7rem 1rem;
-  color: white;
-  background: #17202a;
+  color: var(--brand-color-onPrimary);
+  background: var(--brand-color-primary);
   border-radius: 0.5rem;
   text-decoration: none;
 }

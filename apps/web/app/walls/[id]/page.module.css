@@ -6,7 +6,7 @@
 }
 
 .header {
-  border-bottom: 1px solid #d7dce2;
+  border-bottom: 1px solid var(--brand-color-border);
   padding-bottom: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -34,9 +34,9 @@
 
 .slot {
   min-height: 12rem;
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.8rem;
-  background: #fff;
+  background: var(--brand-color-surface);
   padding: 0.9rem;
   display: flex;
   flex-direction: column;
@@ -46,7 +46,7 @@
 .slotNumber {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--brand-color-muted);
 }
 
 .slotContent {
@@ -58,12 +58,13 @@
   flex-direction: column;
   gap: 0.8rem;
   text-align: center;
-  background: #f7f9fb;
+  background: var(--brand-color-paper);
   border-radius: 0.5rem;
   padding: 0.5rem;
 }
 
 .autograph {
+  background: var(--brand-color-mediaPaper);
   width: 100%;
   max-height: 8rem;
   object-fit: contain;
@@ -73,9 +74,9 @@
 .picker {
   margin-top: 1.5rem;
   padding: 1.3rem;
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.8rem;
-  background: #fff;
+  background: var(--brand-color-surface);
 }
 
 .panel h2,
@@ -93,14 +94,14 @@
   gap: 0.7rem;
   align-items: center;
   padding: 0.7rem;
-  border: 1px solid #d7dce2;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.45rem;
   cursor: pointer;
 }
 
 .choice:has(input:checked) {
-  border-color: #2359a5;
-  background: #edf4ff;
+  border-color: var(--brand-color-primary);
+  background: var(--brand-color-primarySoft);
 }
 
 .privatePreview {
@@ -111,10 +112,11 @@
 }
 
 .privatePreview img {
+  background: var(--brand-color-mediaPaper);
   max-width: min(100%, 22rem);
   max-height: 10rem;
   object-fit: contain;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--brand-color-border);
   border-radius: 0.4rem;
   padding: 0.5rem;
 }
@@ -129,7 +131,7 @@
   margin-top: 1rem;
   padding: 0.9rem;
   border-radius: 0.5rem;
-  background: #eef5ff;
+  background: var(--brand-color-primarySoft);
 }
 
 .page button,
@@ -139,10 +141,10 @@
 
 .page button {
   cursor: pointer;
-  border: 1px solid #255592;
+  border: 1px solid var(--brand-color-control);
   border-radius: 0.4rem;
-  color: #12385f;
-  background: #eef5ff;
+  color: var(--brand-color-primary);
+  background: var(--brand-color-primarySoft);
   padding: 0.55rem 0.8rem;
 }
 
@@ -154,7 +156,7 @@
 .page button:focus-visible,
 .page a:focus-visible,
 .page input:focus-visible {
-  outline: 3px solid #0e63c7;
+  outline: 3px solid var(--brand-color-focus);
   outline-offset: 2px;
 }
 

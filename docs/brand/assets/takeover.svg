@@ -1,0 +1,19 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  role="img"
+  aria-labelledby="title"
+>
+  <title id="title">takeover icon specimen</title>
+  <g
+    fill="none"
+    stroke="#b2f2d6"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M3 7h17l-4-4m5 14H4l4 4" />
+  </g>
+</svg>

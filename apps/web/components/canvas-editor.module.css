@@ -15,7 +15,7 @@
 }
 .header p,
 .help {
-  color: #53606d;
+  color: var(--brand-color-muted);
   margin: 0;
 }
 .actions {
@@ -24,10 +24,10 @@
 }
 .actions button {
   padding: 0.55rem 0.85rem;
-  border: 1px solid #7b8793;
+  border: 1px solid var(--brand-color-control);
   border-radius: 0.5rem;
-  background: white;
-  color: #17202a;
+  background: var(--brand-color-surface);
+  color: var(--brand-color-ink);
   cursor: pointer;
 }
 .actions button:disabled {
@@ -39,8 +39,8 @@
   box-sizing: border-box;
   width: 100%;
   aspect-ratio: 2 / 1;
-  background: white;
-  border: 2px solid #7b8793;
+  background: var(--brand-color-mediaPaper);
+  border: 2px solid var(--brand-color-control);
   border-radius: 0.75rem;
   touch-action: none;
   cursor: crosshair;

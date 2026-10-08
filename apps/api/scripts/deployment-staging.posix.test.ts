@@ -6,8 +6,10 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import os from 'node:os';
@@ -21,8 +23,17 @@ const deploy = readFileSync(
 const selected = 'a'.repeat(40);
 const current = 'b'.repeat(40);
 
-function release(environment: string, operation = selected, failure = '') {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'da-staging-release-'));
+function release(
+  environment: string,
+  operation = selected,
+  failure = '',
+  temporaryDirectory = os.tmpdir(),
+) {
+  // Node resolves an aliased cwd/entrypoint; the fixture must use the same path
+  // so the capacity CLI's direct-execution guard actually runs.
+  const dir = realpathSync(
+    mkdtempSync(path.join(temporaryDirectory, 'da-staging-release-')),
+  );
   try {
     const root = path.join(dir, 'release');
     const state = path.join(dir, 'state');
@@ -141,6 +152,29 @@ fi
 }
 
 describe('staging release context and persistence', () => {
+  it('executes the capacity guard from an aliased temporary directory', () => {
+    const root = realpathSync(
+      mkdtempSync(path.join(os.tmpdir(), 'staging-alias-')),
+    );
+    try {
+      const target = path.join(root, 'target');
+      const alias = path.join(root, 'alias');
+      mkdirSync(target);
+      symlinkSync(target, alias, 'dir');
+      const run = release('staging', selected, 'bytes', alias);
+      expect(run.result.status).toBe(1);
+      expect(run.envCreated).toBe(false);
+      expect(run.releaseCreated).toBe(false);
+      expect(run.active).toBe(current);
+      expect(run.previous).toBe(selected);
+      expect(
+        run.commands.some((line) => /login|compose|capacity retain/.test(line)),
+      ).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it.each(['bytes', 'inodes', 'df-command', 'df-parse'])(
     'fails closed on %s before env/state writes, pull, backup and migration',
     (failure) => {

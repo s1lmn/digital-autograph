@@ -2,13 +2,16 @@ import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const databaseUrl =
@@ -16,13 +19,16 @@ const databaseUrl =
 const directories: string[] = [];
 
 afterEach(() => {
-  for (const directory of directories.splice(0)) {
+  for (const directory of directories.splice(0).reverse()) {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-function fixture(extension = 'mjs') {
-  const directory = mkdtempSync(join(tmpdir(), 'integration runner & space '));
+function fixture(extension = 'mjs', temporaryDirectory = tmpdir()) {
+  // macOS TMPDIR may use /var while child cwd resolves to /private/var.
+  const directory = realpathSync(
+    mkdtempSync(join(temporaryDirectory, 'integration runner & space ')),
+  );
   directories.push(directory);
   const runner = join(directory, 'run-integration.mjs');
   const launcher = join(directory, `package manager & space.${extension}`);
@@ -93,6 +99,38 @@ process.exit(Number(migration ? process.env.MIGRATION_EXIT : process.env.SUITE_E
 }
 
 describe('integration runner', () => {
+  it.each(['mjs', 'cjs', 'js'])(
+    'uses canonical cwd for a %s fixture under an aliased temp directory',
+    (extension) => {
+      const root = realpathSync(
+        mkdtempSync(join(tmpdir(), 'runner alias & space ')),
+      );
+      directories.push(root);
+      const target = join(root, 'real temp & space');
+      const alias = join(root, 'aliased temp & space');
+      mkdirSync(target);
+      symlinkSync(
+        target,
+        alias,
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+
+      const { directory, run } = fixture(extension, alias);
+      const canonicalDirectory = join(target, basename(directory));
+      const result = run();
+      expect(result.status, result.stdout + result.stderr).toBe(0);
+      expect(directory).toBe(canonicalDirectory);
+      expect(result.calls.map((call) => call.cwd)).toEqual([
+        canonicalDirectory,
+        canonicalDirectory,
+      ]);
+      expect(result.calls.map((call) => call.args)).toEqual([
+        ['--filter', '@digital-autograph/db', 'db:migrate'],
+        ['exec', 'vitest', 'run', '--config', 'vitest.integration.config.ts'],
+      ]);
+    },
+  );
+
   it.each(['mjs', 'cjs', 'js'])(
     'runs a %s launcher with literal paths and inherited output',
     (extension) => {

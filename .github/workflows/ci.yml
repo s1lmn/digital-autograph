@@ -114,6 +114,8 @@ jobs:
           YC_REGISTRY_ID: ci-placeholder
           IMAGE_TAG: ci-placeholder
         run: docker buildx bake --file deploy/docker-bake.hcl release
+      - name: Verify runner sudo authorization without TTY
+        run: pnpm test:runner-authorization
       - name: Run migration image twice without TTY on clean PostgreSQL
         run: pnpm test:migration-image
   e2e:

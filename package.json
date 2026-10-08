@@ -18,6 +18,7 @@
     "security:audit": "pnpm audit --audit-level high",
     "test:integration": "dotenv -e .env -- node scripts/run-integration.mjs",
     "test:build-smoke": "dotenv -e .env -- node scripts/smoke-built-api.mjs",
+    "test:runner-authorization": "node scripts/smoke-runner-authorization.mjs",
     "test:migration-image": "node scripts/smoke-migration-image.mjs",
     "e2e:setup": "tsx apps/api/scripts/e2e-setup.ts",
     "test:e2e": "playwright test",

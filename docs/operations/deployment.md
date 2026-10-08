@@ -86,7 +86,9 @@ immutable-image Container Registry:
   Docker Buildx is used on the hosted builder, not required by the VM deploy path. Configure the VM's attached service
   account for `yc`, Lockbox, and the registry credential helper. The runner
   user must be trusted with Docker/root access and non-interactive `sudo`;
-  configure the helper/token profile for the same root context.
+  configure the helper/token profile for the same root context. Provision the
+  reviewed [runner authorization contract](runner-authorization.md) before
+  enabling Release; never grant an unrestricted sudo shell to the runner.
 - Domain A records for `WEB_DOMAIN` and `API_DOMAIN` pointed at that
   environment's VM. Caddy obtains and renews HTTPS certificates; ensure ports
   80/443 and outbound ACME traffic are available.
@@ -250,6 +252,11 @@ independent of a developer checkout.
 2. The dedicated VM job checks out/verifies the exact published (or manually
    validated) SHA and creates its deployment record. It has only GitHub contents
    read/deployments write, no publishing OIDC permission or publisher token.
+   Before installing any release config, the job verifies the administrator-owned
+   preflight entrypoint/helper match the checkout and calls the fixed entrypoint
+   with `sudo -n` and the explicit operation. Missing/stale provisioning or denied
+   authorization fails closed before writes. All subsequent sudo calls also use
+   `-n`; their exact commands are versioned in `deploy/runner.sudoers`.
    The VM obtains the API and worker payloads from its environment's Lockbox,
    writes owner-only runtime environment files, pulls the SHA-tagged images,
    and uses one environment-selected Compose helper for pull, startup, migration,

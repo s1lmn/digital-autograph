@@ -165,6 +165,19 @@ A post-success retention error is an explicit operator warning; it cannot
 undo the successful application or turn an earlier failed deployment green.
 Inspect capacity before allowing the next integration release.
 
+Inventory/capacity subprocesses retain a 30-second timeout. Each separately
+guarded `docker image rm` has a bounded five-minute timeout: unpacked migration
+image deletion on the staging HDD exceeded 30 seconds in Release 37772014942,
+causing client cancellation (Docker HTTP 499) and incomplete retention after
+successful deployment. No force/prune or retry is added. A timeout/nonzero exit
+stops further removals and reports only the operation and timeout/exit status,
+never raw command output or environment values. Check remaining candidates and
+protected image sets read-only before any subsequent operator action.
+
+This helper change requires independent approval and administrator provisioning
+from the accepted exact root-owned checkout per `runner-authorization.md`
+**before merge/release**; the workflow's artifact comparison remains mandatory.
+
 ## Recovery acceptance
 
 This operational PR needs independent developer approval; its author cannot

@@ -96,9 +96,13 @@ describe('release SHA and authorization gates', () => {
             GITHUB_ACTIONS: githubActions,
           },
           encoding: 'utf8',
-          timeout: 10_000,
+          // A cold hosted runner exceeded the former 10-second CLI budget.
+          // Keep a bounded deadline without retrying or weakening the contract.
+          timeout: 30_000,
         },
       );
+      expect(result.error).toBeUndefined();
+      expect(result.signal).toBeNull();
       expect(result.status, result.stderr).toBe(0);
       const config = JSON.parse(result.stdout);
       const targets = ['api', 'web', 'worker', 'migration'];
@@ -120,6 +124,7 @@ describe('release SHA and authorization gates', () => {
         ]);
       }
     },
+    35_000,
   );
   it.each(['deploy', 'rollback'])(
     'exports only the validated request for %s, ignoring rollback image input',

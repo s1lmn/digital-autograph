@@ -56,7 +56,11 @@ Use `pnpm test:portable` for the same portable suite on either platform and
 with an explicit platform error on Windows. A green Windows run covers portable
 unit tests; the Linux `checks` job continues to run the full unit suite plus
 integration/build/container checks, and the `windows-unit` job runs the default
-Windows command. Both Windows jobs, Linux `checks` and `e2e` must pass before merge. Unit tests require no
+Windows command. The `macos-integration-runner` job verifies the launcher and staging capacity fixtures with
+the default macOS temporary directory and real directory aliases. Fixtures use
+canonical paths so symlink aliases do not cause false cwd failures; paths with
+spaces and ampersands are still exercised. Both Windows jobs, the macOS launcher
+job, Linux `checks` and `e2e` must pass before merge. Unit tests require no
 local PostgreSQL, MinIO or cloud credentials.
 
 The integration suite requires the separate `autograph_test` PostgreSQL instance on port 5433 and local MinIO on port 9000. It rejects a database URL with another database name, applies committed migrations, and then runs against that schema and a private test bucket. CI provisions PostgreSQL and MinIO. `pnpm db:generate` generates Drizzle migrations after schema changes; custom SQL migrations capture database triggers.

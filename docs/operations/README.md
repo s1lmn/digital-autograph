@@ -1,5 +1,9 @@
 # Operations
 
+[Incident admission controls](incident-controls.md) describes independent API
+shutdown of new payments and Free Claim while keeping existing recovery and
+history available.
+
 [Safe runtime diagnostics](safe-diagnostics.md) describes bounded exception
 logs, request correlation and built-runtime privacy smoke checks.
 

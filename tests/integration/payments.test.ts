@@ -12,6 +12,7 @@ import {
   createPgNotificationRepository,
 } from '../../packages/db/src/index';
 import { NotificationService } from '../../packages/notifications/src/index';
+import type { IncidentControls } from '../../apps/api/src/incident-controls';
 import {
   TakeoverQuoteService,
   TakeoverReservationService,
@@ -72,7 +73,7 @@ const repo = createPgPaymentRepository(database.pool);
 function service(repository = repo) {
   return new PaymentService(repository, provider, settings);
 }
-function api(payments = service()) {
+function api(payments = service(), incidentControls?: IncidentControls) {
   return buildApi(
     database,
     sessions,
@@ -88,11 +89,15 @@ function api(payments = service()) {
     undefined,
     undefined,
     undefined,
-    undefined,
-    undefined,
+    new TakeoverQuoteService(createPgPricingRepository(database.pool)),
+    new TakeoverReservationService(
+      createPgTakeoverReservationRepository(database.pool),
+    ),
     undefined,
     undefined,
     payments,
+    undefined,
+    incidentControls,
   );
 }
 async function person() {
@@ -268,6 +273,219 @@ beforeEach(async () => {
   creates = 0;
 });
 afterAll(() => database.close());
+it('payment shutdown rejects concurrent quote/reservation/order admission without DB or provider effects', async () => {
+  const f = await setup();
+  const app = api(service(), {
+    disableNewPayments: true,
+    disableFreeClaims: false,
+  });
+  const headers = {
+    cookie: `da_session=${f.buyer.token}`,
+    origin: 'http://127.0.0.1:3000',
+  };
+  const snapshot = async () =>
+    (
+      await database.pool.query(`SELECT
+    (SELECT count(*)::int FROM takeover_quotes) quotes,
+    (SELECT count(*)::int FROM takeover_reservations) reservations,
+    (SELECT count(*)::int FROM payment_orders) orders,
+    (SELECT count(*)::int FROM payments) payments,
+    (SELECT count(*)::int FROM placements) placements`)
+    ).rows[0];
+  const before = await snapshot();
+  const quoteId = (
+    await database.pool.query(
+      'SELECT quote_id FROM takeover_reservations WHERE id=$1',
+      [f.reservationId],
+    )
+  ).rows[0].quote_id;
+  const requests = [
+    {
+      url: `/walls/${f.wallId}/slots/${f.slots[0]!.slotId}/takeover-quote`,
+      payload: {},
+    },
+    { url: '/takeover-reservations', payload: { quoteId } },
+    {
+      url: '/payments/orders',
+      payload: { reservationId: f.reservationId, autographId: f.autographId },
+    },
+  ];
+  try {
+    const responses = await Promise.all(
+      Array.from({ length: 30 }, (_, i) =>
+        app.inject({ method: 'POST', ...requests[i % 3]!, headers }),
+      ),
+    );
+    for (const response of responses) {
+      expect(response.statusCode).toBe(503);
+      expect(response.json()).toEqual({
+        error: { code: 'NEW_PAYMENTS_DISABLED' },
+      });
+      expect(response.headers['cache-control']).toBe('no-store');
+    }
+    expect(await snapshot()).toEqual(before);
+    expect(creates).toBe(0);
+    expect(
+      (
+        await app.inject({
+          url: `/takeover-reservations/${f.reservationId}`,
+          headers,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/takeover-reservations/${f.reservationId}/cancel`,
+          headers,
+          payload: {},
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await database.pool.query(
+          'SELECT status FROM takeover_reservations WHERE id=$1',
+          [f.reservationId],
+        )
+      ).rows[0].status,
+    ).toBe('cancelled');
+  } finally {
+    await app.close();
+  }
+});
+
+it.each(['webhook', 'refresh', 'reconciliation'] as const)(
+  'payment shutdown preserves %s fulfillment and duplicate safety for existing orders',
+  async (path) => {
+    const f = await started();
+    const s = service();
+    const app = api(s, { disableNewPayments: true, disableFreeClaims: true });
+    const headers = {
+      cookie: `da_session=${f.buyer.token}`,
+      origin: 'http://127.0.0.1:3000',
+    };
+    succeed(f.providerId);
+    try {
+      // Even an exact create retry is stopped; existing status/recovery routes remain.
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/payments/orders',
+            headers,
+            payload: {
+              reservationId: f.reservationId,
+              autographId: f.autographId,
+            },
+          })
+        ).statusCode,
+      ).toBe(503);
+      const progress = async () => {
+        if (path === 'reconciliation') {
+          await database.pool.query(
+            "UPDATE payments SET next_check_at=clock_timestamp()-interval '1 minute' WHERE order_id=$1",
+            [f.orderId],
+          );
+          await s.reconcile();
+          return;
+        }
+        const response = await app.inject(
+          path === 'refresh'
+            ? {
+                method: 'POST',
+                url: `/payments/orders/${f.orderId}/refresh`,
+                headers,
+                payload: {},
+              }
+            : {
+                method: 'POST',
+                url: '/payments/webhooks/yookassa',
+                payload: {
+                  type: 'notification',
+                  event: 'payment.succeeded',
+                  object: { id: f.providerId },
+                },
+              },
+        );
+        // Per-process provider capacity may reject concurrent recovery; never lose work.
+        expect([200, 503]).toContain(response.statusCode);
+      };
+      await Promise.all(Array.from({ length: 3 }, () => progress()));
+      await progress();
+      expect(await counts(f.orderId)).toMatchObject({
+        status: 'fulfilled',
+        takeovers: 1,
+        earnings: 1,
+        active: 1,
+      });
+      expect(creates).toBe(1);
+      const status = await app.inject({
+        url: `/payments/orders/${f.orderId}`,
+        headers,
+      });
+      expect(status.statusCode).toBe(200);
+      expect(status.json().status).toBe('fulfilled');
+      const stranger = await person();
+      expect(
+        (
+          await app.inject({
+            url: `/payments/orders/${f.orderId}`,
+            headers: { cookie: `da_session=${stranger.token}` },
+          })
+        ).statusCode,
+      ).toBe(404);
+    } finally {
+      await app.close();
+    }
+  },
+);
+
+it('payment shutdown recovers an unbound persisted attempt using only its original provider key', async () => {
+  const f = await setup();
+  createUnknown = true;
+  const order = await service().create(
+    f.buyer.id,
+    f.reservationId,
+    f.autographId,
+  );
+  expect((await repo.find(order.id))!.providerPaymentId).toBeNull();
+  const originalKeys = [...keys.keys()];
+  succeed([...keys.values()][0]!);
+  createUnknown = false;
+  const app = api(service(), {
+    disableNewPayments: true,
+    disableFreeClaims: false,
+  });
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/payments/orders/${order.id}/refresh`,
+      headers: {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(200);
+    expect(await counts(order.id)).toMatchObject({
+      status: 'fulfilled',
+      takeovers: 1,
+      earnings: 1,
+      active: 1,
+    });
+    expect([...keys.keys()]).toEqual(originalKeys);
+    expect(creates).toBe(2);
+    expect(
+      (await database.pool.query('SELECT count(*)::int n FROM payment_orders'))
+        .rows[0].n,
+    ).toBe(1);
+  } finally {
+    await app.close();
+  }
+});
+
 it('success atomically preserves history, earns once, consumes reservation and pins price', async () => {
   const f = await started();
   succeed(f.providerId);

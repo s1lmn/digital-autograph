@@ -1,0 +1,15 @@
+title = "Digital Autograph secret scanning"
+
+[extend]
+useDefault = true
+
+# Synthetic request idempotency keys in the original reservation integration
+# fixtures (c50bf736), not credentials. Both exact value AND exact path required.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "Reviewed reservation request fixtures only"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^tests/integration/takeover-reservation\.test\.ts$''']
+regexes = ['''^(strict-body-key-01|fresh-after-expiry-01|same-key-two-quotes-01)$''']

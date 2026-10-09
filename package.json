@@ -31,7 +31,8 @@
     "infra:down": "docker compose --profile test down",
     "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts",
     "test:portable": "vitest run --config vitest.portable.config.ts",
-    "test:posix": "vitest run --config vitest.posix.config.ts"
+    "test:posix": "vitest run --config vitest.posix.config.ts",
+    "security:secrets": "node scripts/scan-secrets.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",

@@ -32,52 +32,66 @@ export function WallSlot({
       tabIndex={-1}
       className={styles.slot}
       aria-label={`Slot ${number}`}
+      value={number}
+      data-occupied={slot.occupied}
     >
-      <span className={styles.slotNumber}>Slot {number}</span>
+      <div className={styles.slotHeading}>
+        <span className={styles.slotNumber}>Slot {number}</span>
+        <span className={styles.slotStatus}>
+          {slot.occupied ? 'Occupied' : 'Empty'}
+        </span>
+      </div>
       {slot.occupied ? (
-        <div className={styles.slotContent}>
-          {showMedia && mediaPath ? (
-            <img
-              className={styles.autograph}
-              src={`${apiOrigin}${mediaPath}`}
-              alt={`Digital autograph in slot ${number}`}
-              crossOrigin="anonymous"
-              referrerPolicy="no-referrer"
-              onError={() => setFailedPath(mediaPath)}
-            />
-          ) : (
-            <div>
-              <p>Autograph unavailable</p>
-              {mediaPath && (
-                <button type="button" onClick={() => setFailedPath(null)}>
-                  Retry autograph
+        <>
+          <div className={styles.signatureMedia}>
+            {showMedia && mediaPath ? (
+              <img
+                className={styles.autograph}
+                src={`${apiOrigin}${mediaPath}`}
+                alt={`Digital autograph in slot ${number}`}
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
+                onError={() => setFailedPath(mediaPath)}
+              />
+            ) : (
+              <div className={styles.mediaUnavailable}>
+                <p>Autograph unavailable</p>
+                {mediaPath && (
+                  <button type="button" onClick={() => setFailedPath(null)}>
+                    Retry autograph
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <div className={styles.slotContent}>
+            <p className={styles.placementLabel}>
+              Current placement
+              {slot.currentPlacement
+                ? ` · ${placementSourceLabel(slot.currentPlacement.source)}`
+                : ''}
+            </p>
+            {!frontendCapabilities.paidTakeover && (
+              <div className={styles.takeoverNotice}>
+                <button
+                  type="button"
+                  disabled
+                  aria-describedby={`takeover-unavailable-${slot.id}`}
+                >
+                  Paid takeover
                 </button>
-              )}
-            </div>
-          )}
-          <p>
-            Current placement
-            {slot.currentPlacement
-              ? ` · ${placementSourceLabel(slot.currentPlacement.source)}`
-              : ''}
-          </p>
-          {!frontendCapabilities.paidTakeover && (
-            <div>
-              <button
-                type="button"
-                disabled
-                aria-describedby={`takeover-unavailable-${slot.id}`}
-              >
-                Paid takeover
-              </button>
-              <p id={`takeover-unavailable-${slot.id}`}>
-                Paid takeover is not available yet.
-              </p>
-            </div>
-          )}
-        </div>
+                <p id={`takeover-unavailable-${slot.id}`}>
+                  Paid takeover is not available yet.
+                </p>
+              </div>
+            )}
+          </div>
+        </>
       ) : (
-        <div className={styles.slotContent}>
+        <div className={styles.emptySlot}>
+          <span className={styles.emptyMark} aria-hidden="true">
+            +
+          </span>
           <p>Empty slot</p>
           {actionLabel && (
             <button

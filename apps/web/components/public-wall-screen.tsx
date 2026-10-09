@@ -65,6 +65,9 @@ export function PublicWallScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0);
+  const [slotFilter, setSlotFilter] = useState<'all' | 'empty'>('all');
+  const linkedSlotFocus = useRef<string | null>(null);
+  const allSlotsButton = useRef<HTMLButtonElement>(null);
   const inFlight = useRef(false);
   const requestController = useRef<AbortController | null>(null);
 
@@ -223,47 +226,155 @@ export function PublicWallScreen({
   const selected = ready?.find((item) => item.id === selectedId);
   const target = wall.slots.find((slot) => slot.id === targetSlotId);
   const returnTo = encodeURIComponent(`/walls/${wall.id}`);
+  const emptySlots = wall.slots.filter((slot) => !slot.occupied);
+  const visibleSlots = slotFilter === 'empty' ? emptySlots : wall.slots;
+
+  // A new notification/history fragment must remain reachable after filtering.
+  useEffect(() => {
+    const revealLinkedSlot = () => {
+      const id = window.location.hash.slice(1);
+      if (
+        slotFilter === 'empty' &&
+        wall.slots.some((slot) => `slot-${slot.id}` === id && slot.occupied)
+      ) {
+        linkedSlotFocus.current = id;
+        setSlotFilter('all');
+      }
+    };
+    window.addEventListener('hashchange', revealLinkedSlot);
+    return () => window.removeEventListener('hashchange', revealLinkedSlot);
+  }, [slotFilter, wall.slots]);
+  useEffect(() => {
+    if (slotFilter === 'all' && linkedSlotFocus.current) {
+      document.getElementById(linkedSlotFocus.current)?.focus();
+      linkedSlotFocus.current = null;
+    }
+  }, [slotFilter]);
 
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <p className="eyebrow">Digital Autograph Platform</p>
-        <h1>{wall.creator.displayName}&apos;s Wall</h1>
-        <p className={styles.state}>
-          Wall status: <strong>{wall.status}</strong>
-        </p>
-        <p>{wallNotice(wall, now)}</p>
-        <p>
-          <a href={`/creators/${encodeURIComponent(wall.creator.slug)}`}>
-            View creator
+        <div className={styles.poster}>
+          <p className="eyebrow">Digital Autograph Platform</p>
+          <h1 aria-label={`${wall.creator.displayName}'s Wall`}>
+            <span className={styles.creatorName}>
+              {wall.creator.displayName}
+            </span>
+            <span className={styles.wallTitle}>Wall</span>
+          </h1>
+          <a className={styles.posterLink} href="#slots-heading">
+            View the slots
+            <svg
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M5 19 19 5M5 5h14v14" />
+            </svg>
           </a>
-        </p>
-        <WallCountdown
-          startAt={wall.startAt}
-          endAt={wall.endAt}
-          status={wall.status}
-        />
-        {auth === 'authenticated' && (
-          <a href="/me/placements">View your placement history</a>
-        )}
-        {wall.startAt && <p>Starts: {new Date(wall.startAt).toUTCString()}</p>}
-        {wall.endAt && <p>Ends: {new Date(wall.endAt).toUTCString()}</p>}
-        <button
-          type="button"
-          onClick={() => void refreshWall()}
-          disabled={refreshing}
-        >
-          {refreshing ? 'Refreshing…' : 'Refresh Wall'}
-        </button>
-        {refreshError && (
-          <p role="alert">The Wall could not be refreshed. Try again.</p>
-        )}
+        </div>
+        <div className={styles.wallDetails}>
+          <p className={styles.state}>
+            Wall status: <strong>{wall.status}</strong>
+          </p>
+          <p>{wallNotice(wall, now)}</p>
+          <p>
+            <a href={`/creators/${encodeURIComponent(wall.creator.slug)}`}>
+              View creator
+            </a>
+          </p>
+          <WallCountdown
+            startAt={wall.startAt}
+            endAt={wall.endAt}
+            status={wall.status}
+          />
+          {auth === 'authenticated' && (
+            <a href="/me/placements">View your placement history</a>
+          )}
+          {wall.startAt && (
+            <p>Starts: {new Date(wall.startAt).toUTCString()}</p>
+          )}
+          {wall.endAt && <p>Ends: {new Date(wall.endAt).toUTCString()}</p>}
+          <button
+            type="button"
+            onClick={() => void refreshWall()}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Refreshing…' : 'Refresh Wall'}
+          </button>
+          {refreshError && (
+            <p role="alert">The Wall could not be refreshed. Try again.</p>
+          )}
+        </div>
       </header>
 
-      <section aria-labelledby="slots-heading">
-        <h2 id="slots-heading">Slots</h2>
-        <ol className={styles.grid}>
-          {wall.slots.map((slot) => {
+      <section className={styles.wallSection} aria-labelledby="slots-heading">
+        <div className={styles.sectionHeading}>
+          <h2 id="slots-heading" tabIndex={-1}>
+            Slots
+          </h2>
+          <dl className={styles.slotCounts}>
+            <div>
+              <dt>Occupied</dt>
+              <dd>{wall.slots.length - emptySlots.length}</dd>
+            </div>
+            <div>
+              <dt>Empty</dt>
+              <dd>{emptySlots.length}</dd>
+            </div>
+          </dl>
+        </div>
+        <div className={styles.gridToolbar}>
+          <div
+            className={styles.filters}
+            role="group"
+            aria-label="Filter slots"
+          >
+            <button
+              ref={allSlotsButton}
+              type="button"
+              aria-pressed={slotFilter === 'all'}
+              aria-controls="wall-slots"
+              disabled={phase === 'claiming' || refreshing}
+              onClick={() => setSlotFilter('all')}
+            >
+              All slots
+            </button>
+            <button
+              type="button"
+              aria-pressed={slotFilter === 'empty'}
+              aria-controls="wall-slots"
+              disabled={phase === 'claiming' || refreshing}
+              onClick={() => setSlotFilter('empty')}
+            >
+              Empty slots
+            </button>
+          </div>
+          <p
+            id="grid-summary"
+            className={styles.gridSummary}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            Showing {visibleSlots.length} of {wall.slots.length} slots.
+          </p>
+        </div>
+        <p className={styles.availabilityNote}>
+          An empty slot is not reserved. The server confirms availability when
+          you claim.
+        </p>
+        <ol
+          id="wall-slots"
+          className={styles.grid}
+          aria-label="Wall slots"
+          aria-describedby="grid-summary"
+        >
+          {visibleSlots.map((slot) => {
             const actionLabel =
               !canClaim || slot.occupied
                 ? undefined
@@ -288,6 +399,31 @@ export function PublicWallScreen({
             );
           })}
         </ol>
+        {visibleSlots.length === 0 && (
+          <div className={styles.emptyResult}>
+            <h3>
+              {slotFilter === 'empty'
+                ? 'No empty slots in this view'
+                : 'No slots to show'}
+            </h3>
+            <p>
+              {slotFilter === 'empty'
+                ? 'View all slots to see the autographs, or refresh the Wall for its latest state.'
+                : 'Refresh the Wall to check its latest state.'}
+            </p>
+            {slotFilter === 'empty' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSlotFilter('all');
+                  allSlotsButton.current?.focus();
+                }}
+              >
+                Show all slots
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       {canClaim && auth === 'checking' && (

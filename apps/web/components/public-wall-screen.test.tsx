@@ -79,9 +79,103 @@ function readyList(count = 1) {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.history.replaceState(null, '', '/');
 });
 
 describe('public Wall and Free Claim UX', () => {
+  it('filters by occupancy even when media is unavailable, retaining original slot numbers and making no requests', async () => {
+    const fetchMock = vi.fn(async (input: string) =>
+      input.endsWith('/placements')
+        ? json({ wallId, placements: [] })
+        : json({}, 401),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const initial = occupied();
+    initial.slots[0]!.currentPlacement!.mediaPath = null;
+    render(<PublicWallScreen initialWall={initial} apiOrigin={origin} />);
+    await screen.findByRole('button', { name: 'Sign in to claim' });
+    const requestCount = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Empty slots' }));
+    const grid = screen.getByRole('list', { name: 'Wall slots' });
+    expect(within(grid).queryByRole('listitem', { name: 'Slot 1' })).toBeNull();
+    expect(
+      within(grid)
+        .getByRole('listitem', { name: 'Slot 2' })
+        .getAttribute('value'),
+    ).toBe('2');
+    expect(screen.getByText('Showing 1 of 2 slots.')).toBeTruthy();
+    expect(
+      screen
+        .getByRole('button', { name: 'Empty slots' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(fetchMock.mock.calls).toHaveLength(requestCount);
+    fireEvent.click(screen.getByRole('button', { name: 'All slots' }));
+    expect(within(grid).getByText('Autograph unavailable')).toBeTruthy();
+    expect(screen.getByText('Showing 2 of 2 slots.')).toBeTruthy();
+  });
+
+  it('retains the empty filter across refresh and offers a keyboard focus destination when no slots remain', async () => {
+    const full = occupied();
+    full.slots[1] = {
+      ...full.slots[1]!,
+      occupied: true,
+      currentPlacement: null,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (input.endsWith('/placements'))
+          return json({ wallId, placements: [] });
+        if (input.endsWith(`/walls/${wallId}`)) return json(full);
+        return json({}, 401);
+      }),
+    );
+    render(<PublicWallScreen initialWall={wall()} apiOrigin={origin} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Empty slots' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Wall' }));
+    expect(
+      await screen.findByRole('heading', {
+        name: 'No empty slots in this view',
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText('Showing 0 of 2 slots.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all slots' }));
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'All slots' }),
+    );
+    expect(
+      within(screen.getByRole('list', { name: 'Wall slots' })).getAllByRole(
+        'listitem',
+      ),
+    ).toHaveLength(2);
+  });
+
+  it('reveals and focuses an occupied slot reached by a history fragment while filtering', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) =>
+        input.endsWith('/placements')
+          ? json({ wallId, placements: [] })
+          : json({}, 401),
+      ),
+    );
+    render(<PublicWallScreen initialWall={occupied()} apiOrigin={origin} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Empty slots' }));
+    window.history.replaceState(null, '', `#slot-${slotOne}`);
+    fireEvent(window, new HashChangeEvent('hashchange'));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('listitem', { name: 'Slot 1' }),
+      ),
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'All slots' })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
   it('refreshes history with Refresh Wall inside the single page landmark', async () => {
     let historyRequests = 0;
     const fetchMock = vi.fn(async (input: string) => {
@@ -196,6 +290,9 @@ describe('public Wall and Free Claim UX', () => {
       expect(screen.getByAltText('Digital autograph in slot 1')).toBeTruthy();
       expect(screen.queryByRole('button', { name: /claim/i })).toBeNull();
       expect(screen.getByText(`Wall status:`).textContent).toContain(status);
+      fireEvent.click(screen.getByRole('button', { name: 'Empty slots' }));
+      expect(screen.getByText('Showing 1 of 2 slots.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /claim/i })).toBeNull();
     },
   );
 
@@ -287,6 +384,7 @@ describe('public Wall and Free Claim UX', () => {
       await screen.findByText('No placements have been recorded yet.'),
     ).toBeTruthy();
     const radios = await screen.findAllByRole('radio');
+    fireEvent.click(screen.getByRole('button', { name: 'Empty slots' }));
     fireEvent.click(radios[1]!);
     await waitFor(() =>
       expect(
@@ -333,6 +431,9 @@ describe('public Wall and Free Claim UX', () => {
     expect(
       await screen.findByText('Your autograph is on the Wall.'),
     ).toBeTruthy();
+    await screen.findByText('Showing 1 of 2 slots.');
+    expect(screen.queryByRole('listitem', { name: 'Slot 1' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'All slots' }));
     expect(
       await screen.findByAltText('Digital autograph in slot 1'),
     ).toBeTruthy();
@@ -402,6 +503,7 @@ describe('public Wall and Free Claim UX', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<PublicWallScreen initialWall={wall()} apiOrigin={origin} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Empty slots' }));
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
     );
@@ -410,6 +512,9 @@ describe('public Wall and Free Claim UX', () => {
       'textContent',
       expect.stringContaining('Someone claimed this slot first'),
     );
+    await screen.findByText('Showing 1 of 2 slots.');
+    expect(screen.queryByRole('listitem', { name: 'Slot 1' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'All slots' }));
     expect(
       await screen.findByAltText('Digital autograph in slot 1'),
     ).toBeTruthy();

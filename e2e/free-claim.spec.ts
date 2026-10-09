@@ -211,6 +211,11 @@ test('new user uploads, reviews, claims and reads only their persistent history'
     page.getByRole('radio', { name: /Drawn autograph/ }),
   ).toBeVisible();
   await responsive(page, page.getByRole('button', { name: 'Claim this slot' }));
+  await page.getByRole('button', { name: 'Empty slots', exact: true }).focus();
+  await page.keyboard.press('Space');
+  await expect(
+    page.getByRole('button', { name: 'Empty slots', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Claim this slot' }).click();
   await expect(
     page.getByRole('heading', { name: 'Confirm your free claim' }),
@@ -229,6 +234,16 @@ test('new user uploads, reviews, claims and reads only their persistent history'
     page.getByText('Your autograph is on the Wall.', { exact: true }),
   ).toBeVisible();
   await expect(history.getByText('Current placement')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'No empty slots in this view' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Showing 0 of 1 slots.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show all slots' }).click();
+  await expect(
+    page.getByRole('button', { name: 'All slots', exact: true }),
+  ).toBeFocused();
   await expect(page.getByRole('listitem', { name: 'Slot 1' })).toBeVisible();
   await expect(history.getByText('Free Claim', { exact: true })).toBeVisible();
   await expect(history.getByRole('heading', { name: 'Slot 1' })).toBeVisible();

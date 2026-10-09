@@ -32,6 +32,10 @@ or creator testing. The implementation keeps flows and business rules intact.
 
 ## Tokens and frontend adoption
 
+The [public Wall handoff](public-wall-handoff.md) records the EGO-148 adoption of
+the later «Я был здесь» poster/grid concept, its API constraints and interaction
+coverage. It is a scoped frontend slice, not final EGO-84 acceptance.
+
 [tokens.json](tokens.json) is canonical. `pnpm brand:export` generates
 `apps/web/app/brand-tokens.css`, this gallery, vectors, PNGs and the contrast report.
 `pnpm brand:check` rejects stale generated text, missing/invalid PNG dimensions and

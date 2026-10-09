@@ -1,5 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import {
+  Dir,
+  type Dirent,
+  lstatSync,
   mkdtempSync,
   mkdirSync,
   rmSync,
@@ -9,7 +12,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 const script = new URL(
   '../../../deploy/staging-disk-inventory.mjs',
@@ -127,68 +130,118 @@ describe('read-only staging disk inventory', () => {
     },
   );
 
-  it('preserves inode/byte, rollback image and mounted volume evidence without secret fields or backup contents', () => {
-    const f = fixture();
-    try {
-      const report = f.collect();
-      expect(report.complete).toBe(true);
-      expect(report.probes.rootCapacity.data).toMatchObject({
-        availableBytes: '1000',
-        availableInodes: '5',
-        usedInodePercent: '95',
-      });
-      expect(report.probes.currentImageTag.data).toBe(current);
-      expect(report.probes.previousImageTag.data).toBe(previous);
-      expect(
-        report.probes.images.data.map(
-          (row: { releaseSha: string }) => row.releaseSha,
-        ),
-      ).toEqual([current, previous]);
-      expect(report.probes.containers.data[0].volumes).toEqual([
-        'digital-autograph-staging-postgres',
-      ]);
-      expect(
-        report.probes.backupMetadata.data.map(
-          (row: { completedFilename: boolean }) => row.completedFilename,
-        ),
-      ).toEqual([true, false]);
-      expect(JSON.stringify(report)).not.toMatch(
-        /DO-NOT-PRINT|synthetic backup|private-object|"Env"|"Args"|"Source"|"Labels"/,
-      );
-      expect(readFileSync(path.join(f.directory, 'api.env'), 'utf8')).toBe(
-        secret,
-      );
-      for (const { binary, args } of f.calls) {
-        expect(['df', 'du', 'docker']).toContain(binary);
-        if (binary === 'docker')
-          expect(
-            [
-              'info',
-              'system df',
-              'image ls',
-              'ps',
-              'container inspect',
-              'volume ls',
-            ].some((allowed) => args.join(' ').startsWith(allowed)),
-          ).toBe(true);
-        expect(args).not.toEqual(expect.arrayContaining(['prune']));
+  it.each(['ascending', 'descending'])(
+    'preserves inode/byte, rollback image and mounted volume evidence without secret fields or backup contents with %s directory enumeration',
+    (order) => {
+      const f = fixture();
+      const readSync = Dir.prototype.readSync;
+      let entries: Dirent[] | undefined;
+      const enumeratedNames: string[] = [];
+      const read = vi
+        .spyOn(Dir.prototype, 'readSync')
+        .mockImplementation(function (this: Dir) {
+          if (!entries) {
+            // Read real entries, then force both orders regardless of filesystem behavior.
+            entries = [];
+            let entry;
+            while ((entry = readSync.call(this))) entries.push(entry);
+            entries.sort((a, b) => a.name.localeCompare(b.name));
+            if (order === 'descending') entries.reverse();
+          }
+          const entry = entries.shift() ?? null;
+          if (entry) enumeratedNames.push(entry.name);
+          return entry;
+        });
+      try {
+        const report = f.collect();
+        const expectedNames = [
+          '20261007T120000-123.dump',
+          '20261007T130000-124.dump.tmp',
+          'private-object',
+        ];
+        if (order === 'descending') expectedNames.reverse();
+        expect(enumeratedNames).toEqual(expectedNames);
+        expect(report.complete).toBe(true);
+        expect(report.probes.rootCapacity.data).toMatchObject({
+          availableBytes: '1000',
+          availableInodes: '5',
+          usedInodePercent: '95',
+        });
+        expect(report.probes.currentImageTag.data).toBe(current);
+        expect(report.probes.previousImageTag.data).toBe(previous);
         expect(
-          args.some((arg) =>
-            ['remove', 'restart', 'compose', 'logs'].includes(arg),
+          report.probes.images.data.map(
+            (row: { releaseSha: string }) => row.releaseSha,
           ),
-        ).toBe(false);
-        expect(args.join(' ')).not.toMatch(/\.Config\.Env|\.Args|\.Source/);
+        ).toEqual([current, previous]);
+        expect(report.probes.containers.data[0].volumes).toEqual([
+          'digital-autograph-staging-postgres',
+        ]);
+        const backups = report.probes.backupMetadata.data;
+        expect(backups).toHaveLength(2);
+        expect(
+          Object.fromEntries(
+            backups.map((row: { name: string }) => [row.name, row]),
+          ),
+        ).toEqual(
+          Object.fromEntries(
+            (
+              [
+                ['20261007T120000-123.dump', 'synthetic backup', true],
+                ['20261007T130000-124.dump.tmp', 'incomplete', false],
+              ] as const
+            ).map(([name, contents, completedFilename]) => [
+              name,
+              {
+                name,
+                bytes: Buffer.byteLength(contents),
+                modifiedAt: lstatSync(
+                  path.join(f.directory, 'staging-backups', name),
+                ).mtime.toISOString(),
+                completedFilename,
+              },
+            ]),
+          ),
+        );
+        expect(JSON.stringify(report)).not.toMatch(
+          /DO-NOT-PRINT|synthetic backup|incomplete|private-object|"Env"|"Args"|"Source"|"Labels"/,
+        );
+        expect(readFileSync(path.join(f.directory, 'api.env'), 'utf8')).toBe(
+          secret,
+        );
+        for (const { binary, args } of f.calls) {
+          expect(['df', 'du', 'docker']).toContain(binary);
+          if (binary === 'docker')
+            expect(
+              [
+                'info',
+                'system df',
+                'image ls',
+                'ps',
+                'container inspect',
+                'volume ls',
+              ].some((allowed) => args.join(' ').startsWith(allowed)),
+            ).toBe(true);
+          expect(args).not.toEqual(expect.arrayContaining(['prune']));
+          expect(
+            args.some((arg) =>
+              ['remove', 'restart', 'compose', 'logs'].includes(arg),
+            ),
+          ).toBe(false);
+          expect(args.join(' ')).not.toMatch(/\.Config\.Env|\.Args|\.Source/);
+        }
+        expect(
+          f.calls.some(
+            (call) =>
+              call.args.at(-1) === path.join('/runner path & literal', '_work'),
+          ),
+        ).toBe(true);
+      } finally {
+        read.mockRestore();
+        f.cleanup();
       }
-      expect(
-        f.calls.some(
-          (call) =>
-            call.args.at(-1) === path.join('/runner path & literal', '_work'),
-        ),
-      ).toBe(true);
-    } finally {
-      f.cleanup();
-    }
-  });
+    },
+  );
 
   it.each(['docker', 'df', 'du'])(
     'marks %s failure as incomplete while retaining successful probes and suppressing raw diagnostics',

@@ -25,7 +25,10 @@ export type WorkerOperations = {
   pollIntervalMs: number;
   cleanupGraceSeconds: number;
   notifications?: () => Promise<void>;
+  cleanupOAuthAttempts?: () => Promise<number>;
 };
+
+export const oauthAttemptCleanupIntervalMs = 60_000;
 
 function cleanedKey(job: ClaimedAutographJob): string {
   return `autographs/${job.autographId}/cleaned/${job.id}.png`;
@@ -116,6 +119,7 @@ export async function runWorker(
   operations?: WorkerOperations,
 ): Promise<void> {
   let stopping = false;
+  let nextOAuthCleanupAt = 0;
   let wake: (() => void) | undefined;
   const stopped = new Promise<void>((resolve) => {
     wake = resolve;
@@ -146,6 +150,28 @@ export async function runWorker(
             await operations.notifications();
           } catch {
             console.error('Notification polling cycle failed');
+          }
+        }
+        if (
+          !stopping &&
+          operations.cleanupOAuthAttempts &&
+          performance.now() >= nextOAuthCleanupAt
+        ) {
+          nextOAuthCleanupAt =
+            performance.now() + oauthAttemptCleanupIntervalMs;
+          try {
+            const deletedAttempts = await operations.cleanupOAuthAttempts();
+            if (deletedAttempts > 0)
+              console.info(
+                JSON.stringify({
+                  event: 'OAUTH_ATTEMPTS_CLEANED',
+                  deletedAttempts,
+                }),
+              );
+          } catch {
+            console.error(
+              JSON.stringify({ event: 'OAUTH_ATTEMPT_CLEANUP_FAILED' }),
+            );
           }
         }
       }

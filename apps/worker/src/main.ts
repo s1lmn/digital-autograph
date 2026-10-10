@@ -3,6 +3,7 @@ import { runtimeFailureRecord } from '@digital-autograph/observability';
 import {
   createDatabase,
   createPgAutographProcessingRepository,
+  createPgOAuthAttemptCleanup,
 } from '@digital-autograph/db';
 import { createPrivateS3Storage } from '@digital-autograph/integrations/private-s3';
 import { restrictWorkerImageLoaders } from './image-processing';
@@ -49,6 +50,7 @@ async function main(): Promise<void> {
         leaseSeconds: config.WORKER_LEASE_SECONDS,
         pollIntervalMs: config.WORKER_POLL_INTERVAL_MS,
         cleanupGraceSeconds: config.UPLOAD_CLEANUP_GRACE_SECONDS,
+        cleanupOAuthAttempts: createPgOAuthAttemptCleanup(database.pool),
         notifications: () =>
           notificationCycle(
             notificationRepository,

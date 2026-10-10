@@ -224,6 +224,66 @@ it('migrates clean DB twice and upgrades populated pre-0017 without fabricated l
     rmSync(temp, { recursive: true, force: true });
   }
 }, 60000);
+it('upgrades populated pre-0018 preserving exact append-only evidence without inferring age', async () => {
+  const name = `autograph_test_age_${randomUUID().replaceAll('-', '')}`;
+  const u = new URL(value!);
+  u.pathname = `/${name}`;
+  const temp = mkdtempSync(join(tmpdir(), 'da-age-upgrade-'));
+  await admin.pool.query(`CREATE DATABASE "${name}"`);
+  const db = createDatabase(u.href);
+  try {
+    mkdirSync(join(temp, 'meta'));
+    const before = {
+      ...journal,
+      entries: journal.entries.filter((e: { idx: number }) => e.idx < 18),
+    };
+    writeFileSync(join(temp, 'meta/_journal.json'), JSON.stringify(before));
+    for (const e of before.entries)
+      copyFileSync(join(folder, `${e.tag}.sql`), join(temp, `${e.tag}.sql`));
+    await migrate(name, temp);
+    const user = randomUUID();
+    await db.pool.query('INSERT INTO users(id) VALUES($1)', [user]);
+    await db.pool.query(
+      "INSERT INTO legal_evidence_events(user_id,document_type,document_version,document_hash,action,source,context) VALUES($1,'terms_of_use','synthetic-v1',repeat('a',64),'accepted','web','legal_gate')",
+      [user],
+    );
+    const original = (
+      await db.pool.query(
+        'SELECT to_jsonb(e) AS evidence FROM legal_evidence_events e',
+      )
+    ).rows;
+    await migrate(name, folder);
+    expect(
+      (
+        await db.pool.query(
+          'SELECT to_jsonb(e) AS evidence FROM legal_evidence_events e',
+        )
+      ).rows,
+    ).toEqual(original);
+    expect(
+      (await db.pool.query('SELECT * FROM age_declarations')).rowCount,
+    ).toBe(0);
+    await migrate(name, folder);
+    expect(
+      (
+        await db.pool.query(
+          'SELECT to_jsonb(e) AS evidence FROM legal_evidence_events e',
+        )
+      ).rows,
+    ).toEqual(original);
+    expect(
+      (
+        await db.pool.query(
+          'SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations',
+        )
+      ).rows[0].count,
+    ).toBe(19);
+  } finally {
+    await db.close();
+    await admin.pool.query(`DROP DATABASE "${name}"`);
+    rmSync(temp, { recursive: true, force: true });
+  }
+}, 60000);
 it('applies all migrations to a clean database and repeats idempotently', async () => {
   const name = `autograph_test_legal_clean_${randomUUID().replaceAll('-', '')}`;
   const u = new URL(value!);
@@ -246,7 +306,7 @@ it('applies all migrations to a clean database and repeats idempotently', async 
           "SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",
         )
       ).rows[0].count,
-    ).toBe(32);
+    ).toBe(33);
   } finally {
     await db.close();
     await admin.pool.query(`DROP DATABASE "${name}"`);

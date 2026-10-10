@@ -11,6 +11,11 @@ import {
   wallClaimApi,
   type ReadyAutographChoice,
 } from '../lib/wall-claim-api';
+import {
+  FirstUseActionNotice,
+  needsFirstUseConfirmation,
+} from './first-use-action-notice';
+import { FirstUseGate } from './first-use-gate';
 import { ReadyAutographPicker } from './ready-autograph-picker';
 import { WallPlacementHistory } from './placement-history';
 import { WallSlot } from './wall-slot';
@@ -62,6 +67,7 @@ export function PublicWallScreen({
   const [claimsUnavailable, setClaimsUnavailable] = useState(false);
   const [phase, setPhase] = useState<ClaimPhase>('idle');
   const [message, setMessage] = useState('');
+  const [legalRequired, setLegalRequired] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0);
@@ -114,6 +120,10 @@ export function PublicWallScreen({
     return () => clearInterval(timer);
   }, []);
   const confirmationRef = useRef<HTMLHeadingElement>(null);
+  const focusConfirmation = useCallback(
+    () => confirmationRef.current?.focus(),
+    [],
+  );
   useEffect(() => {
     confirmationRef.current?.focus();
   }, [targetSlotId]);
@@ -142,6 +152,7 @@ export function PublicWallScreen({
     inFlight.current = true;
     const controller = new AbortController();
     requestController.current = controller;
+    setLegalRequired(false);
     setPhase('claiming');
     setMessage('Claiming this slot…');
     try {
@@ -161,7 +172,10 @@ export function PublicWallScreen({
       if (controller.signal.aborted) return;
       setPhase('conflict');
       if (error instanceof WallClaimApiError) {
-        if (error.code === 'SLOT_OCCUPIED') {
+        if (needsFirstUseConfirmation(error)) {
+          setLegalRequired(true);
+          setMessage('');
+        } else if (error.code === 'SLOT_OCCUPIED') {
           setMessage(
             'Someone claimed this slot first. The Wall has been refreshed.',
           );
@@ -366,46 +380,55 @@ export function PublicWallScreen({
         !target.occupied &&
         auth === 'authenticated' &&
         selected && (
-          <section className={styles.panel} aria-labelledby="confirm-heading">
-            <h2 id="confirm-heading" ref={confirmationRef} tabIndex={-1}>
-              Confirm your free claim
-            </h2>
-            <p>Wall: {wall.creator.displayName}</p>
-            <p>Slot: {target.position + 1}</p>
-            <p>
-              Autograph: {selected.source === 'canvas' ? 'Drawn' : 'Photo'}{' '}
-              autograph
-            </p>
-            <p>
-              You can use the free claim once on this Wall. If your autograph is
-              later displaced, the free claim is not restored.
-            </p>
-            <div className={styles.actions}>
-              <button
-                type="button"
-                onClick={() => void claim()}
-                disabled={phase === 'claiming' || refreshing}
-              >
-                {phase === 'claiming'
-                  ? 'Claiming…'
-                  : phase === 'error'
-                    ? 'Retry same claim'
-                    : 'Confirm free claim'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTargetSlotId(null);
-                  document.getElementById(`slot-action-${target.id}`)?.focus();
-                }}
-                disabled={phase === 'claiming' || refreshing}
-              >
-                Cancel
-              </button>
-            </div>
-          </section>
+          <FirstUseGate apiOrigin={apiOrigin} onReady={focusConfirmation}>
+            <section className={styles.panel} aria-labelledby="confirm-heading">
+              <h2 id="confirm-heading" ref={confirmationRef} tabIndex={-1}>
+                Confirm your free claim
+              </h2>
+              <p>Wall: {wall.creator.displayName}</p>
+              <p>Slot: {target.position + 1}</p>
+              <p>
+                Autograph: {selected.source === 'canvas' ? 'Drawn' : 'Photo'}{' '}
+                autograph
+              </p>
+              <p>
+                You can use the free claim once on this Wall. If your autograph
+                is later displaced, the free claim is not restored.
+              </p>
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  onClick={() => void claim()}
+                  disabled={phase === 'claiming' || refreshing}
+                >
+                  {phase === 'claiming'
+                    ? 'Claiming…'
+                    : phase === 'error'
+                      ? 'Retry same claim'
+                      : 'Confirm free claim'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTargetSlotId(null);
+                    document
+                      .getElementById(`slot-action-${target.id}`)
+                      ?.focus();
+                  }}
+                  disabled={phase === 'claiming' || refreshing}
+                >
+                  Cancel
+                </button>
+              </div>
+            </section>
+          </FirstUseGate>
         )}
 
+      {legalRequired && (
+        <div role="alert">
+          <FirstUseActionNotice returnTo={`/walls/${wall.id}`} />
+        </div>
+      )}
       {message && (
         <p
           role={phase === 'conflict' || phase === 'error' ? 'alert' : 'status'}

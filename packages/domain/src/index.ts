@@ -93,3 +93,5 @@ export {
 } from './wall';
 export * from './notifications';
 export * from './legal';
+
+export type { AgeDeclarationRepository } from './first-use';

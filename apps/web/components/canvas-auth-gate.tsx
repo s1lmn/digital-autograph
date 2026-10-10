@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { FirstUseGate } from './first-use-gate';
 import { CanvasCreateScreen } from './canvas-create-screen';
 import styles from '../app/autograph/create/page.module.css';
 
@@ -31,7 +32,11 @@ export function CanvasAuthGate({ apiOrigin }: { apiOrigin: string }) {
   const returnTo = encodeURIComponent('/autograph/create');
   if (auth === 'checking') return <p role="status">Checking sign-in…</p>;
   if (auth === 'authenticated')
-    return <CanvasCreateScreen apiOrigin={apiOrigin} />;
+    return (
+      <FirstUseGate apiOrigin={apiOrigin}>
+        <CanvasCreateScreen apiOrigin={apiOrigin} />
+      </FirstUseGate>
+    );
   if (auth === 'anonymous') {
     return (
       <section className={styles.auth} aria-labelledby="sign-in-heading">

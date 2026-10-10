@@ -9,3 +9,5 @@ export * from './moderation';
 export * from './pricing';
 export * from './reservation';
 export * from './notifications';
+
+export { firstUseStateSchema, type FirstUseState } from './first-use';

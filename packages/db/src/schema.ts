@@ -1099,3 +1099,24 @@ export const creatorEarnings = pgTable(
     ),
   ],
 );
+
+export const ageDeclarations = pgTable(
+  'age_declarations',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    minimumAge: integer('minimum_age').notNull().default(18),
+    declaredAt: timestamp('declared_at', { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+    source: varchar('source', { length: 64 }).notNull().default('web'),
+    context: varchar('context', { length: 64 }).notNull().default('first_use'),
+  },
+  (t) => [
+    check(
+      'age_declaration_semantics',
+      sql`${t.minimumAge} = 18 AND ${t.source} = 'web' AND ${t.context} = 'first_use'`,
+    ),
+  ],
+);

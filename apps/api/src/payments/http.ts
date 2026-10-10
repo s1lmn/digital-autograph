@@ -81,6 +81,7 @@ export function registerPaymentRoutes(
   app.post(
     '/payments/orders',
     {
+      config: { firstUse: true },
       preHandler: [
         requireAuthenticatedUser,
         rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),

@@ -34,7 +34,8 @@ export async function proxy(request: NextRequest) {
       }),
     );
   };
-  if (['/legal'].includes(path)) return safe(NextResponse.next());
+  if (['/legal', '/legal/first-use'].includes(path))
+    return safe(NextResponse.next());
   const parts = path.split('/').filter(Boolean);
   const route =
     parts[0] === 'security'

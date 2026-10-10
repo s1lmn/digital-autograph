@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   LegalError,
+  type AgeDeclarationRepository,
   isCurrentLegalState,
   type LegalDocument,
   type LegalRepository,
@@ -19,6 +20,7 @@ const types = z.enum([
 ]);
 export type LegalHttp = {
   repository: LegalRepository;
+  ageDeclarations?: AgeDeclarationRepository;
   documents: readonly (LegalDocument & { content: string })[];
   securityDocuments?: readonly SecurityDocument[];
 };
@@ -159,6 +161,8 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
           .code(409)
           .send({ error: { code: 'LEGAL_DOCUMENT_CHANGED' } });
       try {
+        if (!isPublished(document))
+          throw new LegalError('LEGAL_DOCUMENT_UNAVAILABLE');
         return {
           event: await legal.repository.record(
             authenticatedSession(req).user.id,

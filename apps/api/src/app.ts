@@ -1,3 +1,7 @@
+import {
+  registerFirstUseEnforcement,
+  registerFirstUseRoutes,
+} from './first-use';
 import { registerLegalRoutes, type LegalHttp } from './legal-http';
 import type { PaymentService } from '@digital-autograph/payments';
 import { registerPaymentRoutes } from './payments/http';
@@ -140,8 +144,12 @@ export function buildApi(
     }
   });
 
+  registerFirstUseEnforcement(app, legal);
   registerAuthRoutes(app, sessions, authConfig);
-  if (legal) registerLegalRoutes(app, legal);
+  if (legal) {
+    registerLegalRoutes(app, legal);
+    registerFirstUseRoutes(app, legal);
+  }
   if (testAuth) {
     registerTestAuthRoutes(
       app,

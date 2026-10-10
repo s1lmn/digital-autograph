@@ -1,3 +1,4 @@
+import { syntheticFirstUseDocuments } from '../../../tests/integration/first-use-fixtures';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { PaymentService } from '@digital-autograph/payments';
@@ -61,9 +62,32 @@ function fixture(controls?: IncidentControls) {
     undefined,
     controls,
     {
-      documents: loadLegalDocuments(),
+      documents: loadLegalDocuments().map((d) =>
+        d.current && ['terms_of_use', 'community_guidelines'].includes(d.type)
+          ? syntheticFirstUseDocuments.find((x) => x.type === d.type)!
+          : d,
+      ),
+      ageDeclarations: {
+        declaredAt: async () => new Date(),
+        declareAdult: async () => new Date(),
+      },
       repository: {
-        latest: async () => null,
+        latest: async (userId, type) => {
+          const d = syntheticFirstUseDocuments.find((d) => d.type === type)!;
+          return {
+            id,
+            userId,
+            documentType: type,
+            documentVersion: d.version,
+            documentHash: d.hash,
+            action: 'accepted',
+            source: 'web',
+            context: 'legal_gate',
+            scope: null,
+            previousEventId: null,
+            occurredAt: new Date(),
+          };
+        },
         record: async () => {
           throw new LegalError('LEGAL_DOCUMENT_UNAVAILABLE');
         },
@@ -229,6 +253,6 @@ it.each([
       },
     });
     expect(acceptance.statusCode).toBe(409);
-    expect(acceptance.json().error.code).toBe('LEGAL_DOCUMENT_UNAVAILABLE');
+    expect(acceptance.json().error.code).toBe('LEGAL_DOCUMENT_CHANGED');
   },
 );

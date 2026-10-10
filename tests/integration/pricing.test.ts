@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
@@ -66,7 +69,7 @@ async function person(role?: 'admin' | 'moderator' | 'finance') {
       [id, role],
     );
   }
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 function headers(token: string) {

@@ -1,13 +1,18 @@
+import { buildApi as unacceptedApi } from '../../apps/api/src/app';
 import { syntheticLegalDocuments } from './legal-fixtures';
 import { randomUUID, createHash } from 'node:crypto';
 import { beforeEach, afterAll, it, expect } from 'vitest';
 import { createYookassaProvider } from '../../packages/integrations/src/yookassa';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
   createPgPaymentRepository,
   createPgLegalRepository,
+  createPgAgeDeclarationRepository,
   createPgPricingRepository,
   createPgTakeoverReservationRepository,
   createPgSessionRepository,
@@ -78,8 +83,12 @@ const repo = createPgPaymentRepository(database.pool, {
 function service(repository = repo) {
   return new PaymentService(repository, provider, settings);
 }
-function api(payments = service(), incidentControls?: IncidentControls) {
-  return buildApi(
+function api(
+  payments = service(),
+  incidentControls?: IncidentControls,
+  firstUsePublished = true,
+) {
+  return (firstUsePublished ? buildApi : unacceptedApi)(
     database,
     sessions,
     {
@@ -105,6 +114,7 @@ function api(payments = service(), incidentControls?: IncidentControls) {
     incidentControls,
     {
       repository: createPgLegalRepository(database.pool),
+      ageDeclarations: createPgAgeDeclarationRepository(database.pool),
       documents: loadLegalDocuments(),
     },
   );
@@ -112,7 +122,7 @@ function api(payments = service(), incidentControls?: IncidentControls) {
 async function person() {
   const id = randomUUID();
   await database.pool.query('INSERT INTO users (id) VALUES ($1::uuid)', [id]);
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 async function fixture(
@@ -1598,7 +1608,7 @@ it.each([
     const existing = await started();
     const blocked = createPgPaymentRepository(database.pool);
     const blockedService = service(blocked);
-    const app = api(blockedService, controls);
+    const app = api(blockedService, controls, false);
     try {
       const f = await setup();
       const calls = creates;
@@ -1620,6 +1630,41 @@ it.each([
       );
       expect(creates).toBe(calls);
       succeed(existing.providerId);
+      const existingHeaders = {
+        cookie: `da_session=${existing.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      };
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/payments/webhooks/yookassa',
+            payload: {
+              type: 'notification',
+              event: 'payment.succeeded',
+              object: { id: existing.providerId },
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/payments/orders/${existing.orderId}/refresh`,
+            headers: existingHeaders,
+            payload: {},
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            url: `/payments/orders/${existing.orderId}`,
+            headers: existingHeaders,
+          })
+        ).statusCode,
+      ).toBe(200);
       await blockedService.webhook(existing.providerId, 'payment.succeeded');
       await blockedService.refresh(existing.buyer.id, existing.orderId);
       await blockedService.reconcile();

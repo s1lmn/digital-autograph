@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
@@ -75,7 +78,7 @@ const app = buildApi(
 async function person() {
   const id = randomUUID();
   await database.pool.query('INSERT INTO users (id) VALUES ($1::uuid)', [id]);
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 async function wallFixture(

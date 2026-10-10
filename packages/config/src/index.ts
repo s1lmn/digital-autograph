@@ -439,3 +439,6 @@ export function loadNotificationTelegramWorkerConfig(
   );
 }
 export { loadLegalDocuments } from './legal';
+
+export { loadSecurityDocuments } from './security-documents';
+export type { SecurityDocument } from './security-documents';

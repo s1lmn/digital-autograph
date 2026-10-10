@@ -406,3 +406,31 @@ it('authenticated sessions cannot expose or accept real unapproved Destka/legacy
     await app.close();
   }
 });
+
+it('published read-only catalogues keep real drafts hidden and create no consent evidence', async () => {
+  const app = buildApi(database, sessions, {
+    appEnvironment: 'test',
+    sessionTtlSeconds: 1209600,
+    trustedWebOrigins: ['http://127.0.0.1:3000'],
+  });
+  registerLegalRoutes(app, {
+    repository: repo,
+    documents: loadLegalDocuments(),
+  });
+  try {
+    for (const path of ['/legal/documents', '/security/documents']) {
+      const response = await app.inject(path);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ documents: [] });
+    }
+    expect(
+      (await app.inject('/security/documents/1.0-destka-20261010')).statusCode,
+    ).toBe(404);
+    const result = await database.pool.query(
+      'SELECT count(*)::int AS count FROM legal_evidence_events',
+    );
+    expect(result.rows[0].count).toBe(0);
+  } finally {
+    await app.close();
+  }
+});

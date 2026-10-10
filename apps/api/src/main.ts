@@ -1,4 +1,7 @@
-import { loadLegalDocuments } from '@digital-autograph/config';
+import {
+  loadLegalDocuments,
+  loadSecurityDocuments,
+} from '@digital-autograph/config';
 import { createPgLegalRepository } from '@digital-autograph/db';
 import { PaymentService } from '@digital-autograph/payments';
 import { createPgPaymentRepository } from '@digital-autograph/db';
@@ -193,6 +196,7 @@ async function main(): Promise<void> {
     {
       repository: createPgLegalRepository(database.pool),
       documents: loadLegalDocuments(),
+      securityDocuments: loadSecurityDocuments(),
     },
   );
   let closing = false;

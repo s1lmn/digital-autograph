@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
     },
   ],
   output: 'standalone',
+  outputFileTracingExcludes: { '*': ['../../docs/legal/**/*'] },
   outputFileTracingRoot: path.resolve(process.cwd(), '../..'),
   transpilePackages: [
     '@digital-autograph/config',

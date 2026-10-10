@@ -5,6 +5,7 @@ import {
   type LegalDocument,
   type LegalRepository,
 } from '@digital-autograph/domain';
+import type { SecurityDocument } from '@digital-autograph/config';
 import type { FastifyInstance } from 'fastify';
 import { authenticatedSession, requireAuthenticatedUser } from './auth/http';
 const types = z.enum([
@@ -19,8 +20,55 @@ const types = z.enum([
 export type LegalHttp = {
   repository: LegalRepository;
   documents: readonly (LegalDocument & { content: string })[];
+  securityDocuments?: readonly SecurityDocument[];
 };
+function isPublished(doc: { ready: boolean; content: string }) {
+  return doc.ready && !doc.content.includes('[[');
+}
 export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
+  app.get('/legal/documents', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return {
+      documents: legal.documents
+        .filter(isPublished)
+        .map(({ type, version, hash, current }) => ({
+          type,
+          version,
+          hash,
+          current,
+          path: `/legal/documents/${type}/${version}`,
+        })),
+    };
+  });
+  app.get('/security/documents', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return {
+      documents: (legal.securityDocuments ?? [])
+        .filter(isPublished)
+        .map(({ version, hash, current }) => ({
+          type: 'security',
+          version,
+          hash,
+          current,
+          path: `/security/documents/${version}`,
+        })),
+    };
+  });
+  app.get('/security/documents/:version', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const params = z
+      .object({ version: z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/) })
+      .safeParse(req.params);
+    const doc = params.success
+      ? legal.securityDocuments?.find((d) => d.version === params.data.version)
+      : undefined;
+    if (!doc || !isPublished(doc))
+      return reply
+        .code(404)
+        .send({ error: { code: 'LEGAL_DOCUMENT_NOT_FOUND' } });
+    reply.header('X-Legal-Document-Status', 'published');
+    return reply.type('text/plain; charset=utf-8').send(doc.content);
+  });
   app.get('/legal/documents/:type/:version', async (req, reply) => {
     reply.header('Cache-Control', 'no-store');
     const params = z
@@ -34,7 +82,7 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
       : undefined;
     // Public reads never disclose drafts, including to signed-in users.
     // Use the same response for unknown and unapproved versions.
-    if (!doc?.ready || doc.content.includes('[['))
+    if (!doc || !isPublished(doc))
       return reply
         .code(404)
         .send({ error: { code: 'LEGAL_DOCUMENT_NOT_FOUND' } });

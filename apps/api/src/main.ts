@@ -184,6 +184,10 @@ async function main(): Promise<void> {
           }
         : undefined,
     },
+    {
+      disableNewPayments: config.DISABLE_NEW_PAYMENTS,
+      disableFreeClaims: config.DISABLE_FREE_CLAIMS,
+    },
   );
   let closing = false;
 

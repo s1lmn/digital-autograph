@@ -5,10 +5,16 @@ import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
   createPgFreeClaimRepository,
+  createPgPlacementHistoryRepository,
   createPgSessionRepository,
   createPgWallRepository,
 } from '../../packages/db/src/index';
-import { FreeClaimService, WallService } from '../../packages/walls/src/index';
+import {
+  FreeClaimService,
+  PlacementHistoryService,
+  WallService,
+} from '../../packages/walls/src/index';
+import type { IncidentControls } from '../../apps/api/src/incident-controls';
 import type { WallStatus } from '../../packages/domain/src/index';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -23,6 +29,33 @@ const sessions = new SessionService(
 );
 const walls = new WallService(createPgWallRepository(database.pool));
 const claims = new FreeClaimService(createPgFreeClaimRepository(database.pool));
+function incidentApi(controls: IncidentControls) {
+  return buildApi(
+    database,
+    sessions,
+    {
+      appEnvironment: 'test',
+      sessionTtlSeconds: 1209600,
+      trustedWebOrigins: ['http://127.0.0.1:3000'],
+    },
+    undefined,
+    undefined,
+    walls,
+    undefined,
+    undefined,
+    claims,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    new PlacementHistoryService(
+      createPgPlacementHistoryRepository(database.pool),
+    ),
+    undefined,
+    undefined,
+    controls,
+  );
+}
 const app = buildApi(
   database,
   sessions,
@@ -197,6 +230,121 @@ describe('Free Claim and atomic Placement', () => {
   afterAll(async () => {
     await app.close();
     await database.close();
+  });
+
+  it('claim shutdown rejects concurrent direct requests without creating placements or evidence', async () => {
+    const owner = await person();
+    const wall = await wallFixture(owner.id);
+    const autographId = await autographFixture(owner.id);
+    const stopped = incidentApi({
+      disableNewPayments: false,
+      disableFreeClaims: true,
+    });
+    try {
+      const responses = await Promise.all(
+        Array.from({ length: 25 }, () =>
+          stopped.inject({
+            method: 'POST',
+            url: `/walls/${wall.wallId}/slots/${wall.slotIds[0]}/free-claim`,
+            headers: {
+              cookie: `da_session=${owner.token}`,
+              origin: 'http://127.0.0.1:3000',
+            },
+            payload: { autographId },
+          }),
+        ),
+      );
+      for (const response of responses) {
+        expect(response.statusCode).toBe(503);
+        expect(response.json()).toEqual({
+          error: { code: 'FREE_CLAIMS_DISABLED' },
+        });
+      }
+      expect(await counts(wall.wallId)).toEqual({ placements: 0, claims: 0 });
+      // A restarted API with the switch off accepts the unchanged request.
+      expect(
+        (await request(wall.wallId, wall.slotIds[0]!, autographId, owner.token))
+          .statusCode,
+      ).toBe(201);
+      expect(await counts(wall.wallId)).toEqual({ placements: 1, claims: 1 });
+    } finally {
+      await stopped.close();
+    }
+  });
+
+  it('payment shutdown independently allows Free Claim and both switches preserve public and personal history', async () => {
+    const owner = await person();
+    const wall = await wallFixture(owner.id);
+    const autographId = await autographFixture(owner.id);
+    const headers = {
+      cookie: `da_session=${owner.token}`,
+      origin: 'http://127.0.0.1:3000',
+    };
+    const paymentsStopped = incidentApi({
+      disableNewPayments: true,
+      disableFreeClaims: false,
+    });
+    const stopped = incidentApi({
+      disableNewPayments: true,
+      disableFreeClaims: true,
+    });
+    const url = `/walls/${wall.wallId}/slots/${wall.slotIds[0]}/free-claim`;
+    try {
+      expect(
+        (
+          await paymentsStopped.inject({
+            method: 'POST',
+            url,
+            headers,
+            payload: { autographId },
+          })
+        ).statusCode,
+      ).toBe(201);
+      const before = await counts(wall.wallId);
+      // The switch also blocks exact claim retries; read routes provide recovery.
+      expect(
+        (
+          await stopped.inject({
+            method: 'POST',
+            url,
+            headers,
+            payload: { autographId },
+          })
+        ).statusCode,
+      ).toBe(503);
+      expect(
+        (await stopped.inject(`/walls/${wall.wallId}`)).json().slots[0]
+          .occupied,
+      ).toBe(true);
+      const publicHistory = await stopped.inject(
+        `/walls/${wall.wallId}/placements`,
+      );
+      expect(publicHistory.statusCode).toBe(200);
+      expect(publicHistory.json().placements).toHaveLength(1);
+      const privateHistory = await stopped.inject({
+        url: '/me/placements',
+        headers,
+      });
+      expect(privateHistory.statusCode).toBe(200);
+      expect(privateHistory.json().items).toHaveLength(1);
+      expect((await stopped.inject('/me/placements')).statusCode).toBe(401);
+      const stranger = await person();
+      expect(
+        (
+          await stopped.inject({
+            url: '/me/placements',
+            headers: { cookie: `da_session=${stranger.token}` },
+          })
+        ).json().items,
+      ).toEqual([]);
+      expect(
+        (await stopped.inject({ url: '/auth/me', headers })).statusCode,
+      ).toBe(200);
+      expect(await counts(wall.wallId)).toEqual(before);
+    } finally {
+      await paymentsStopped.close();
+      await stopped.close();
+    }
   });
 
   it('commits one Placement and durable evidence, then returns the exact replay', async () => {

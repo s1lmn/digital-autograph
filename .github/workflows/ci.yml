@@ -99,6 +99,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Audit all workspace dependencies for High/Critical advisories
         run: pnpm security:audit
+      - name: Verify pinned DOCX conversion and canonical bytes
+        run: python3 scripts/legal-canonical.py --check
       - run: pnpm format:check
       - name: Verify brand tokens, exports and approved contrast pairs
         run: pnpm brand:check

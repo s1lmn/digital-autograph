@@ -7,11 +7,13 @@ import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
   createPgPaymentRepository,
+  createPgLegalRepository,
   createPgPricingRepository,
   createPgTakeoverReservationRepository,
   createPgSessionRepository,
   createPgNotificationRepository,
 } from '../../packages/db/src/index';
+import { loadLegalDocuments } from '../../packages/config/src/index';
 import { NotificationService } from '../../packages/notifications/src/index';
 import type { IncidentControls } from '../../apps/api/src/incident-controls';
 import {
@@ -101,6 +103,10 @@ function api(payments = service(), incidentControls?: IncidentControls) {
     payments,
     undefined,
     incidentControls,
+    {
+      repository: createPgLegalRepository(database.pool),
+      documents: loadLegalDocuments(),
+    },
   );
 }
 async function person() {
@@ -1580,3 +1586,50 @@ it('unpublished contractual documents prevent a new order before provider calls'
     (await database.pool.query('SELECT id FROM payment_orders')).rowCount,
   ).toBe(0);
 });
+
+it.each([
+  { disableNewPayments: false, disableFreeClaims: false },
+  { disableNewPayments: true, disableFreeClaims: false },
+  { disableNewPayments: false, disableFreeClaims: true },
+  { disableNewPayments: true, disableFreeClaims: true },
+])(
+  'actual legal registry blocks new Orders while existing recovery remains available %j',
+  async (controls) => {
+    const existing = await started();
+    const blocked = createPgPaymentRepository(database.pool);
+    const blockedService = service(blocked);
+    const app = api(blockedService, controls);
+    try {
+      const f = await setup();
+      const calls = creates;
+      const headers = {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      };
+      const response = await app.inject({
+        method: 'POST',
+        url: '/payments/orders',
+        headers,
+        payload: { reservationId: f.reservationId, autographId: f.autographId },
+      });
+      expect(response.statusCode).toBe(controls.disableNewPayments ? 503 : 409);
+      expect(response.json().error.code).toBe(
+        controls.disableNewPayments
+          ? 'NEW_PAYMENTS_DISABLED'
+          : 'LEGAL_DOCUMENT_UNAVAILABLE',
+      );
+      expect(creates).toBe(calls);
+      succeed(existing.providerId);
+      await blockedService.webhook(existing.providerId, 'payment.succeeded');
+      await blockedService.refresh(existing.buyer.id, existing.orderId);
+      await blockedService.reconcile();
+      expect(await counts(existing.orderId)).toMatchObject({
+        takeovers: 1,
+        earnings: 1,
+        active: 1,
+      });
+    } finally {
+      await app.close();
+    }
+  },
+);

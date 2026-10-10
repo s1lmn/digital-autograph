@@ -1,2 +1,8 @@
 # Canonical legal bytes must be identical across Windows/Linux/macOS checkouts.
 docs/legal/**/*.md text eol=lf
+
+# Preserve transferred source bytes; generated integrity metadata uses stable LF.
+docs/legal/sources/** -text
+docs/legal/*.json text eol=lf
+# The immutable incoming CSV uses CRLF; keep normal whitespace checks otherwise.
+docs/legal/sources/**/*.csv whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

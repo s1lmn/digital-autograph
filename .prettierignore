@@ -14,3 +14,7 @@ CONTRIBUTING.md
 # Preserve approved legal wording/list numbering and exact canonical hash bytes.
 docs/legal/public/*.md
 docs/legal/internal/*.md
+
+# Immutable source transfers and generated canonical policy bytes.
+docs/legal/sources/
+docs/legal/security/*.md

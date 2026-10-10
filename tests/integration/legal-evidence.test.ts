@@ -11,6 +11,7 @@ import {
   type LegalDocument,
   type LegalScope,
 } from '../../packages/domain/src/index';
+import { loadLegalDocuments } from '../../packages/config/src/index';
 import { buildApi } from '../../apps/api/src/app';
 import { registerLegalRoutes } from '../../apps/api/src/legal-http';
 import { syntheticLegalDocuments } from './legal-fixtures';
@@ -241,7 +242,11 @@ it('HTTP uses session subject, exact Origin and current registry; rejects client
         await app.inject({
           method: 'POST',
           url: '/legal/accept',
-          payload: { type: 'terms_of_use' },
+          payload: {
+            type: 'terms_of_use',
+            version: terms.version,
+            hash: terms.hash,
+          },
         })
       ).statusCode,
     ).toBe(401);
@@ -251,7 +256,11 @@ it('HTTP uses session subject, exact Origin and current registry; rejects client
           method: 'POST',
           url: '/legal/accept',
           headers: { ...headers, origin: 'https://evil.test' },
-          payload: { type: 'terms_of_use' },
+          payload: {
+            type: 'terms_of_use',
+            version: terms.version,
+            hash: terms.hash,
+          },
         })
       ).statusCode,
     ).toBe(403);
@@ -288,11 +297,31 @@ it('HTTP uses session subject, exact Origin and current registry; rejects client
           })
         ).statusCode,
       ).toBe(400);
+    for (const changed of [
+      { version: 'archived-v0', hash: terms.hash },
+      { version: terms.version, hash: 'c'.repeat(64) },
+    ]) {
+      const stale = await app.inject({
+        method: 'POST',
+        url: '/legal/accept',
+        headers,
+        payload: { type: 'terms_of_use', ...changed },
+      });
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json()).toEqual({
+        error: { code: 'LEGAL_DOCUMENT_CHANGED' },
+      });
+    }
+    expect(await repo.latest(user, terms.type)).toBeNull();
     const accepted = await app.inject({
       method: 'POST',
       url: '/legal/accept',
       headers,
-      payload: { type: 'terms_of_use' },
+      payload: {
+        type: 'terms_of_use',
+        version: terms.version,
+        hash: terms.hash,
+      },
     });
     expect(accepted.statusCode).toBe(200);
     expect(accepted.json().event.userId).toBe(user);
@@ -327,6 +356,52 @@ it('HTTP uses session subject, exact Origin and current registry; rejects client
       payload: { type: 'personal_data_consent', purpose: scope.purpose },
     });
     expect(withdrawn.json().event.action).toBe('withdrawn');
+  } finally {
+    await app.close();
+  }
+});
+
+it('authenticated sessions cannot expose or accept real unapproved Destka/legacy documents', async () => {
+  const app = buildApi(database, sessions, {
+    appEnvironment: 'test',
+    sessionTtlSeconds: 1209600,
+    trustedWebOrigins: ['http://127.0.0.1:3000'],
+  });
+  const documents = loadLegalDocuments();
+  registerLegalRoutes(app, { repository: repo, documents });
+  const headers = {
+    cookie: `da_session=${(await sessions.createSession(user)).token}`,
+    origin: 'http://127.0.0.1:3000',
+  };
+  try {
+    for (const document of documents) {
+      for (const requestHeaders of [{}, headers]) {
+        const response = await app.inject({
+          url: document.path,
+          headers: requestHeaders,
+        });
+        expect(response.statusCode).toBe(404);
+        expect(response.json()).toEqual({
+          error: { code: 'LEGAL_DOCUMENT_NOT_FOUND' },
+        });
+      }
+    }
+    const document = documents.find(
+      (d) => d.type === 'terms_of_use' && d.current,
+    )!;
+    const response = await app.inject({
+      method: 'POST',
+      url: '/legal/accept',
+      headers,
+      payload: {
+        type: document.type,
+        version: document.version,
+        hash: document.hash,
+      },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error.code).toBe('LEGAL_DOCUMENT_UNAVAILABLE');
+    expect(await repo.latest(user, document.type)).toBeNull();
   } finally {
     await app.close();
   }

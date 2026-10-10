@@ -22,6 +22,7 @@ export type LegalHttp = {
 };
 export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
   app.get('/legal/documents/:type/:version', async (req, reply) => {
+    reply.header('Cache-Control', 'no-store');
     const params = z
       .object({ type: types, version: z.string().max(64) })
       .safeParse(req.params);
@@ -31,12 +32,13 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
             d.type === params.data.type && d.version === params.data.version,
         )
       : undefined;
-    if (!doc)
+    // Public reads never disclose drafts, including to signed-in users.
+    // Use the same response for unknown and unapproved versions.
+    if (!doc?.ready || doc.content.includes('[['))
       return reply
         .code(404)
         .send({ error: { code: 'LEGAL_DOCUMENT_NOT_FOUND' } });
-    reply.header('Cache-Control', 'no-store');
-    reply.header('X-Legal-Document-Status', doc.ready ? 'published' : 'draft');
+    reply.header('X-Legal-Document-Status', 'published');
     return reply.type('text/plain; charset=utf-8').send(doc.content);
   });
   app.get(
@@ -86,7 +88,11 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
     async (req, reply) => {
       reply.header('Cache-Control', 'no-store');
       const body = z
-        .object({ type: z.enum(['terms_of_use', 'community_guidelines']) })
+        .object({
+          type: z.enum(['terms_of_use', 'community_guidelines']),
+          version: z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/),
+          hash: z.string().regex(/^[a-f0-9]{64}$/),
+        })
         .strict()
         .safeParse(req.body);
       if (!body.success)
@@ -94,6 +100,16 @@ export function registerLegalRoutes(app: FastifyInstance, legal: LegalHttp) {
       const document = legal.documents.find(
         (d) => d.type === body.data.type && d.current,
       )!;
+      // Displayed identity is a precondition, never authoritative evidence.
+      // A deployment between display and acceptance must not record new wording
+      // that the subject never saw. Persist only the server registry document.
+      if (
+        body.data.version !== document.version ||
+        body.data.hash !== document.hash
+      )
+        return reply
+          .code(409)
+          .send({ error: { code: 'LEGAL_DOCUMENT_CHANGED' } });
       try {
         return {
           event: await legal.repository.record(

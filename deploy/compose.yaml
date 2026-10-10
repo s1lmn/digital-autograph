@@ -46,6 +46,8 @@ services:
     restart: unless-stopped
     env_file:
       - /etc/digital-autograph/env/api.env
+      - path: /etc/digital-autograph/env/incident.env
+        required: false
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
       API_HOST: 0.0.0.0

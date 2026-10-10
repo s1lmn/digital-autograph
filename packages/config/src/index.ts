@@ -37,6 +37,14 @@ const exactOrigin = z.string().refine((value) => {
 
 const apiSchema = databaseSchema
   .extend({
+    DISABLE_NEW_PAYMENTS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    DISABLE_FREE_CLAIMS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     API_HOST: z.string().min(1),
     API_PORT: z.coerce.number().int().min(1).max(65535),
     SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(2_592_000),

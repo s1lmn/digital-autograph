@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 export { eq, sql } from 'drizzle-orm';
 export { createPgSessionRepository } from './session-repository';
 export { createPgOAuthAttemptRepository } from './oauth-attempt-repository';
+export { createPgOAuthAttemptCleanup } from './oauth-attempt-cleanup';
 export { createPgProviderIdentityRepository } from './provider-identity-repository';
 export { createPgWallRepository } from './wall-repository';
 export { createPgPlacementHistoryRepository } from './placement-history-repository';

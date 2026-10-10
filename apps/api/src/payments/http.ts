@@ -8,6 +8,7 @@ import type {
   FastifyRequest,
 } from 'fastify';
 import { authenticatedSession, requireAuthenticatedUser } from '../auth/http';
+import { rejectDisabledOperation } from '../incident-controls';
 const createBody = z
   .object({ reservationId: z.uuid(), autographId: z.uuid() })
   .strict();
@@ -71,6 +72,7 @@ function capacity() {
 export function registerPaymentRoutes(
   app: FastifyInstance,
   payments: PaymentService,
+  disabled = false,
 ) {
   // Fixed independent budgets: user traffic cannot consume webhook capacity.
   // Perimeter aggregate limits are still required across multiple replicas.
@@ -79,7 +81,10 @@ export function registerPaymentRoutes(
   app.post(
     '/payments/orders',
     {
-      preHandler: requireAuthenticatedUser,
+      preHandler: [
+        requireAuthenticatedUser,
+        rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),
+      ],
       bodyLimit: 2048,
       errorHandler: parserError,
     },

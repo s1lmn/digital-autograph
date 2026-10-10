@@ -53,6 +53,7 @@ import type {
 } from '@digital-autograph/notifications';
 import { registerNotificationRoutes } from './notifications/http';
 import { registerSharingRoutes } from './notifications/sharing-http';
+import type { IncidentControls } from './incident-controls';
 
 type DatabaseProbe = Pick<Database, 'checkConnection'>;
 
@@ -80,6 +81,10 @@ export function buildApi(
     service: NotificationService;
     shares: ShareRepository;
     telegram?: { username: string; secret: string };
+  },
+  incidentControls: IncidentControls = {
+    disableNewPayments: false,
+    disableFreeClaims: false,
   },
   legal?: LegalHttp,
 ) {
@@ -151,15 +156,23 @@ export function buildApi(
   if (telegram)
     registerTelegramRoutes(app, telegram.login, authConfig, telegram.config);
   if (walls) registerWallRoutes(app, walls);
-  if (claims) registerFreeClaimRoutes(app, claims);
+  if (claims)
+    registerFreeClaimRoutes(app, claims, incidentControls.disableFreeClaims);
   if (publicMedia) registerPublicPlacementMediaRoutes(app, publicMedia);
-  if (pricing) registerPricingRoutes(app, pricing);
-  if (reservations) registerTakeoverReservationRoutes(app, reservations);
+  if (pricing)
+    registerPricingRoutes(app, pricing, incidentControls.disableNewPayments);
+  if (reservations)
+    registerTakeoverReservationRoutes(
+      app,
+      reservations,
+      incidentControls.disableNewPayments,
+    );
   if (placementHistory) registerPlacementHistoryRoutes(app, placementHistory);
   if (autographs) registerAutographRoutes(app, autographs);
   if (moderation) registerModerationRoutes(app, moderation);
 
-  if (payments) registerPaymentRoutes(app, payments);
+  if (payments)
+    registerPaymentRoutes(app, payments, incidentControls.disableNewPayments);
   if (notifications) {
     registerNotificationRoutes(
       app,

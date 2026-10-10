@@ -1,5 +1,8 @@
 # Operations
 
+[OAuth attempt cleanup](oauth-attempt-cleanup.md) documents bounded worker
+maintenance of expired Google/Telegram login attempts.
+
 [Safe runtime diagnostics](safe-diagnostics.md) describes bounded exception
 logs, request correlation and built-runtime privacy smoke checks.
 

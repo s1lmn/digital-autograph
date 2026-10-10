@@ -92,5 +92,10 @@ failure makes the command fail.
 
 See `AGENTS.md` for permanent invariants, `docs/architecture/domain-model.md` for the persistence model, and `docs/adr/` for architectural decisions.
 
+Server-only `DISABLE_NEW_PAYMENTS` and `DISABLE_FREE_CLAIMS` independently stop
+new operations while preserving existing payment recovery and history. Values
+must be exactly `true`/`false` and require restarting all API instances; see
+[the incident runbook](docs/operations/incident-controls.md).
+
 Staging/production provisioning and release procedures are documented in
 [the Yandex Cloud deployment runbook](docs/operations/deployment.md).

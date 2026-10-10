@@ -7,7 +7,11 @@ import {
   createPgAgeDeclarationRepository,
   createPgLegalRepository,
 } from '@digital-autograph/db';
-import { PaymentService } from '@digital-autograph/payments';
+import {
+  PaymentService,
+  type PaymentProvider,
+  type PaymentSettings,
+} from '@digital-autograph/payments';
 import { createPgPaymentRepository } from '@digital-autograph/db';
 import { createYookassaProvider } from '@digital-autograph/integrations';
 import { loadApiConfig, loadPaymentConfig } from '@digital-autograph/config';
@@ -62,8 +66,16 @@ import { loadNotificationTelegramApiConfig } from '@digital-autograph/config';
 
 export async function startApi(
   legalDocuments: LegalHttp['documents'] = loadLegalDocuments(),
+  syntheticPayment?: { provider: PaymentProvider; settings: PaymentSettings },
 ): Promise<void> {
   const config = loadApiConfig();
+  if (
+    syntheticPayment &&
+    (config.APP_ENV !== 'test' || process.env.NODE_ENV === 'production')
+  )
+    throw new Error(
+      'Synthetic payment composition requires isolated test runtime',
+    );
   const paymentConfig = loadPaymentConfig();
   const notificationTelegram = loadNotificationTelegramApiConfig();
   const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
@@ -117,22 +129,24 @@ export async function startApi(
     identities,
     sessions,
   );
-  const payments = paymentConfig
-    ? new PaymentService(
-        createPgPaymentRepository(database.pool),
-        createYookassaProvider({
-          shopId: paymentConfig.YOOKASSA_SHOP_ID,
-          secretKey: paymentConfig.YOOKASSA_SECRET_KEY,
-        }),
-        {
-          shopId: paymentConfig.YOOKASSA_SHOP_ID,
-          mode: paymentConfig.PAYMENT_MODE,
-          returnUrl: paymentConfig.PAYMENT_RETURN_URL,
-          creatorShareBps: paymentConfig.PAYMENT_CREATOR_SHARE_BPS,
-        },
-        (signal) => console.warn(JSON.stringify(signal)),
-      )
-    : undefined;
+  const payments =
+    paymentConfig || syntheticPayment
+      ? new PaymentService(
+          createPgPaymentRepository(database.pool, { legalDocuments }),
+          syntheticPayment?.provider ??
+            createYookassaProvider({
+              shopId: paymentConfig!.YOOKASSA_SHOP_ID,
+              secretKey: paymentConfig!.YOOKASSA_SECRET_KEY,
+            }),
+          syntheticPayment?.settings ?? {
+            shopId: paymentConfig!.YOOKASSA_SHOP_ID,
+            mode: paymentConfig!.PAYMENT_MODE,
+            returnUrl: paymentConfig!.PAYMENT_RETURN_URL,
+            creatorShareBps: paymentConfig!.PAYMENT_CREATOR_SHARE_BPS,
+          },
+          (signal) => console.warn(JSON.stringify(signal)),
+        )
+      : undefined;
   const app = buildApi(
     database,
     sessions,

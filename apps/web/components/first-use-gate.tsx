@@ -15,10 +15,12 @@ export function FirstUseGate({
   apiOrigin,
   children,
   onReady,
+  loginReturnTo = '/legal/first-use',
 }: {
   apiOrigin: string;
   children: ReactNode;
   onReady?: () => void;
+  loginReturnTo?: string;
 }) {
   const [state, setState] = useState<FirstUseState | null>(null);
   const [error, setError] = useState('');
@@ -152,12 +154,12 @@ export function FirstUseGate({
         <div className={styles.actions}>
           <p>Войдите, чтобы подтвердить условия.</p>
           <a
-            href={`${apiOrigin}/auth/google/start?returnTo=%2Flegal%2Ffirst-use`}
+            href={`${apiOrigin}/auth/google/start?returnTo=${encodeURIComponent(loginReturnTo)}`}
           >
             Войти через Google
           </a>
           <a
-            href={`${apiOrigin}/auth/telegram/start?returnTo=%2Flegal%2Ffirst-use`}
+            href={`${apiOrigin}/auth/telegram/start?returnTo=${encodeURIComponent(loginReturnTo)}`}
           >
             Войти через Telegram
           </a>

@@ -116,6 +116,8 @@ export function buildApi(
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Idempotency-Key'],
+    // The cross-origin checkout verifies this public publication marker, never secret headers.
+    exposedHeaders: ['X-Legal-Document-Status'],
     strictPreflight: true,
   });
   app.decorateRequest('authContext', null);
@@ -180,7 +182,12 @@ export function buildApi(
   if (moderation) registerModerationRoutes(app, moderation);
 
   if (payments)
-    registerPaymentRoutes(app, payments, incidentControls.disableNewPayments);
+    registerPaymentRoutes(
+      app,
+      payments,
+      incidentControls.disableNewPayments,
+      legal,
+    );
   if (notifications) {
     registerNotificationRoutes(
       app,

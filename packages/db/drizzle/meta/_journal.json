@@ -134,6 +134,13 @@
       "when": 1791663339632,
       "tag": "0018_age_declaration",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791665870774,
+      "tag": "0019_checkout_confirmation",
+      "breakpoints": true
     }
   ]
 }

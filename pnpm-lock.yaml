@@ -278,7 +278,11 @@ importers:
 
   packages/observability: {}
 
-  packages/payments: {}
+  packages/payments:
+    dependencies:
+      '@digital-autograph/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/ui:
     dependencies:

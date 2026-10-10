@@ -991,6 +991,65 @@ export const paymentOrders = pgTable(
     ),
   ],
 );
+export const checkoutConfirmations = pgTable(
+  'checkout_confirmations',
+  {
+    orderId: uuid('order_id')
+      .primaryKey()
+      .references(() => paymentOrders.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    reservationId: uuid('reservation_id')
+      .notNull()
+      .references(() => takeoverReservations.id, { onDelete: 'restrict' }),
+    autographId: uuid('autograph_id')
+      .notNull()
+      .references(() => autographs.id, { onDelete: 'restrict' }),
+    amountMinor: bigint('amount_minor', { mode: 'bigint' }).notNull(),
+    currency: varchar('currency', { length: 3 }).notNull(),
+    guaranteedVisibilitySeconds: integer(
+      'guaranteed_visibility_seconds',
+    ).notNull(),
+    reservationExpiresAt: timestamp('reservation_expires_at', {
+      withTimezone: true,
+    }).notNull(),
+    targetPlacementId: uuid('target_placement_id')
+      .notNull()
+      .references(() => placements.id, { onDelete: 'restrict' }),
+    pricingConfigId: uuid('pricing_config_id')
+      .notNull()
+      .references(() => pricingConfigVersions.id, { onDelete: 'restrict' }),
+    offerVersion: varchar('offer_version', { length: 64 }).notNull(),
+    offerHash: varchar('offer_hash', { length: 64 }).notNull(),
+    contentRulesVersion: varchar('content_rules_version', {
+      length: 64,
+    }).notNull(),
+    contentRulesHash: varchar('content_rules_hash', { length: 64 }).notNull(),
+    refundPolicyVersion: varchar('refund_policy_version', {
+      length: 64,
+    }).notNull(),
+    refundPolicyHash: varchar('refund_policy_hash', { length: 64 }).notNull(),
+    source: varchar('source', { length: 64 }).notNull().default('web'),
+    context: varchar('context', { length: 64 })
+      .notNull()
+      .default('paid_checkout'),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true })
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (t) => [
+    check(
+      'checkout_confirmation_semantics',
+      sql`${t.source}='web' AND ${t.context}='paid_checkout' AND ${t.guaranteedVisibilitySeconds}>=0 AND ${t.amountMinor} BETWEEN 1 AND 100000000000 AND ${t.currency}='RUB'`,
+    ),
+    check(
+      'checkout_confirmation_identity',
+      sql`${t.offerVersion} ~ '^[a-zA-Z0-9._-]{1,64}$' AND ${t.contentRulesVersion} ~ '^[a-zA-Z0-9._-]{1,64}$' AND ${t.refundPolicyVersion} ~ '^[a-zA-Z0-9._-]{1,64}$' AND ${t.offerHash} ~ '^[a-f0-9]{64}$' AND ${t.contentRulesHash} ~ '^[a-f0-9]{64}$' AND ${t.refundPolicyHash} ~ '^[a-f0-9]{64}$'`,
+    ),
+  ],
+);
+
 export const payments = pgTable(
   'payments',
   {

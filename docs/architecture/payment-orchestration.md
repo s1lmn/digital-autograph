@@ -149,14 +149,13 @@ states remain queryable. EGO-111 owns alert delivery and durable incident routin
 
 ## HTTP and return page
 
-- `POST /payments/orders`: authenticated strict `{ reservationId, autographId }`.
+- `POST /payments/orders`: authenticated strict `{ reservationId, autographId, confirmation }` for new admissions; see [paid checkout](paid-checkout-legal-acceptance.md).
 - `GET /payments/orders/:id`: owner-only local status; no provider credentials/keys.
 - `POST /payments/orders/:id/refresh`: owner-only authenticated provider refetch.
 - `POST /payments/webhooks/yookassa`: bounded provider observation hint.
 - `/payments/return?orderId=…`: backend status UI. Configured base return URL gets
   only the server-generated Order ID appended. Refresh never trusts `paid/status`
-  from navigation. A full checkout selector/countdown is outside this backend PR;
-  clients use the create API's safe confirmation URL.
+  from navigation. The prepared `/payments/checkout` displays trusted reservation terms and exact legal editions, while unpublished real documents continue to block new Orders.
 
 Cookie mutation origin checks and current active-session validation remain intact.
 There is no mark-paid route. IDOR attempts return not-found; public Wall/history

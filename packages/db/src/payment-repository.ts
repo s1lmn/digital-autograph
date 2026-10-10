@@ -1,3 +1,9 @@
+import { checkoutDocuments } from './checkout-documents';
+import {
+  type CheckoutConfirmation,
+  type CheckoutSummary,
+  type CheckoutTerms,
+} from '@digital-autograph/domain';
 import { loadLegalDocuments } from '@digital-autograph/config';
 import {
   requireLegalDocument,
@@ -208,19 +214,83 @@ async function eligible(
           config.rows[0].guaranteed_visibility_seconds * 1000,
   };
 }
+async function checkoutTerms(
+  db: PoolClient,
+  r: OrderRow,
+): Promise<CheckoutTerms> {
+  const result = await db.query<{
+    guaranteed_visibility_seconds: number;
+    expires_at: Date;
+  }>(
+    `SELECT c.guaranteed_visibility_seconds,r.expires_at FROM pricing_config_versions c JOIN takeover_reservations r ON r.pricing_config_id=c.id WHERE r.id=$1`,
+    [r.reservation_id],
+  );
+  const t = result.rows[0]!;
+  return {
+    amountMinor: r.amount_minor,
+    currency: r.currency,
+    guaranteedVisibilitySeconds: t.guaranteed_visibility_seconds,
+    reservationExpiresAt: t.expires_at.toISOString(),
+    targetPlacementId: r.target_placement_id,
+    pricingConfigId: r.pricing_config_id,
+  };
+}
+async function requireEligible(
+  db: PoolClient,
+  r: OrderRow,
+  target: Awaited<ReturnType<typeof lockTarget>>,
+  autographId: string,
+  userId: string,
+) {
+  const res = await db.query<{ status: string; expires_at: Date }>(
+    'SELECT status,expires_at FROM takeover_reservations WHERE id=$1',
+    [r.reservation_id],
+  );
+  if (res.rows[0]!.expires_at <= (await clock(db)))
+    throw new PaymentError('RESERVATION_EXPIRED');
+  if (
+    !(await autographReady(db, autographId, userId)) ||
+    !(await eligible(db, r, target)).eligible
+  )
+    throw new PaymentError('RESERVATION_NOT_ELIGIBLE');
+}
 export function createPgPaymentRepository(
   pool: Pool,
   options: {
     afterPlacementInsert?: () => Promise<void>;
-    legalDocuments?: readonly LegalDocument[];
+    legalDocuments?: readonly (LegalDocument & { content?: string })[];
   } = {},
 ): PaymentRepository {
   const legalDocuments = options.legalDocuments ?? loadLegalDocuments();
+  async function requireFirstUse(db: PoolClient, userId: string) {
+    const age = await db.query(
+      'SELECT 1 FROM age_declarations WHERE user_id=$1',
+      [userId],
+    );
+    if (!age.rowCount) throw new PaymentError('FIRST_USE_REQUIRED');
+
+    for (const type of ['terms_of_use', 'community_guidelines'] as const) {
+      const doc = requireLegalDocument(legalDocuments, type);
+      const latest = await db.query<{
+        document_version: string;
+        document_hash: string;
+      }>(
+        "SELECT document_version,document_hash FROM legal_evidence_events WHERE user_id=$1 AND document_type=$2 AND purpose='contract' ORDER BY sequence DESC LIMIT 1",
+        [userId, type],
+      );
+      if (
+        latest.rows[0]?.document_version !== doc.version ||
+        latest.rows[0]?.document_hash !== doc.hash
+      )
+        throw new PaymentError('FIRST_USE_REQUIRED');
+    }
+  }
   async function create(
     userId: string,
     reservationId: string,
     autographId: string,
     settings: PaymentSettings,
+    confirmation?: CheckoutConfirmation,
   ) {
     return tx(pool, async (db) => {
       const pointer = await db.query<{
@@ -253,17 +323,34 @@ export function createPgPaymentRepository(
           throw new PaymentError('ORDER_REQUEST_CONFLICT');
         return (await find(db, prior.rows[0].id))!;
       }
+      const documents = checkoutDocuments(legalDocuments);
+      if (!confirmation?.confirmed)
+        throw new PaymentError('CHECKOUT_CONFIRMATION_REQUIRED');
       if (
-        !(await autographReady(db, autographId, userId)) ||
-        !(await eligible(db, r, target)).eligible
+        confirmation.documents.length !== 3 ||
+        documents.some(
+          (d) =>
+            !confirmation.documents.some(
+              (c) =>
+                c.type === d.type &&
+                c.version === d.version &&
+                c.hash === d.hash,
+            ),
+        )
       )
-        throw new PaymentError('RESERVATION_NOT_ELIGIBLE');
-      const offer = requireLegalDocument(legalDocuments, 'public_offer');
-      const rules = requireLegalDocument(
-        legalDocuments,
-        'community_guidelines',
-      );
-      const refunds = requireLegalDocument(legalDocuments, 'refund_policy');
+        throw new PaymentError('CHECKOUT_TERMS_CHANGED');
+      await requireFirstUse(db, userId);
+      await requireEligible(db, r, target, autographId, userId);
+      const terms = await checkoutTerms(db, r);
+      if (
+        Object.keys(terms).some(
+          (key) =>
+            terms[key as keyof CheckoutTerms] !==
+            confirmation.terms[key as keyof CheckoutTerms],
+        )
+      )
+        throw new PaymentError('CHECKOUT_TERMS_CHANGED');
+      const [offer, rules, refunds] = documents;
       const id = randomUUID();
       await db.query(
         `INSERT INTO payment_orders (id,user_id,reservation_id,quote_id,wall_id,slot_id,target_placement_id,autograph_id,creator_id,pricing_config_id,amount_minor,currency,creator_share_bps,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash)
@@ -275,13 +362,20 @@ export function createPgPaymentRepository(
           autographId,
           target.wall.creator_id,
           settings.creatorShareBps,
-          offer.version,
-          offer.hash,
-          rules.version,
-          rules.hash,
-          refunds.version,
-          refunds.hash,
+          offer!.version,
+          offer!.hash,
+          rules!.version,
+          rules!.hash,
+          refunds!.version,
+          refunds!.hash,
         ],
+      );
+      // Order + explicit checkout evidence + Payment commit before any provider I/O.
+      await db.query(
+        `INSERT INTO checkout_confirmations
+        (order_id,user_id,reservation_id,autograph_id,amount_minor,currency,guaranteed_visibility_seconds,reservation_expires_at,target_placement_id,pricing_config_id,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash)
+        SELECT id,user_id,reservation_id,autograph_id,amount_minor,currency,$2,$3::timestamptz,target_placement_id,pricing_config_id,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash FROM payment_orders WHERE id=$1`,
+        [id, terms.guaranteedVisibilitySeconds, terms.reservationExpiresAt],
       );
       const returnUrl = new URL(settings.returnUrl);
       returnUrl.searchParams.set('orderId', id);
@@ -428,6 +522,65 @@ export function createPgPaymentRepository(
   }
   return {
     create,
+    async findByReservation(userId, reservationId) {
+      const ids = await pool.query<{ id: string }>(
+        'SELECT id FROM payment_orders WHERE user_id=$1 AND reservation_id=$2',
+        [userId, reservationId],
+      );
+      return ids.rows[0] ? find(pool, ids.rows[0].id) : null;
+    },
+    async checkout(userId, reservationId, autographId) {
+      return tx(pool, async (db) => {
+        const rr = await db.query<OrderRow>(
+          'SELECT *,id AS reservation_id FROM takeover_reservations WHERE id=$1 AND user_id=$2',
+          [reservationId, userId],
+        );
+        const r = rr.rows[0];
+        if (!r) throw new PaymentError('RESERVATION_NOT_FOUND');
+        const target = await lockTarget(
+          db,
+          r.wall_id,
+          r.slot_id,
+          r.target_placement_id,
+        );
+        await db.query(
+          'SELECT id FROM takeover_reservations WHERE id=$1 FOR UPDATE',
+          [reservationId],
+        );
+        const prior = await db.query<{ id: string; autograph_id: string }>(
+          'SELECT id,autograph_id FROM payment_orders WHERE reservation_id=$1',
+          [reservationId],
+        );
+        if (prior.rows[0]) {
+          if (prior.rows[0].autograph_id !== autographId)
+            throw new PaymentError('ORDER_REQUEST_CONFLICT');
+          return { existingOrderId: prior.rows[0].id };
+        }
+        const documents = checkoutDocuments(legalDocuments);
+        await requireFirstUse(db, userId);
+        await requireEligible(db, r, target, autographId, userId);
+        const labels = await db.query<{
+          creator_name: string | null;
+          position: number;
+        }>(
+          `SELECT cp.display_name AS creator_name,s.position FROM slots s LEFT JOIN creator_profiles cp ON cp.creator_id=$2 WHERE s.id=$1`,
+          [r.slot_id, target.wall.creator_id],
+        );
+        const label = labels.rows[0]!;
+        const summary: CheckoutSummary = {
+          ...(await checkoutTerms(db, r)),
+          reservationId,
+          autographId,
+          wallId: r.wall_id,
+          wallTitle: `Стенд ${label.creator_name ?? target.wall.creator_id}`,
+          creatorName: label.creator_name ?? 'Создатель',
+          slotId: r.slot_id,
+          slotNumber: label.position + 1,
+          documents,
+        };
+        return summary;
+      });
+    },
     find: (id) => find(pool, id),
     observe,
     async lease(id) {

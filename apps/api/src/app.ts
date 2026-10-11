@@ -19,6 +19,11 @@ import {
   type TelegramHttpConfig,
 } from './auth/telegram-http';
 import type { TelegramLoginService } from './auth/telegram-login';
+import {
+  registerYandexRoutes,
+  type YandexHttpConfig,
+} from './auth/yandex-http';
+import type { YandexLoginService } from './auth/yandex-login';
 import type {
   FreeClaimService,
   PublicPlacementMediaService,
@@ -85,9 +90,11 @@ export function buildApi(
     disableNewPayments: false,
     disableFreeClaims: false,
   },
+  yandex?: { login: YandexLoginService; config: YandexHttpConfig },
+  loggerStream?: Parameters<typeof apiLoggerOptions>[0],
 ) {
   const app = Fastify({
-    logger: apiLoggerOptions(),
+    logger: apiLoggerOptions(loggerStream),
   });
   registerSafeApiErrors(app);
 
@@ -138,6 +145,12 @@ export function buildApi(
     }
   });
 
+  app.get('/auth/providers', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { yandex: !!yandex };
+  });
+  if (yandex)
+    registerYandexRoutes(app, yandex.login, authConfig, yandex.config);
   registerAuthRoutes(app, sessions, authConfig);
   if (testAuth) {
     registerTestAuthRoutes(

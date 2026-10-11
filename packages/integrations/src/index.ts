@@ -12,3 +12,9 @@ export {
 } from './telegram';
 export { createYookassaProvider } from './yookassa';
 export { createTelegramNotificationSender } from './telegram-notifications';
+
+export {
+  createYandexOAuthClient,
+  type YandexOAuthClient,
+  type YandexOAuthConfig,
+} from './yandex';

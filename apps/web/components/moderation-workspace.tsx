@@ -1,5 +1,7 @@
 'use client';
 
+import { VkIdSignIn } from './vk-id-sign-in';
+
 import { useEffect, useRef, useState } from 'react';
 import {
   ModerationApiError,
@@ -201,6 +203,7 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
         <a href={`${apiOrigin}/auth/telegram/start?returnTo=${returnTo}`}>
           Sign in with Telegram
         </a>
+        <VkIdSignIn apiOrigin={apiOrigin} returnTo="/moderation" />
       </section>
     );
   }

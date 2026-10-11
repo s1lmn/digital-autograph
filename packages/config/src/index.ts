@@ -438,3 +438,62 @@ export function loadNotificationTelegramWorkerConfig(
     environment,
   );
 }
+
+// Separate opt-in and operator approval. Neither credentials alone nor a public
+// frontend flag can activate VkId login. Disabled installations need no keys.
+export function loadVkIdAuthConfig(environment = process.env) {
+  try {
+    const gates = z
+      .object({
+        VK_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+        VK_AUTH_APPROVED: z.enum(['true', 'false']).default('false'),
+      })
+      .parse(environment);
+    if (gates.VK_AUTH_ENABLED !== 'true' || gates.VK_AUTH_APPROVED !== 'true')
+      return null;
+    const config = z
+      .object({
+        APP_ENV: appEnvironment,
+        WEB_ORIGIN: exactOrigin,
+        GOOGLE_REDIRECT_URI: z.url(),
+        VK_CLIENT_ID: z.string().regex(/^[1-9][0-9]{0,19}$/),
+        VK_SERVICE_TOKEN: z.string().min(1).max(4096),
+        VK_REDIRECT_URI: z.url(),
+      })
+      .parse(environment);
+    const callback = new URL(config.VK_REDIRECT_URI);
+    const web = new URL(config.WEB_ORIGIN);
+    const local = ['local', 'test', 'development'].includes(config.APP_ENV);
+    if (
+      callback.href !== config.VK_REDIRECT_URI ||
+      callback.pathname !== '/auth/vk-id/callback' ||
+      callback.search ||
+      callback.hash ||
+      callback.username ||
+      callback.password ||
+      callback.origin !== new URL(config.GOOGLE_REDIRECT_URI).origin ||
+      (callback.protocol !== 'https:' &&
+        !(
+          local &&
+          callback.protocol === 'http:' &&
+          ['localhost', '127.0.0.1'].includes(callback.hostname)
+        )) ||
+      (!local &&
+        (web.protocol !== 'https:' ||
+          !(
+            callback.hostname === web.hostname ||
+            callback.hostname === `api.${web.hostname}`
+          )))
+    )
+      throw new Error();
+    return {
+      clientId: config.VK_CLIENT_ID,
+      serviceToken: config.VK_SERVICE_TOKEN,
+      redirectUri: config.VK_REDIRECT_URI,
+    };
+  } catch {
+    throw new Error(
+      'Invalid VkId authentication configuration (values redacted)',
+    );
+  }
+}

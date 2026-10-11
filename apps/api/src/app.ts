@@ -19,6 +19,8 @@ import {
   type TelegramHttpConfig,
 } from './auth/telegram-http';
 import type { TelegramLoginService } from './auth/telegram-login';
+import { registerVkIdRoutes, type VkIdHttpConfig } from './auth/vk-id-http';
+import type { VkIdLoginService } from './auth/vk-id-login';
 import type {
   FreeClaimService,
   PublicPlacementMediaService,
@@ -85,9 +87,11 @@ export function buildApi(
     disableNewPayments: false,
     disableFreeClaims: false,
   },
+  vkId?: { login: VkIdLoginService; config: VkIdHttpConfig },
+  loggerStream?: Parameters<typeof apiLoggerOptions>[0],
 ) {
   const app = Fastify({
-    logger: apiLoggerOptions(),
+    logger: apiLoggerOptions(loggerStream),
   });
   registerSafeApiErrors(app);
 
@@ -138,6 +142,11 @@ export function buildApi(
     }
   });
 
+  app.get('/auth/providers', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { vk_id: !!vkId };
+  });
+  if (vkId) registerVkIdRoutes(app, vkId.login, authConfig, vkId.config);
   registerAuthRoutes(app, sessions, authConfig);
   if (testAuth) {
     registerTestAuthRoutes(

@@ -1,7 +1,11 @@
 import { PaymentService } from '@digital-autograph/payments';
 import { createPgPaymentRepository } from '@digital-autograph/db';
 import { createYookassaProvider } from '@digital-autograph/integrations';
-import { loadApiConfig, loadPaymentConfig } from '@digital-autograph/config';
+import {
+  loadApiConfig,
+  loadPaymentConfig,
+  loadVkIdAuthConfig,
+} from '@digital-autograph/config';
 import { runtimeFailureRecord } from '@digital-autograph/observability';
 import {
   IdentityService,
@@ -35,6 +39,7 @@ import {
   TakeoverReservationService,
 } from '@digital-autograph/walls';
 import {
+  createVkIdOAuthClient,
   createGoogleOidcClient,
   createTelegramOidcClient,
   createPrivateS3Storage,
@@ -45,6 +50,7 @@ import {
   googleLoginAttemptTtlSeconds,
 } from './auth/google-login';
 import { TelegramLoginService } from './auth/telegram-login';
+import { VkIdLoginService } from './auth/vk-id-login';
 import { NotificationService } from '@digital-autograph/notifications';
 import {
   createPgNotificationRepository,
@@ -55,6 +61,7 @@ import { loadNotificationTelegramApiConfig } from '@digital-autograph/config';
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const paymentConfig = loadPaymentConfig();
+  const vkIdConfig = loadVkIdAuthConfig();
   const notificationTelegram = loadNotificationTelegramApiConfig();
   const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
   if (
@@ -188,6 +195,21 @@ async function main(): Promise<void> {
       disableNewPayments: config.DISABLE_NEW_PAYMENTS,
       disableFreeClaims: config.DISABLE_FREE_CLAIMS,
     },
+    vkIdConfig
+      ? {
+          login: new VkIdLoginService(
+            attempts,
+            createVkIdOAuthClient(vkIdConfig),
+            identities,
+            sessions,
+          ),
+          config: {
+            appEnvironment: config.APP_ENV,
+            webOrigin: config.WEB_ORIGIN,
+            redirectUri: vkIdConfig.redirectUri,
+          },
+        }
+      : undefined,
   );
   let closing = false;
 

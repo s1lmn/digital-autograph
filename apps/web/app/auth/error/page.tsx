@@ -17,6 +17,8 @@ export default async function AuthErrorPage({
     GOOGLE_AUTH_FAILED: 'Google sign-in could not be completed.',
     TELEGRAM_AUTH_CANCELLED: 'Telegram sign-in was cancelled.',
     TELEGRAM_AUTH_FAILED: 'Telegram sign-in could not be completed.',
+    VK_AUTH_CANCELLED: 'Вход через VK ID отменён.',
+    VK_AUTH_FAILED: 'Не удалось завершить вход через VK ID.',
     ALREADY_AUTHENTICATED: 'You are already signed in.',
   };
   const message =

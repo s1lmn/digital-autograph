@@ -12,6 +12,7 @@ import {
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { z } from 'zod';
 import { authenticatedSession, requireAuthenticatedUser } from '../auth/http';
+import { rejectDisabledOperation } from '../incident-controls';
 
 function parse<T extends z.ZodType>(
   schema: T,
@@ -47,6 +48,7 @@ function sendPricingError(error: unknown, reply: FastifyReply): unknown {
 export function registerPricingRoutes(
   app: FastifyInstance,
   pricing: TakeoverQuoteService,
+  disabled = false,
 ): void {
   app.post(
     '/admin/pricing/configs',
@@ -118,7 +120,12 @@ export function registerPricingRoutes(
 
   app.post(
     '/walls/:wallId/slots/:slotId/takeover-quote',
-    { preHandler: requireAuthenticatedUser },
+    {
+      preHandler: [
+        requireAuthenticatedUser,
+        rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),
+      ],
+    },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       const params = parse(takeoverQuoteParams, request.params, reply);

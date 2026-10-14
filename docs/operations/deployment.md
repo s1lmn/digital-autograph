@@ -167,6 +167,12 @@ and review production CORS separately. Do not change public access to fix CORS.
 
 ### Lockbox payloads
 
+For independent new-payment/claim shutdown, see
+[incident controls](incident-controls.md). The API additionally reads the optional
+administrator-owned `/etc/digital-autograph/env/incident.env` after `api.env`;
+this override survives normal release/rollback environment refresh. No worker,
+migration or web service reads it. Use matching supported application images.
+
 Create one API secret and one worker secret per environment. Payload entries
 are plain-text key/value pairs; do not put them in GitHub Actions variables,
 the repository, or deployment logs.

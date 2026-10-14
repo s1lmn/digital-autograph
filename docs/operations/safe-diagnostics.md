@@ -47,7 +47,8 @@ capture actual Fastify/Pino output, fallback 4xx logging, nested/cyclic errors,
 extra arguments and hostile getters.
 
 This is an early independent part of EGO-111, not a monitoring/backup system.
-External error tracking, release tagging, metrics/alerts, restore drills,
+Bounded API response metrics are described in [api-metrics.md](api-metrics.md).
+External error tracking, release tagging, additional metrics/alerts, restore drills,
 RPO/RTO, on-call and incident exercises remain separate work. No retention or
 legal policy is selected here; no domain/payment/schema mutation is introduced.
 

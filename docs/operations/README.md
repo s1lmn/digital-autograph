@@ -1,5 +1,8 @@
 # Operations
 
+[Aggregate API response metrics](api-metrics.md) documents bounded latency and
+status-class events, route-template privacy, rates and sampling limitations.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.

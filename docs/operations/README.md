@@ -19,3 +19,7 @@ and the targeted dependency overrides.
 
 See [staging disk recovery](staging-disk-recovery.md) for the read-only inventory
 tool and the evidence required before capacity remediation and release recovery.
+
+[Reservation admission](../architecture/takeover-reservation.md#reservation-admission-ego-151)
+describes per-user protection against mass Slot locking, HTTP 429 retry behavior,
+and the remaining anti-fraud work.

@@ -5,14 +5,21 @@ import {
 } from '@digital-autograph/walls';
 import type { FastifyInstance } from 'fastify';
 import { authenticatedSession, requireAuthenticatedUser } from '../auth/http';
+import { rejectDisabledOperation } from '../incident-controls';
 
 export function registerFreeClaimRoutes(
   app: FastifyInstance,
   claims: FreeClaimService,
+  disabled = false,
 ): void {
   app.post(
     '/walls/:wallId/slots/:slotId/free-claim',
-    { preHandler: requireAuthenticatedUser },
+    {
+      preHandler: [
+        requireAuthenticatedUser,
+        rejectDisabledOperation(disabled, 'FREE_CLAIMS_DISABLED'),
+      ],
+    },
     async (request, reply) => {
       const params = freeClaimParams.safeParse(request.params);
       const body = freeClaimBody.safeParse(request.body);

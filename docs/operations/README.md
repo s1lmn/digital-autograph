@@ -1,5 +1,8 @@
 # Operations
 
+[Local public Wall load probe](public-wall-load.md) prepares reproducible,
+bounded public-read measurements for the later EGO-113 capacity exercise.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.

@@ -46,7 +46,9 @@ try {
       '--gitleaks-ignore-path',
       ignoreDirectory,
       '--ignore-gitleaks-allow',
-      '--log-opts=--all',
+      // Compare merge commits against each parent, including content introduced
+      // only during a merge or its conflict resolution.
+      '--log-opts=--all -m',
       '--redact=100',
       '--no-banner',
       '--no-color',

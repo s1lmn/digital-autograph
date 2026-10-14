@@ -10,7 +10,10 @@ Gitleaks 8.24.3 uses its built-in rules plus `.gitleaks.toml`. The Linux x64
 installer checks the reviewed release archive SHA-256 before execution; download,
 checksum, missing-binary, wrong-version and shallow-checkout failures block the
 gate. The scanner checks all available Git refs, including deleted historical
-content. It does not contact a credential provider or test whether a key is live.
+content. Merge commits are compared against each parent (`--all -m`), so content
+introduced only during a merge or conflict resolution is also scanned. The smoke
+checks clean merges and both current and later-deleted merge-only credentials.
+It does not contact a credential provider or test whether a key is live.
 Pattern matching cannot establish absence of all secrets, especially arbitrary
 passwords, binaries, runtime logs or client bundles. EGO-109's wider review remains
 required.
@@ -38,7 +41,7 @@ locations locally using the same pinned tool:
 ```bash
 gitleaks git --config .gitleaks.toml --ignore-gitleaks-allow \
   --gitleaks-ignore-path /tmp/empty-reviewed-ignore-directory \
-  --log-opts=--all --redact=100 --no-banner --verbose .
+  --log-opts='--all -m' --redact=100 --no-banner --verbose .
 ```
 
 Create an empty ignore directory first; do not share raw source, credential

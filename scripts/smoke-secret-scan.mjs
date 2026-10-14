@@ -51,9 +51,14 @@ function scan(expected, target = repository, extraEnv = {}) {
   );
 }
 try {
-  git('init', '-q');
+  git('init', '-q', '-b', 'main');
   writeFileSync(resolve(repository, 'README.md'), 'Clean fixture\n');
   commit();
+  const cleanHead = spawnSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repository,
+    encoding: 'utf8',
+  });
+  assert.equal(cleanHead.status, 0, 'Clean fixture head lookup failed');
   scan(0);
   scan(2, temporary); // Not a Git repository must fail closed.
   scan(2, repository, { GITLEAKS_BIN: resolve(temporary, 'missing-scanner') });
@@ -108,8 +113,30 @@ try {
   ]);
   assert.equal(cloned.status, 0, 'Shallow fixture clone failed');
   scan(2, shallow);
+
+  // Start again with clean reachable history so ordinary commits cannot mask
+  // failure to scan a credential introduced only by a two-parent merge.
+  git('reset', '--hard', cleanHead.stdout.trim());
+  git('switch', '-qc', 'side');
+  writeFileSync(resolve(repository, 'side.txt'), 'Clean side\n');
+  commit();
+  git('switch', '-q', 'main');
+  writeFileSync(resolve(repository, 'main.txt'), 'Clean main\n');
+  commit();
+  git('merge', '--no-ff', '--no-commit', 'side');
+  commit();
+  scan(0); // A clean two-parent merge must still pass.
+
+  git('reset', '--hard', 'HEAD~1');
+  git('merge', '--no-ff', '--no-commit', 'side');
+  writeFileSync(resolve(repository, 'merge-only.ts'), `token = '${canary}';\n`);
+  commit();
+  scan(1); // Neither parent contains this merge-created credential.
+  git('rm', '-q', 'merge-only.ts');
+  commit();
+  scan(1); // Later deletion must not hide the merge-only historical finding.
   console.log(
-    'Secret scanner smoke passed: detection, history, exceptions, safe output and failure guards.',
+    'Secret scanner smoke passed: detection, merge history, exceptions, safe output and failure guards.',
   );
 } finally {
   rmSync(temporary, { recursive: true, force: true });

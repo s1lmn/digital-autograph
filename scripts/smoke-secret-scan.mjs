@@ -78,6 +78,21 @@ try {
   );
   commit();
   scan(0); // Exact approved path + values are synthetic.
+  const checkout = resolve(repository, 'apps/web/components/paid-checkout.tsx');
+  mkdirSync(dirname(checkout), { recursive: true });
+  const publicComment =
+    '// Check the published API bytes too: unavailable/tampered/placeholder documents never enable submission.\n';
+  writeFileSync(checkout, publicComment);
+  commit();
+  scan(0); // Exact known public comment AND exact checkout path.
+  writeFileSync(resolve(repository, 'other-comment.ts'), publicComment);
+  commit();
+  scan(1); // The same scanner match elsewhere is not excluded.
+  git('reset', '--hard', 'HEAD~1');
+  writeFileSync(checkout, `token = '${canary}';\n`);
+  commit();
+  scan(1); // A credential in the checkout path still blocks the gate.
+  git('reset', '--hard', 'HEAD~1');
   writeFileSync(
     resolve(repository, 'other.ts'),
     `token = '${['same', 'key', 'two', 'quotes', '01'].join('-')}';`,

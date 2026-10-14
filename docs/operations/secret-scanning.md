@@ -63,10 +63,19 @@ For a real or uncertain credential:
 
 ## Exceptions and scanner upgrades
 
-Only three exact synthetic request idempotency-key values are excluded, only for
+Three exact synthetic request idempotency-key values are excluded, only for
 `generic-api-key`, AND only inside the reservation integration fixture path.
-The original historical findings were reviewed in commit `c50bf736`. No whole
-test directories, commits or baselines are skipped. Repository `.gitleaksignore`
+The original historical findings were reviewed in commit `c50bf736`.
+
+One additional false positive is an ordinary public validation comment introduced
+in checkout commit `3db21bd4`. Its complete scanner match is exactly
+`API bytes too: unavailable/tampered/placeholder`, AND the file must be exactly
+`apps/web/components/paid-checkout.tsx`. The real-scanner smoke proves this match
+elsewhere still fails and a synthetic credential in the checkout path still
+fails. This exception does not suppress the merge-only credential regression.
+It requires independent review along with every scanner/config change.
+
+No whole directories, commits or baselines are skipped. Repository `.gitleaksignore`
 is forbidden (its presence fails the gate), and inline `gitleaks:allow` comments
 cannot suppress this gate. The explicit ignore-path flag alone does not disable
 Gitleaks 8.24.3's automatic source-directory ignore loading.

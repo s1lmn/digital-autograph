@@ -13,3 +13,12 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^tests/integration/takeover-reservation\.test\.ts$''']
 regexes = ['''^(strict-body-key-01|fresh-after-expiry-01|same-key-two-quotes-01)$''']
+
+# Public validation comment in checkout (3db21bd4), not credential material.
+# Match the complete scanner match AND exact file, never a whole path/rule.
+[[rules.allowlists]]
+description = "Public checkout validation comment only"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^apps/web/components/paid-checkout\.tsx$''']
+regexes = ['''^API bytes too: unavailable/tampered/placeholder\s*$''']

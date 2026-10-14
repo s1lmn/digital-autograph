@@ -9,6 +9,7 @@ import {
 } from '@digital-autograph/walls';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { authenticatedSession, requireAuthenticatedUser } from '../auth/http';
+import { rejectDisabledOperation } from '../incident-controls';
 
 function sendReservationError(error: unknown, reply: FastifyReply): unknown {
   if (!(error instanceof ReservationError)) throw error;
@@ -25,10 +26,16 @@ function sendReservationError(error: unknown, reply: FastifyReply): unknown {
 export function registerTakeoverReservationRoutes(
   app: FastifyInstance,
   reservations: TakeoverReservationService,
+  disabled = false,
 ): void {
   app.post(
     '/takeover-reservations',
-    { preHandler: requireAuthenticatedUser },
+    {
+      preHandler: [
+        requireAuthenticatedUser,
+        rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),
+      ],
+    },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       const body = createTakeoverReservationBody.safeParse(request.body);

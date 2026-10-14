@@ -70,9 +70,12 @@ The original historical findings were reviewed in commit `c50bf736`.
 One additional false positive is an ordinary public validation comment introduced
 in checkout commit `3db21bd4`. Its complete scanner match is exactly
 `API bytes too: unavailable/tampered/placeholder`, AND the file must be exactly
-`apps/web/components/paid-checkout.tsx`. The real-scanner smoke proves this match
-elsewhere still fails and a synthetic credential in the checkout path still
-fails. This exception does not suppress the merge-only credential regression.
+`apps/web/components/paid-checkout.tsx` or the literal regression/runbook copies
+in `scripts/smoke-secret-scan.mjs` and `docs/operations/secret-scanning.md`.
+Only whitespace and Markdown's closing backtick may follow the exact match.
+The real-scanner smoke proves this match elsewhere still fails and other
+synthetic generic API keys in each of these three paths still fail. This
+exception does not suppress the merge-only credential regression.
 It requires independent review along with every scanner/config change.
 
 No whole directories, commits or baselines are skipped. Repository `.gitleaksignore`

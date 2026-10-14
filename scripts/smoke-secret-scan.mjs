@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const temporary = mkdtempSync(resolve(tmpdir(), 'autograph-scanner-smoke-'));
 const canary = ['gh', 'p_'].join('') + randomBytes(18).toString('hex');
+const genericCanary = randomBytes(24).toString('base64url');
 const repository = resolve(temporary, 'repository');
 mkdirSync(repository);
 function git(...args) {
@@ -46,7 +47,9 @@ function scan(expected, target = repository, extraEnv = {}) {
   // Never include captured output or canary in an assertion failure message.
   assert.equal(result.status, expected, 'Unexpected scanner exit status');
   assert.ok(
-    !`${result.stdout}${result.stderr}`.includes(canary),
+    ![canary, genericCanary].some((value) =>
+      `${result.stdout}${result.stderr}`.includes(value),
+    ),
     'Scanner exposed the synthetic credential',
   );
 }
@@ -93,6 +96,18 @@ try {
   commit();
   scan(1); // A credential in the checkout path still blocks the gate.
   git('reset', '--hard', 'HEAD~1');
+  for (const path of [
+    'apps/web/components/paid-checkout.tsx',
+    'scripts/smoke-secret-scan.mjs',
+    'docs/operations/secret-scanning.md',
+  ]) {
+    const file = resolve(repository, path);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, `api_key = '${genericCanary}';\n`);
+    commit();
+    scan(1); // Other generic-api-key values in every exact path still fail.
+    git('reset', '--hard', 'HEAD~1');
+  }
   writeFileSync(
     resolve(repository, 'other.ts'),
     `token = '${['same', 'key', 'two', 'quotes', '01'].join('-')}';`,

@@ -51,6 +51,34 @@ test('public wall poster and slot grid remain readable with filtering, fragments
   ).toBeFocused();
   await expect(grid.getByRole('listitem')).toHaveCount(10);
 
+  // A native anchor to the unchanged fragment emits no hashchange. It must
+  // still reveal and focus the occupied slot after filtering it out again.
+  await page.evaluate((id) => {
+    const anchor = document.createElement('a');
+    anchor.href = `#slot-${id}`;
+    anchor.textContent = 'Revisit occupied slot';
+    document.querySelector('main')!.prepend(anchor);
+  }, e2eSlotId);
+  const repeatedLink = page.getByRole('link', {
+    name: 'Revisit occupied slot',
+    exact: true,
+  });
+  for (const activation of ['mouse', 'keyboard']) {
+    await emptyFilter.click();
+    await expect(grid.getByRole('listitem')).toHaveCount(8);
+    await expect(emptyFilter).toHaveAttribute('aria-pressed', 'true');
+    await expect(page).toHaveURL(new RegExp(`#slot-${e2eSlotId}$`));
+    if (activation === 'keyboard') {
+      await repeatedLink.focus();
+      await page.keyboard.press('Enter');
+    } else await repeatedLink.click();
+    await expect(emptyFilter).toHaveAttribute('aria-pressed', 'false');
+    await expect(grid.getByRole('listitem')).toHaveCount(10);
+    await expect(
+      grid.getByRole('listitem', { name: 'Slot 1', exact: true }),
+    ).toBeFocused();
+  }
+
   for (const width of [1440, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
     expect(

@@ -229,7 +229,8 @@ export function PublicWallScreen({
   const emptySlots = wall.slots.filter((slot) => !slot.occupied);
   const visibleSlots = slotFilter === 'empty' ? emptySlots : wall.slots;
 
-  // A new notification/history fragment must remain reachable after filtering.
+  // Notification/history fragments must remain reachable after filtering,
+  // including native anchors that repeat the current fragment (no hashchange).
   useEffect(() => {
     const revealLinkedSlot = () => {
       const id = window.location.hash.slice(1);
@@ -241,8 +242,39 @@ export function PublicWallScreen({
         setSlotFilter('all');
       }
     };
+    const revealRepeatedLink = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        !(event.target instanceof Element)
+      )
+        return;
+      const anchor = event.target.closest('a[href]');
+      if (
+        !(anchor instanceof HTMLAnchorElement) ||
+        anchor.hasAttribute('download') ||
+        (anchor.target && anchor.target.toLowerCase() !== '_self')
+      )
+        return;
+      const destination = new URL(anchor.href);
+      if (
+        destination.origin === window.location.origin &&
+        destination.pathname === window.location.pathname &&
+        destination.search === window.location.search &&
+        destination.hash === window.location.hash
+      )
+        revealLinkedSlot();
+    };
     window.addEventListener('hashchange', revealLinkedSlot);
-    return () => window.removeEventListener('hashchange', revealLinkedSlot);
+    document.addEventListener('click', revealRepeatedLink);
+    return () => {
+      window.removeEventListener('hashchange', revealLinkedSlot);
+      document.removeEventListener('click', revealRepeatedLink);
+    };
   }, [slotFilter, wall.slots]);
   useEffect(() => {
     if (slotFilter === 'all' && linkedSlotFocus.current) {

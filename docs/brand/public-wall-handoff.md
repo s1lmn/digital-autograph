@@ -29,8 +29,10 @@ implicitly authorize a partial localization or final marketing claims.
   counts and membership then follow the refreshed response.
 - A view with no empty slots provides an explanation, Refresh Wall and Show all
   slots. The latter returns keyboard focus to the persistent All slots button.
-- New occupied-slot fragments from history/notifications reveal the full grid
-  and focus the original slot. Slot IDs and existing links are retained.
+- New occupied-slot fragments from history/notifications and same-document
+  anchors repeating the current fragment reveal the full grid and focus the
+  original slot. Slot IDs and existing links are retained. Modified clicks,
+  downloads and links targeting another document/window keep native behavior.
 - Scheduled, paused, ended and elapsed live Walls remain readable and filterable
   without enabling claims. Existing auth, ready-autograph, confirmation, replay,
   race, offline-refresh and history failure states remain in place.

@@ -243,6 +243,12 @@ with Google and Telegram.
 
 ## GitHub configuration
 
+The repository is now public. The private-Free limitations below describe the
+original deployment design, not current GitHub feature availability. See
+[public repository CI/CD controls](public-repository-security.md) before enabling
+the deployment runner or configuring protection. No Environment migration has
+been applied; the existing release authorization remains in force.
+
 For the private GitHub Free repository, do not create or depend on protected
 GitHub Environments, environment secrets, or required reviewers. Configure
 these non-secret values as repository-level Actions variables:

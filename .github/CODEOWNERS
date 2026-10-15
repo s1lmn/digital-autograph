@@ -1,0 +1,7 @@
+# Either maintainer may review; the PR author cannot supply their own approval.
+/.github/ @s1lmn @MDBaryshev
+/deploy/ @s1lmn @MDBaryshev
+/scripts/ @s1lmn @MDBaryshev
+/.gitleaks.toml @s1lmn @MDBaryshev
+/SECURITY.md @s1lmn @MDBaryshev
+/docs/operations/ @s1lmn @MDBaryshev

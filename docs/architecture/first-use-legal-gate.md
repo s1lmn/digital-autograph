@@ -101,3 +101,14 @@ integrated, this branch synchronized/retested, and exact-head independent review
 obtained before release. Publication additionally requires approved wording, requisites,
 addresses, URLs and effective dates, readiness and separate release acceptance.
 No checkout or dissemination work is started automatically.
+
+## Existing Order response-loss retries
+
+The first-use and incident admission gates apply only when no session-owned Order
+exists for the reservation. Repeating POST /payments/orders for an existing Order
+continues through the original repository replay check, preserving its autograph,
+economic and legal snapshots even when current documents are unpublished or new
+payments are disabled. This does not admit a new Order or authorize another user.
+Parallel HTTP replay, one Payment and unchanged Order bytes are covered alongside
+the existing financial concurrency suite. New uploads and Free Claim still fail
+closed while Terms/Rules remain unapproved; publication is required before rollout.

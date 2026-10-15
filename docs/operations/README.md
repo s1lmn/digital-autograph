@@ -1,5 +1,8 @@
 # Operations
 
+[Worker failure diagnostics](worker-diagnostics.md) documents structured,
+bounded errors from image, notification and cleanup cycles.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.

@@ -130,6 +130,10 @@ export interface PaymentRepository {
     autographId: string,
     settings: PaymentSettings,
   ): Promise<PaymentAttempt>;
+  findByReservation?(
+    userId: string,
+    reservationId: string,
+  ): Promise<PaymentAttempt | null>;
   find(id: string): Promise<PaymentAttempt | null>;
   lease(id: string): Promise<string | null>;
   release(id: string, token: string): Promise<void>;
@@ -167,6 +171,9 @@ export class PaymentService {
         p.state === 'provider_pending' ? p.confirmationUrl : null,
       placementId: p.placementId,
     };
+  }
+  async existing(userId: string, reservationId: string) {
+    return this.repository.findByReservation?.(userId, reservationId) ?? null;
   }
   async create(userId: string, reservationId: string, autographId: string) {
     const attempt = await this.repository.create(

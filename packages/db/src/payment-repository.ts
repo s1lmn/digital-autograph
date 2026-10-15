@@ -428,6 +428,13 @@ export function createPgPaymentRepository(
   }
   return {
     create,
+    async findByReservation(userId, reservationId) {
+      const ids = await pool.query<{ id: string }>(
+        'SELECT id FROM payment_orders WHERE user_id=$1 AND reservation_id=$2',
+        [userId, reservationId],
+      );
+      return ids.rows[0] ? find(pool, ids.rows[0].id) : null;
+    },
     find: (id) => find(pool, id),
     observe,
     async lease(id) {

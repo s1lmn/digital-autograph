@@ -8,7 +8,8 @@ import type {
   FastifyRequest,
 } from 'fastify';
 import { authenticatedSession, requireAuthenticatedUser } from '../auth/http';
-import { rejectDisabledOperation } from '../incident-controls';
+import type { LegalHttp } from '../legal-http';
+import { firstUseState } from '../first-use';
 const createBody = z
   .object({ reservationId: z.uuid(), autographId: z.uuid() })
   .strict();
@@ -73,6 +74,7 @@ export function registerPaymentRoutes(
   app: FastifyInstance,
   payments: PaymentService,
   disabled = false,
+  legal?: LegalHttp,
 ) {
   // Fixed independent budgets: user traffic cannot consume webhook capacity.
   // Perimeter aggregate limits are still required across multiple replicas.
@@ -81,10 +83,24 @@ export function registerPaymentRoutes(
   app.post(
     '/payments/orders',
     {
-      config: { firstUse: true },
       preHandler: [
         requireAuthenticatedUser,
-        rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),
+        async (req, reply) => {
+          if (!disabled) return;
+          const body = createBody.safeParse(req.body);
+          if (
+            body.success &&
+            (await payments.existing(
+              authenticatedSession(req).user.id,
+              body.data.reservationId,
+            ))
+          )
+            return;
+          return reply
+            .header('Cache-Control', 'no-store')
+            .code(503)
+            .send({ error: { code: 'NEW_PAYMENTS_DISABLED' } });
+        },
       ],
       bodyLimit: 2048,
       errorHandler: parserError,
@@ -97,6 +113,17 @@ export function registerPaymentRoutes(
       if (!users.acquire())
         return reply.code(429).send({ error: { code: 'RATE_LIMITED' } });
       try {
+        const userId = authenticatedSession(req).user.id;
+        const prior = await payments.existing(userId, body.data.reservationId);
+        if (!prior) {
+          if (disabled)
+            return reply
+              .code(503)
+              .send({ error: { code: 'NEW_PAYMENTS_DISABLED' } });
+          if (!legal) throw new LegalError('LEGAL_DOCUMENT_UNAVAILABLE');
+          if (!(await firstUseState(legal, userId)).complete)
+            throw new PaymentError('FIRST_USE_REQUIRED');
+        }
         return await payments.create(
           authenticatedSession(req).user.id,
           body.data.reservationId,

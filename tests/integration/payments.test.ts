@@ -1629,11 +1629,49 @@ it.each([
           : 'LEGAL_DOCUMENT_UNAVAILABLE',
       );
       expect(creates).toBe(calls);
-      succeed(existing.providerId);
+      const priorOrder = await database.pool.query(
+        'SELECT to_jsonb(o) AS snapshot FROM payment_orders o WHERE id=$1',
+        [existing.orderId],
+      );
       const existingHeaders = {
         cookie: `da_session=${existing.buyer.token}`,
         origin: 'http://127.0.0.1:3000',
       };
+      const replay = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          app.inject({
+            method: 'POST',
+            url: '/payments/orders',
+            headers: existingHeaders,
+            payload: {
+              reservationId: existing.reservationId,
+              autographId: existing.autographId,
+            },
+          }),
+        ),
+      );
+      for (const response of replay) {
+        expect(response.statusCode).toBe(200);
+        expect(response.json().id).toBe(existing.orderId);
+      }
+      expect(creates).toBe(calls);
+      expect(
+        (
+          await database.pool.query(
+            'SELECT to_jsonb(o) AS snapshot FROM payment_orders o WHERE id=$1',
+            [existing.orderId],
+          )
+        ).rows,
+      ).toEqual(priorOrder.rows);
+      expect(
+        (
+          await database.pool.query(
+            'SELECT count(*)::int AS count FROM payments WHERE order_id=$1',
+            [existing.orderId],
+          )
+        ).rows[0].count,
+      ).toBe(1);
+      succeed(existing.providerId);
       expect(
         (
           await app.inject({

@@ -58,7 +58,10 @@ function fixture(controls?: IncidentControls) {
     { create: calls[2] } as unknown as TakeoverReservationService,
     undefined,
     undefined,
-    { create: calls[3] } as unknown as PaymentService,
+    {
+      create: calls[3],
+      existing: async () => null,
+    } as unknown as PaymentService,
     undefined,
     controls,
     {

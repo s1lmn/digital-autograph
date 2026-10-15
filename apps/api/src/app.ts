@@ -180,7 +180,12 @@ export function buildApi(
   if (moderation) registerModerationRoutes(app, moderation);
 
   if (payments)
-    registerPaymentRoutes(app, payments, incidentControls.disableNewPayments);
+    registerPaymentRoutes(
+      app,
+      payments,
+      incidentControls.disableNewPayments,
+      legal,
+    );
   if (notifications) {
     registerNotificationRoutes(
       app,

@@ -88,6 +88,7 @@ function api(
     undefined,
     {
       create: calls.order,
+      existing: async () => null,
       refresh: calls.refresh,
       status: calls.status,
       webhook: calls.webhook,

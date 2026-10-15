@@ -23,3 +23,12 @@ tool and the evidence required before capacity remediation and release recovery.
 [Reservation admission](../architecture/takeover-reservation.md#reservation-admission-ego-151)
 describes per-user protection against mass Slot locking, HTTP 429 retry behavior,
 and the remaining anti-fraud work.
+
+See [public repository CI/CD controls](public-repository-security.md) for the
+main ruleset proposal, fork/runner trust boundary and remaining owner actions.
+
+The [15 October 2026 audit](public-repository-audit-2026-10-15.md) records verified
+API/network evidence, validation limits and outstanding owner actions.
+
+[PR Policy activation](pr-policy-activation.md) records the November 2026 Actions
+event-policy prerequisite, live-test gate and two-maintainer review tradeoff.

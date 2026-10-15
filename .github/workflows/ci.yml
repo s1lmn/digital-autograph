@@ -5,11 +5,17 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   macos-integration-runner:
+    timeout-minutes: 15
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -21,9 +27,12 @@ jobs:
       - name: Check launcher and staging fixtures with default macOS TMPDIR and directory aliases
         run: pnpm test apps/api/scripts/integration-runner.test.ts apps/api/scripts/deployment-staging.posix.test.ts
   windows-integration-runner:
+    timeout-minutes: 15
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -35,9 +44,12 @@ jobs:
       - name: Check integration launcher and database guard on Windows
         run: pnpm test apps/api/scripts/integration-runner.test.ts
   windows-unit:
+    timeout-minutes: 15
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -49,6 +61,7 @@ jobs:
       # On Windows the default command runs every portable unit test.
       - run: pnpm test
   checks:
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -89,6 +102,8 @@ jobs:
       UPLOAD_URL_TTL_SECONDS: 300
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -133,6 +148,7 @@ jobs:
       - name: Run migration image twice without TTY on clean PostgreSQL
         run: pnpm test:migration-image
   e2e:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -176,6 +192,8 @@ jobs:
       E2E_WEB_URL: http://127.0.0.1:3000
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
@@ -206,6 +224,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
+          retention-days: 3
           path: |
             playwright-report/
             test-results/

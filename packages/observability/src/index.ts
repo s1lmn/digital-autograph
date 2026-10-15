@@ -1,3 +1,9 @@
+export {
+  ApiResponseMetrics,
+  apiLatencyBoundsMs,
+  apiMetricSeriesLimit,
+} from './api-metrics';
+
 const names = new Set([
   'Error',
   'TypeError',

@@ -10,7 +10,54 @@ const release = readFileSync(
   'utf8',
 ).replaceAll('\r\n', '\n');
 
+const mainRuleset = JSON.parse(
+  readFileSync(
+    new URL('../../../.github/security/main-ruleset.json', import.meta.url),
+    'utf8',
+  ),
+);
+
 describe('production-critical test gate', () => {
+  it('targets main without bypasses and requires every current CI job plus trusted policy', () => {
+    expect(mainRuleset.conditions.ref_name).toEqual({
+      include: ['refs/heads/main'],
+      exclude: [],
+    });
+    expect(mainRuleset.bypass_actors).toEqual([]);
+    const required = mainRuleset.rules.find(
+      (rule: { type: string }) => rule.type === 'required_status_checks',
+    ).parameters;
+    const ciJobs = [
+      ...ci.split('jobs:')[1]!.matchAll(/^ {2}([a-z0-9-]+):\n/gm),
+    ].map((match) => match[1]);
+    const contexts: Array<{ context: string; integration_id: number }> =
+      required.required_status_checks;
+    expect(
+      [...contexts].sort((a, b) => a.context.localeCompare(b.context)),
+    ).toEqual(
+      [...ciJobs, 'policy']
+        .map((context) => ({ context, integration_id: 15368 }))
+        .sort((a, b) => a.context.localeCompare(b.context)),
+    );
+    expect(required.strict_required_status_checks_policy).toBe(true);
+    const review = mainRuleset.rules.find(
+      (rule: { type: string }) => rule.type === 'pull_request',
+    ).parameters;
+    expect(review.required_approving_review_count).toBe(1);
+    expect(review.dismiss_stale_reviews_on_push).toBe(true);
+    expect(review.required_review_thread_resolution).toBe(true);
+  });
+  it('isolates untrusted CI on hosted runners with read-only, unpersisted credentials', () => {
+    expect(ci.split('jobs:')[0]).toContain('permissions:\n  contents: read');
+    expect(ci).not.toMatch(
+      /self-hosted|pull_request_target|workflow_run|secrets\.|id-token:|permissions:.*write/,
+    );
+    expect(ci.match(/uses: actions\/checkout@v4/g)).toHaveLength(5);
+    expect(ci.match(/persist-credentials: false/g)).toHaveLength(5);
+    expect(ci.match(/timeout-minutes:/g)).toHaveLength(5);
+    expect(ci).toContain('retention-days: 3');
+    expect(release).not.toMatch(/download-artifact|actions\/cache/);
+  });
   it('runs macOS and Windows launcher checks alongside full Linux and Windows units', () => {
     const macos = ci
       .split('\n  macos-integration-runner:\n')[1]

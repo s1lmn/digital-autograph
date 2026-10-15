@@ -93,6 +93,7 @@ describe('PR Policy for dependency update proposals', () => {
   it.each([
     'ego-146-checkout',
     'codex/ego-146-checkout',
+    's1lm4n/ego-88-public-ci-hardening',
     'chore/checkout',
     'fix/checkout',
   ])('preserves ordinary developer branch %s', (branch) => {
@@ -112,5 +113,28 @@ describe('PR Policy for dependency update proposals', () => {
     const pr = proposal();
     pr.body += '\nS3_SECRET_ACCESS_KEY=synthetic-canary';
     expect(validate(pr)).toContain('PR body appears to contain a secret');
+  });
+});
+
+describe('public repository metadata boundary', () => {
+  it('uses trusted base policy without checking out or running PR source', () => {
+    expect(workflow).toContain('  pull_request_target:');
+    expect(workflow).toContain('converted_to_draft');
+    expect(workflow).toContain('if: github.event.pull_request.draft == false');
+    expect(workflow).not.toMatch(
+      /actions\/checkout|\n\s+run:|secrets\.|id-token:|write/,
+    );
+    expect(workflow.match(/uses:/g)).toHaveLength(1);
+    expect(workflow).toContain('uses: actions/github-script@v7');
+    expect(script).not.toContain('${{');
+  });
+
+  it('treats shell and expression syntax in metadata as data', () => {
+    const pr = proposal();
+    pr.user.login = 'contributor';
+    pr.head.repo.full_name = 'contributor/fork';
+    pr.head.ref = 'ego-88-public-ci';
+    pr.title = 'EGO-88: $(throw new Error()) ${{ secrets.EXAMPLE }}';
+    expect(validate(pr)).toBe('');
   });
 });

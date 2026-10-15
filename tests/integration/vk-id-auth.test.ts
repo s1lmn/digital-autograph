@@ -14,6 +14,7 @@ import {
 import { createVkIdOAuthClient } from '../../packages/integrations/src/vk-id';
 import { buildApi } from '../../apps/api/src/app';
 import { VkIdLoginService } from '../../apps/api/src/auth/vk-id-login';
+import { YandexLoginService } from '../../apps/api/src/auth/yandex-login';
 import { loadVkIdAuthConfig } from '../../packages/config/src/index';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -44,6 +45,7 @@ function createApp(
   enabled = true,
   environment: 'test' | 'staging' | 'production' = 'test',
   stream?: { write: (line: string) => void },
+  yandexEnabled = false,
 ) {
   const challenges = new Map<string, string>();
   const subjects = new Map<string, string>();
@@ -118,11 +120,32 @@ function createApp(
     },
   ];
   if (enabled)
-    args[17] = {
+    args[18] = {
       login,
       config: { appEnvironment: environment, webOrigin, redirectUri },
     };
-  args[18] = stream;
+  if (yandexEnabled)
+    args[17] = {
+      login: new YandexLoginService(
+        attempts,
+        {
+          authorizationUrl({ state, codeChallenge }) {
+            return `https://oauth.yandex.ru/authorize?${new URLSearchParams({ state, code_challenge: codeChallenge })}`;
+          },
+          async verifyCode() {
+            return { subject: '123456' };
+          },
+        },
+        identities,
+        sessions,
+      ),
+      config: {
+        appEnvironment: environment,
+        webOrigin,
+        redirectUri: 'http://127.0.0.1:4000/auth/yandex/callback',
+      },
+    };
+  args[19] = stream;
   const app = buildApi(...args);
   return { app, requests, login };
 }
@@ -178,6 +201,74 @@ afterAll(async () => {
 });
 
 describe('VK ID isolated PostgreSQL login', () => {
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])(
+    'keeps availability and start routes independent (VK=%s, Yandex=%s)',
+    async (vkEnabled, yandexEnabled) => {
+      const { app } = createApp(vkEnabled, 'test', undefined, yandexEnabled);
+      try {
+        expect((await app.inject('/auth/providers')).json()).toEqual({
+          yandex: yandexEnabled,
+          vk_id: vkEnabled,
+        });
+        for (const [path, enabled] of [
+          ['/auth/yandex/start', yandexEnabled],
+          ['/auth/vk-id/start', vkEnabled],
+        ] as const) {
+          expect(
+            (await app.inject({ url: path, headers: host })).statusCode,
+          ).toBe(enabled ? 302 : 404);
+        }
+      } finally {
+        await app.close();
+      }
+    },
+  );
+  it('rejects cross-provider attempts while both providers coexist and keeps identities separate', async () => {
+    const { app, requests } = createApp(true, 'test', undefined, true);
+    try {
+      const vk = await start(app);
+      const y = await app.inject({ url: '/auth/yandex/start', headers: host });
+      const state = new URL(y.headers.location!).searchParams.get('state')!;
+      const cookies = y.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+      expect((await finish(app, { ...vk, state })).headers.location).toContain(
+        'VK_AUTH_FAILED',
+      );
+      expect(
+        (
+          await app.inject({
+            url: `/auth/yandex/callback?state=${vk.state}&code=synthetic`,
+            headers: { ...host, cookie: cookies },
+          })
+        ).headers.location,
+      ).toContain('YANDEX_AUTH_FAILED');
+      expect(requests).toHaveLength(0);
+      expect(await count('users')).toBe(0);
+      expect(sessionCookie(await finish(app, vk))).not.toBe('');
+      const ownYandex = await app.inject({
+        url: `/auth/yandex/callback?state=${state}&code=synthetic`,
+        headers: { ...host, cookie: cookies },
+      });
+      expect(sessionCookie(ownYandex)).not.toBe('');
+      const identities = await db.pool.query(
+        'SELECT provider,provider_user_id,user_id FROM social_identities ORDER BY provider',
+      );
+      expect(
+        identities.rows.map((r) => [r.provider, r.provider_user_id]),
+      ).toEqual([
+        ['vk_id', '123456'],
+        ['yandex', '123456'],
+      ]);
+      expect(identities.rows[0].user_id).not.toBe(identities.rows[1].user_id);
+      expect(await count('user_roles')).toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
   it.each(['mismatch', 'tokenstate', 'not-a-stable-id'])(
     'rejects unconfirmed provider identity (%s) without creating any account/session',
     async (subject) => {
@@ -501,6 +592,7 @@ describe('VK ID isolated PostgreSQL login', () => {
     const { app } = createApp(false);
     try {
       expect((await app.inject('/auth/providers')).json()).toEqual({
+        yandex: false,
         vk_id: false,
       });
       expect((await app.inject('/auth/vk-id/start')).statusCode).toBe(404);

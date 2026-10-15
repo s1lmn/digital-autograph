@@ -1,5 +1,6 @@
 'use client';
 
+import { YandexSignIn } from './yandex-sign-in';
 import { VkIdSignIn } from './vk-id-sign-in';
 
 import { useEffect, useRef, useState } from 'react';
@@ -203,6 +204,7 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
         <a href={`${apiOrigin}/auth/telegram/start?returnTo=${returnTo}`}>
           Sign in with Telegram
         </a>
+        <YandexSignIn apiOrigin={apiOrigin} returnTo="/moderation" />
         <VkIdSignIn apiOrigin={apiOrigin} returnTo="/moderation" />
       </section>
     );

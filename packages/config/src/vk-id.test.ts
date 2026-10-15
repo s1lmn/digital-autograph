@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadVkIdAuthConfig } from './index';
+import { loadVkIdAuthConfig, loadYandexAuthConfig } from './index';
 const base = {
   APP_ENV: 'test',
   WEB_ORIGIN: 'http://127.0.0.1:3000',
@@ -11,6 +11,22 @@ const base = {
   VK_AUTH_APPROVED: 'true',
 };
 describe('VkId opt-in configuration', () => {
+  it('neither provider approval enables the other provider', () => {
+    const both = {
+      ...base,
+      YANDEX_CLIENT_ID: 'synthetic-yandex-client',
+      YANDEX_CLIENT_SECRET: 'synthetic-yandex-secret',
+      YANDEX_REDIRECT_URI: 'http://127.0.0.1:4000/auth/yandex/callback',
+      YANDEX_AUTH_ENABLED: 'true',
+      YANDEX_AUTH_APPROVED: 'true',
+    };
+    const vkOnly = { ...both, YANDEX_AUTH_APPROVED: 'false' };
+    expect(loadVkIdAuthConfig(vkOnly)).not.toBeNull();
+    expect(loadYandexAuthConfig(vkOnly)).toBeNull();
+    const yandexOnly = { ...both, VK_AUTH_APPROVED: 'false' };
+    expect(loadYandexAuthConfig(yandexOnly)).not.toBeNull();
+    expect(loadVkIdAuthConfig(yandexOnly)).toBeNull();
+  });
   it('is disabled by default, without credentials, or without operator approval', () => {
     expect(loadVkIdAuthConfig({})).toBeNull();
     expect(

@@ -91,7 +91,7 @@ test('VkId browser code flow returns to Wall, persists session, repeats safely a
       trustedWebOrigins: [webOrigin],
     },
   ];
-  args[17] = {
+  args[18] = {
     login,
     config: {
       appEnvironment: 'test',
@@ -176,7 +176,7 @@ test('default deployment exposes no VkId route or public button; UI uses server 
   );
   expect(
     await (await page.request.get(`${apiOrigin}/auth/providers`)).json(),
-  ).toEqual({ vk_id: false });
+  ).toEqual({ yandex: false, vk_id: false });
   expect(
     (await page.request.get(`${apiOrigin}/auth/vk-id/start`)).status(),
   ).toBe(404);

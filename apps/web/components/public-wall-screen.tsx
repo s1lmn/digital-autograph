@@ -1,5 +1,6 @@
 'use client';
 
+import { YandexSignIn } from './yandex-sign-in';
 import { VkIdSignIn } from './vk-id-sign-in';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -359,6 +360,10 @@ export function PublicWallScreen({
             <a href={`${apiOrigin}/auth/telegram/start?returnTo=${returnTo}`}>
               Continue with Telegram
             </a>
+            <YandexSignIn
+              apiOrigin={apiOrigin}
+              returnTo={`/walls/${wall.id}`}
+            />
             <VkIdSignIn apiOrigin={apiOrigin} returnTo={`/walls/${wall.id}`} />
           </div>
         </section>

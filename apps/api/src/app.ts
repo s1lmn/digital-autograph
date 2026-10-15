@@ -19,6 +19,11 @@ import {
   type TelegramHttpConfig,
 } from './auth/telegram-http';
 import type { TelegramLoginService } from './auth/telegram-login';
+import {
+  registerYandexRoutes,
+  type YandexHttpConfig,
+} from './auth/yandex-http';
+import type { YandexLoginService } from './auth/yandex-login';
 import { registerVkIdRoutes, type VkIdHttpConfig } from './auth/vk-id-http';
 import type { VkIdLoginService } from './auth/vk-id-login';
 import type {
@@ -87,6 +92,7 @@ export function buildApi(
     disableNewPayments: false,
     disableFreeClaims: false,
   },
+  yandex?: { login: YandexLoginService; config: YandexHttpConfig },
   vkId?: { login: VkIdLoginService; config: VkIdHttpConfig },
   loggerStream?: Parameters<typeof apiLoggerOptions>[0],
 ) {
@@ -144,8 +150,10 @@ export function buildApi(
 
   app.get('/auth/providers', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    return { vk_id: !!vkId };
+    return { yandex: !!yandex, vk_id: !!vkId };
   });
+  if (yandex)
+    registerYandexRoutes(app, yandex.login, authConfig, yandex.config);
   if (vkId) registerVkIdRoutes(app, vkId.login, authConfig, vkId.config);
   registerAuthRoutes(app, sessions, authConfig);
   if (testAuth) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { YandexSignIn } from './yandex-sign-in';
 import { VkIdSignIn } from './vk-id-sign-in';
 
 import { useEffect, useRef, useState } from 'react';
@@ -85,6 +86,7 @@ export function AccountSession({ apiOrigin }: { apiOrigin: string }) {
           <a href={`${apiOrigin}/auth/telegram/start?returnTo=%2Fme`}>
             Continue with Telegram
           </a>
+          <YandexSignIn apiOrigin={apiOrigin} returnTo="/me" />
           <VkIdSignIn apiOrigin={apiOrigin} returnTo="/me" />
         </div>
         <p>

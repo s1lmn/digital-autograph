@@ -4,6 +4,7 @@ import { createYookassaProvider } from '@digital-autograph/integrations';
 import {
   loadApiConfig,
   loadPaymentConfig,
+  loadYandexAuthConfig,
   loadVkIdAuthConfig,
 } from '@digital-autograph/config';
 import { runtimeFailureRecord } from '@digital-autograph/observability';
@@ -39,6 +40,7 @@ import {
   TakeoverReservationService,
 } from '@digital-autograph/walls';
 import {
+  createYandexOAuthClient,
   createVkIdOAuthClient,
   createGoogleOidcClient,
   createTelegramOidcClient,
@@ -50,6 +52,7 @@ import {
   googleLoginAttemptTtlSeconds,
 } from './auth/google-login';
 import { TelegramLoginService } from './auth/telegram-login';
+import { YandexLoginService } from './auth/yandex-login';
 import { VkIdLoginService } from './auth/vk-id-login';
 import { NotificationService } from '@digital-autograph/notifications';
 import {
@@ -61,6 +64,7 @@ import { loadNotificationTelegramApiConfig } from '@digital-autograph/config';
 async function main(): Promise<void> {
   const config = loadApiConfig();
   const paymentConfig = loadPaymentConfig();
+  const yandexConfig = loadYandexAuthConfig();
   const vkIdConfig = loadVkIdAuthConfig();
   const notificationTelegram = loadNotificationTelegramApiConfig();
   const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
@@ -195,6 +199,21 @@ async function main(): Promise<void> {
       disableNewPayments: config.DISABLE_NEW_PAYMENTS,
       disableFreeClaims: config.DISABLE_FREE_CLAIMS,
     },
+    yandexConfig
+      ? {
+          login: new YandexLoginService(
+            attempts,
+            createYandexOAuthClient(yandexConfig),
+            identities,
+            sessions,
+          ),
+          config: {
+            appEnvironment: config.APP_ENV,
+            webOrigin: config.WEB_ORIGIN,
+            redirectUri: yandexConfig.redirectUri,
+          },
+        }
+      : undefined,
     vkIdConfig
       ? {
           login: new VkIdLoginService(

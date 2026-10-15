@@ -129,7 +129,9 @@ describe('public repository metadata boundary', () => {
       /actions\/checkout|\n\s+run:|secrets\.|id-token:|write/,
     );
     expect(workflow.match(/uses:/g)).toHaveLength(1);
-    expect(workflow).toContain('uses: actions/github-script@v7');
+    // Keep this boundary compatible with the separate EGO-153 upgrade (#44).
+    // Accept only existing v7 and the proposed v9; Action review stays in #44.
+    expect(workflow).toMatch(/^\s+uses: actions\/github-script@v(?:7|9)\s*$/m);
     expect(script).not.toContain('${{');
   });
 

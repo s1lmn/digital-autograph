@@ -43,9 +43,29 @@ describe('production-critical test gate', () => {
     const review = mainRuleset.rules.find(
       (rule: { type: string }) => rule.type === 'pull_request',
     ).parameters;
-    expect(review.required_approving_review_count).toBe(1);
-    expect(review.dismiss_stale_reviews_on_push).toBe(true);
-    expect(review.required_review_thread_resolution).toBe(true);
+    // Preserve the complete live review contract, including preview API fields.
+    expect(review).toEqual({
+      allowed_merge_methods: ['merge', 'squash', 'rebase'],
+      dismiss_stale_reviews_on_push: true,
+      require_code_owner_review: false,
+      require_last_push_approval: false,
+      required_approving_review_count: 1,
+      required_review_thread_resolution: true,
+      require_extra_approval_for_unattributed_changes: true,
+      required_reviewers: [],
+    });
+    expect(mainRuleset.enforcement).toBe('active');
+    expect(mainRuleset.target).toBe('branch');
+    expect(
+      mainRuleset.rules.map((rule: { type: string }) => rule.type).sort(),
+    ).toEqual([
+      'deletion',
+      'non_fast_forward',
+      'pull_request',
+      'required_status_checks',
+    ]);
+    expect(required.do_not_enforce_on_create).toBe(false);
+    expect(contexts.some((check) => check.context === 'secrets')).toBe(false);
   });
   it('isolates untrusted CI on hosted runners with read-only, unpersisted credentials', () => {
     expect(ci.split('jobs:')[0]).toContain('permissions:\n  contents: read');

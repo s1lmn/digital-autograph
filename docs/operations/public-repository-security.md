@@ -25,9 +25,15 @@ never interpolated into executable expressions. This ensures fork edits cannot
 replace the policy and metadata edits are evaluated by trusted code. Until this
 workflow is merged, existing PRs still use the previous base behavior.
 
-Draft Policy is intentionally skipped; drafts cannot merge. `ready_for_review`
-validates it again. Stacked drafts may target their documented dependency while
-under development; before merge, retarget to updated `main`, complete metadata
+**Activation is BLOCKED** until the exact-path Actions event exception and real
+positive/negative default-branch runs are verified, including the 2 November
+2026 `pull_request_target` restrictions. See [PR Policy activation](pr-policy-activation.md)
+for the API evidence, proposed exception, alternatives and recovery. Do not
+install `policy` as required merely from the candidate JSON.
+
+Draft Policy explicitly fails rather than skipping; drafts cannot merge.
+`converted_to_draft` invalidates readiness and `ready_for_review` validates again.
+Stacked drafts may target their documented dependency while under development; before merge, retarget to updated `main`, complete metadata
 and obtain fresh checks/review. Policy still rejects non-main merge targets.
 
 Release accepts only successful same-repository push CI on `main`, or the
@@ -64,9 +70,10 @@ No runner, VM, DNS, firewall or cloud configuration is changed by this PR.
 `.github/security/main-ruleset.json` is the exact proposed PUT body for existing
 ruleset `24111688`. It selects only `refs/heads/main`, has no administrator bypass,
 requires one independent approval, dismisses stale approvals, resolves threads,
-blocks force push/deletion and requires all six existing check contexts from the
-GitHub Actions app (`integration_id=15368`). Contexts were read from successful
-check runs, not inferred from workflow titles:
+blocks force push/deletion and proposes all five CI contexts plus the historical
+`policy` context from GitHub Actions (`integration_id=15368`). The new trusted
+`policy` trigger is not yet proven as a required status; its activation gate
+above must pass first. Names/source were read from real successful check runs:
 
 - `checks`
 - `windows-unit`
@@ -82,22 +89,65 @@ another person after the only reviewer pushes a fix can deadlock a two-person
 workflow. Strict required checks do require synchronizing with `main` and rerunning
 CI; coordinate the existing PR queue. No merge queue event is configured.
 
-After owner approval, use an authenticated administrator from the reviewed
-checkout (this command changes GitHub settings):
+### Preserve live parameters before any approved PUT
+
+The current live pull-request rule and the candidate now have identical review
+parameters, including `required_reviewers: []` and
+`require_extra_approval_for_unattributed_changes: true`. The latter is exposed
+by both live API versions checked on 15 October and describes GitHub's
+[additional approval for unattributed Copilot PRs](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#additional-approval-for-unattributed-copilot-pull-requests).
+The published [REST schema](https://docs.github.com/en/rest/repos/rules#update-a-repository-ruleset)
+and GitHub's [OpenAPI source](https://github.com/github/rest-api-description/blob/main/descriptions/api.github.com/api.github.com.json)
+were inspected: neither currently lists this public-preview field, while the
+live GET includes it (also with API version `2026-03-10`). Write round-trip
+acceptance is NOT RUN because settings changes are forbidden here. Schema lag
+is not permission to drop a live protection. If an approved future PUT rejects
+it, stop and resolve compatibility instead of stripping it and retrying. Read back its value after PUT.
+
+Current comparison: deletion/non-fast-forward rules, review parameters,
+no bypass, enforcement/target/name, strict checks and do_not_enforce_on_create
+are preserved. The only planned semantic changes are selecting main and replacing
+the two incorrect contexts with verified check names/source. Any newly appearing
+live rule, context, exclusion or parameter requires reconciliation before write;
+do not overwrite owner changes with an old file. Regression tests lock the full
+review parameter object and other critical settings.
+
+Before a separately approved rollout, first complete the [activation gate](pr-policy-activation.md),
+independent approval/current-head CI, accepted merge and new-main push CI.
+Then capture the **entire current** ruleset immediately before PUT:
+
+```sh
+# Save outside the repository in an operator-controlled directory.
+gh api repos/s1lmn/digital-autograph/rulesets/24111688 > "$AUDIT_DIR/main-before.json"
+jq -S '{name,target,enforcement,bypass_actors,conditions,rules}' \
+  "$AUDIT_DIR/main-before.json" > "$AUDIT_DIR/main-before-body.json"
+jq -S . .github/security/main-ruleset.json > "$AUDIT_DIR/main-proposed.json"
+diff -u "$AUDIT_DIR/main-before-body.json" "$AUDIT_DIR/main-proposed.json"
+```
+
+`AUDIT_DIR` must be an existing private operator directory. Review the full diff:
+only the two planned semantic changes above are allowed. Preserve every live
+review field, even a newly documented/preview field. An unexpected diff is a
+STOP, not a reason to blindly paste the stored file. No PUT is performed by
+this PR. Only after those conditions and owner approval:
 
 ```sh
 gh api --method PUT repos/s1lmn/digital-autograph/rulesets/24111688 \
   --input .github/security/main-ruleset.json
-# Both reads must show the intended main selector and effective rules:
-gh api repos/s1lmn/digital-autograph/rulesets/24111688
+gh api repos/s1lmn/digital-autograph/rulesets/24111688 > "$AUDIT_DIR/main-after.json"
+jq -S '{name,target,enforcement,bypass_actors,conditions,rules}' \
+  "$AUDIT_DIR/main-after.json" > "$AUDIT_DIR/main-after-body.json"
+diff -u "$AUDIT_DIR/main-proposed.json" "$AUDIT_DIR/main-after-body.json"
 gh api repos/s1lmn/digital-autograph/rules/branches/main
 ```
 
-First restore hosted Actions and verify every required check on the current PR
-head/merge ref. Do not install contexts that cannot report or describe the rule
-as enabled from this file alone. `policy` is case-sensitive; `CI` and `PR policy`
-are not the actual check-run names. Enable this rule before accepting subsequent
-merges; an independent maintainer must review this PR as well.
+The after-response must select `refs/heads/main`, retain every review value
+including extra approval=true, require the expected contexts/app, and have no
+bypass. API rule array ordering may differ; compare rule contents by type as
+well as the full diff. A missing/false parameter or unexpected effective rule
+is not successful activation. Confirm actual restrictions with the safe test
+matrix in the activation runbook; no admin bypass or invalid merge is permitted.
+`policy` is case-sensitive; `CI` and `PR policy` are not actual check-run names.
 
 ### Add the existing Secret Scan gate after PR #47
 

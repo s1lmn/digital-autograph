@@ -5,6 +5,26 @@
 NOT RUN — проверка не выполнялась, REQUIRES OWNER ACTION — действие владельца.
 Исторический успех не является доказательством текущей работоспособности.
 
+## Дополнение после технического ревью PR #60
+
+Исходные наблюдения ниже сохранены как срез аудита. Перед исправлениями повторно
+проверены head #60 (без новых коммитов/reviews), Linear EGO-88 (**In Review**),
+full ruleset и Actions policies (HTTP 200, пустой список с parents). Последний
+подтверждённый CI #60 — 38761402396: все пять jobs PASS на исходном head.
+
+В candidate JSON восстановлены оба отсутствовавших live review-параметра:
+extra approval для unattributed changes=true и required_reviewers=[]. Новая
+проверка требует весь review object, no bypass и остальные critical controls.
+Draft Policy теперь fail-closed вместо skipped. Подготовлен exact-path Actions
+event-policy payload, но GitHub settings не изменены. Риск enforcement с
+2 ноября 2026 и непроверенный default-branch `policy` — **BLOCKED** для включения
+required context. Локальные tests не заменяют реальную интеграционную проверку.
+
+Точные ограничения, owner actions, поведение fork/draft/edited/synchronize,
+модель CODEOWNERS и проверка после PUT: [activation runbook](pr-policy-activation.md).
+Исправления готовятся в том же PR; новый exact-head CI/review отражаются в его
+описании. EGO-88 не закрывается.
+
 ## VERIFIED: исходное состояние и зависимости
 
 - Fresh `origin/main`: `6847339244f2a3fde89ef1f6b95965566f109668`.

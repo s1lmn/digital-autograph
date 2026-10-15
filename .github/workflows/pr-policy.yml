@@ -9,9 +9,12 @@ permissions:
   contents: read
   pull-requests: read
 
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   policy:
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -28,6 +31,12 @@ jobs:
             const branch = pr.head.ref || '';
 
             const errors = [];
+
+            // A skipped/neutral job can satisfy a required check. Fail closed
+            // until the PR is explicitly ready, including on converted_to_draft.
+            if (pr.draft !== false) {
+              errors.push('Draft PR is not ready for merge. Mark it Ready for review and rerun policy.');
+            }
 
             if (!/\bEGO-\d+\b/i.test(body) && !/\bEGO-\d+\b/i.test(title)) {
               errors.push('PR must reference a Linear issue such as EGO-130 in the title or body.');

@@ -1,13 +1,22 @@
 name: PR Policy
 
 on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+  # Trusted metadata-only policy. Never check out or execute PR code here.
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review, converted_to_draft]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-policy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   policy:
-    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
@@ -22,6 +31,12 @@ jobs:
             const branch = pr.head.ref || '';
 
             const errors = [];
+
+            // A skipped/neutral job can satisfy a required check. Fail closed
+            // until the PR is explicitly ready, including on converted_to_draft.
+            if (pr.draft !== false) {
+              errors.push('Draft PR is not ready for merge. Mark it Ready for review and rerun policy.');
+            }
 
             if (!/\bEGO-\d+\b/i.test(body) && !/\bEGO-\d+\b/i.test(title)) {
               errors.push('PR must reference a Linear issue such as EGO-130 in the title or body.');
@@ -45,7 +60,7 @@ jobs:
               errors.push(`PR base must normally be main; current base is ${pr.base.ref}. Use stacked PRs only when explicitly documented.`);
             }
 
-            const allowedBranch = /^(ego-\d+-[a-z0-9-]+|codex\/[a-z0-9._/-]+|chore\/[a-z0-9._/-]+|fix\/[a-z0-9._/-]+)$/;
+            const allowedBranch = /^(ego-\d+-[a-z0-9-]+|s1lm4n\/ego-\d+-[a-z0-9-]+|codex\/[a-z0-9._/-]+|chore\/[a-z0-9._/-]+|fix\/[a-z0-9._/-]+)$/;
             const dependabotActionsBranch =
               pr.user?.login === 'dependabot[bot]' &&
               Boolean(pr.base.repo?.full_name) &&

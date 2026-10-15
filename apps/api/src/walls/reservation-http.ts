@@ -31,6 +31,7 @@ export function registerTakeoverReservationRoutes(
   app.post(
     '/takeover-reservations',
     {
+      config: { firstUse: true },
       preHandler: [
         requireAuthenticatedUser,
         rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),

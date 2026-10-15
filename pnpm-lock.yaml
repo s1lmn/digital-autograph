@@ -71,13 +71,15 @@ importers:
       '@digital-autograph/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@digital-autograph/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@digital-autograph/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
       '@digital-autograph/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
-
       '@digital-autograph/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -169,7 +171,6 @@ importers:
       '@digital-autograph/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
-
       '@digital-autograph/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -190,6 +191,9 @@ importers:
 
   packages/config:
     dependencies:
+      '@digital-autograph/domain':
+        specifier: workspace:*
+        version: link:../domain
       zod:
         specifier: ^4.1.0
         version: 4.6.5
@@ -274,7 +278,11 @@ importers:
 
   packages/observability: {}
 
-  packages/payments: {}
+  packages/payments:
+    dependencies:
+      '@digital-autograph/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/ui:
     dependencies:

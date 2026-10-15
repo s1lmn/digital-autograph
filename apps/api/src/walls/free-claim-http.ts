@@ -15,6 +15,7 @@ export function registerFreeClaimRoutes(
   app.post(
     '/walls/:wallId/slots/:slotId/free-claim',
     {
+      config: { firstUse: true },
       preHandler: [
         requireAuthenticatedUser,
         rejectDisabledOperation(disabled, 'FREE_CLAIMS_DISABLED'),

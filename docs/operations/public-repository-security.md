@@ -25,6 +25,16 @@ never interpolated into executable expressions. This ensures fork edits cannot
 replace the policy and metadata edits are evaluated by trusted code. Until this
 workflow is merged, existing PRs still use the previous base behavior.
 
+Before making `policy` required, the owner must also inspect the repository's
+effective Actions event policy. GitHub's default public-repository policy is
+currently in evaluate mode and is scheduled to enforce a block on
+`pull_request_target` for affected repositories on 2 November 2026. If this
+metadata-only workflow remains necessary, review an explicit allowance for this
+event under the applicable policy and verify a real run after it takes effect.
+Do not change settings automatically, broaden token permissions, execute PR
+source, or treat a blocked/missing policy run as success. See
+[GitHub's default event policy](https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target#default-policy-for-pull_request_target).
+
 Draft Policy is intentionally skipped; drafts cannot merge. `ready_for_review`
 validates it again. Stacked drafts may target their documented dependency while
 under development; before merge, retarget to updated `main`, complete metadata
@@ -81,6 +91,12 @@ self-approval does not count. Last-push approval is not added because requiring
 another person after the only reviewer pushes a fix can deadlock a two-person
 workflow. Strict required checks do require synchronizing with `main` and rerunning
 CI; coordinate the existing PR queue. No merge queue event is configured.
+
+The boundary regression accepts the existing `github-script@v7` and the v9
+candidate in EGO-153 / PR #44. This PR does not upgrade the Action: its release
+compatibility review and final-head CI remain in #44. Check both versions when
+updating this assertion; requiring only v7 would make these otherwise separate
+PRs fail CI when combined.
 
 After owner approval, use an authenticated administrator from the reviewed
 checkout (this command changes GitHub settings):

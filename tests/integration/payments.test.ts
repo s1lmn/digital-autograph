@@ -385,22 +385,30 @@ it.each(['webhook', 'refresh', 'reconciliation'] as const)(
       cookie: `da_session=${f.buyer.token}`,
       origin: 'http://127.0.0.1:3000',
     };
-    succeed(f.providerId);
     try {
-      // Even an exact create retry is stopped; existing status/recovery routes remain.
-      expect(
-        (
-          await app.inject({
-            method: 'POST',
-            url: '/payments/orders',
-            headers,
-            payload: {
-              reservationId: f.reservationId,
-              autographId: f.autographId,
-            },
-          })
-        ).statusCode,
-      ).toBe(503);
+      // Replay stays pending; the selected webhook/refresh/reconcile path must
+      // still perform fulfillment after the provider actually reports success.
+      const replay = await app.inject({
+        method: 'POST',
+        url: '/payments/orders',
+        headers,
+        payload: {
+          reservationId: f.reservationId,
+          autographId: f.autographId,
+        },
+      });
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json()).toMatchObject({
+        id: f.orderId,
+        status: 'provider_pending',
+      });
+      expect(creates).toBe(1);
+      expect(await counts(f.orderId)).toMatchObject({
+        takeovers: 0,
+        earnings: 0,
+        active: 1,
+      });
+      succeed(f.providerId);
       const progress = async () => {
         if (path === 'reconciliation') {
           await database.pool.query(

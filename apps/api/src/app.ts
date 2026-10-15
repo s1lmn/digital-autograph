@@ -1,3 +1,8 @@
+import {
+  registerFirstUseEnforcement,
+  registerFirstUseRoutes,
+} from './first-use';
+import { registerLegalRoutes, type LegalHttp } from './legal-http';
 import type { PaymentService } from '@digital-autograph/payments';
 import { registerPaymentRoutes } from './payments/http';
 import {
@@ -19,6 +24,13 @@ import {
   type TelegramHttpConfig,
 } from './auth/telegram-http';
 import type { TelegramLoginService } from './auth/telegram-login';
+import {
+  registerYandexRoutes,
+  type YandexHttpConfig,
+} from './auth/yandex-http';
+import type { YandexLoginService } from './auth/yandex-login';
+import { registerVkIdRoutes, type VkIdHttpConfig } from './auth/vk-id-http';
+import type { VkIdLoginService } from './auth/vk-id-login';
 import type {
   FreeClaimService,
   PublicPlacementMediaService,
@@ -85,9 +97,13 @@ export function buildApi(
     disableNewPayments: false,
     disableFreeClaims: false,
   },
+  legal?: LegalHttp,
+  yandex?: { login: YandexLoginService; config: YandexHttpConfig },
+  vkId?: { login: VkIdLoginService; config: VkIdHttpConfig },
+  loggerStream?: Parameters<typeof apiLoggerOptions>[0],
 ) {
   const app = Fastify({
-    logger: apiLoggerOptions(),
+    logger: apiLoggerOptions(loggerStream),
   });
   registerSafeApiErrors(app);
 
@@ -110,6 +126,8 @@ export function buildApi(
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Idempotency-Key'],
+    // The cross-origin checkout verifies this public publication marker, never secret headers.
+    exposedHeaders: ['X-Legal-Document-Status'],
     strictPreflight: true,
   });
   app.decorateRequest('authContext', null);
@@ -138,7 +156,19 @@ export function buildApi(
     }
   });
 
+  registerFirstUseEnforcement(app, legal, authConfig.firstUseEnforced ?? false);
+  app.get('/auth/providers', async (_request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return { yandex: !!yandex, vk_id: !!vkId };
+  });
+  if (yandex)
+    registerYandexRoutes(app, yandex.login, authConfig, yandex.config);
+  if (vkId) registerVkIdRoutes(app, vkId.login, authConfig, vkId.config);
   registerAuthRoutes(app, sessions, authConfig);
+  if (legal) {
+    registerLegalRoutes(app, legal);
+    registerFirstUseRoutes(app, legal, authConfig.firstUseEnforced ?? false);
+  }
   if (testAuth) {
     registerTestAuthRoutes(
       app,
@@ -169,7 +199,13 @@ export function buildApi(
   if (moderation) registerModerationRoutes(app, moderation);
 
   if (payments)
-    registerPaymentRoutes(app, payments, incidentControls.disableNewPayments);
+    registerPaymentRoutes(
+      app,
+      payments,
+      incidentControls.disableNewPayments,
+      legal,
+      authConfig.firstUseEnforced ?? false,
+    );
   if (notifications) {
     registerNotificationRoutes(
       app,

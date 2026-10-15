@@ -7,7 +7,10 @@ import {
   ModerationService,
   PrivateObjectTooLargeError,
 } from '../../packages/autographs/src/index';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import {
   processOneAutographJob,
   type WorkerOperations,
@@ -82,7 +85,7 @@ async function fixture(
 ) {
   const userId = randomUUID();
   await database.db.insert(users).values({ ...userFixture(1), id: userId });
-  const token = (await sessions.createSession(userId)).token;
+  const token = (await acceptedSession(sessions, database, userId)).token;
   const draft = await service.create(userId, source);
   const input =
     bytes ??
@@ -184,7 +187,8 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     expect((await fetch(url)).status).toBe(200);
     const stranger = randomUUID();
     await database.db.insert(users).values({ id: stranger });
-    const strangerToken = (await sessions.createSession(stranger)).token;
+    const strangerToken = (await acceptedSession(sessions, database, stranger))
+      .token;
     expect(
       (
         await app.inject({
@@ -217,7 +221,9 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     await database.db
       .insert(userRoles)
       .values({ userId: moderatorId, role: 'moderator' });
-    const moderatorToken = (await sessions.createSession(moderatorId)).token;
+    const moderatorToken = (
+      await acceptedSession(sessions, database, moderatorId)
+    ).token;
     const moderatorPreview = await app.inject({
       url: `/moderation/autographs/${f.draft.id}/preview`,
       headers: { cookie: `da_session=${moderatorToken}` },

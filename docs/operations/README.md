@@ -1,5 +1,8 @@
 # Operations
 
+[Local image-processing benchmark](image-processing-benchmark.md) documents the
+bounded synthetic processor workload, JSON measurements and capacity-test limits.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.

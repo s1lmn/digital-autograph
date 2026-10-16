@@ -1,5 +1,9 @@
 # Architecture boundaries
 
+[Proposed post-publication moderation](post-publication-moderation.md) defines
+future report/appeal request boundaries and the transaction/privacy/test plan;
+reporting, actions and persistence are not implemented by those contracts.
+
 [Notifications, deep links and sharing](notifications-sharing.md) describes the
 durable outbox, preferences, optional Telegram channel, and public text cards.
 

@@ -1,5 +1,9 @@
 # Product specifications
 
+[User interview kit (EGO-159)](user-interviews.md) contains a Russian discussion
+guide, offline concept cards and a blank session template for EGO-69. It records
+no completed interviews, accepted prices, validated demand or launch approval.
+
 [Brand Kit v1 preview (EGO-82)](../brand/README.md) provides reusable design tokens,
 visual states and export-ready assets. Final naming and messaging acceptance
 remain with EGO-80 and EGO-81.

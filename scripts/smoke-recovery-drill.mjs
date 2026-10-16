@@ -89,7 +89,8 @@ try {
   docker(['network', 'create', '--internal', name]);
   created.push(name);
   for (const container of [source, target]) {
-    phase = container === source ? 'source_start' : 'target_start';
+    const role = container === source ? 'source' : 'target';
+    phase = `${role}_create`;
     // Record only after successful creation; never remove a pre-existing name.
     docker([
       'create',
@@ -108,7 +109,9 @@ try {
       'postgres:17-alpine',
     ]);
     created.push(container);
+    phase = `${role}_start`;
     docker(['start', container]);
+    phase = `${role}_readiness`;
     let ready = false;
     for (let attempt = 0; attempt < 45; attempt++) {
       if (
@@ -116,6 +119,10 @@ try {
           'exec',
           container,
           'pg_isready',
+          // The image's initialization-only server accepts Unix sockets. Wait
+          // for the final TCP listener after init scripts/database creation.
+          '-h',
+          '127.0.0.1',
           '-U',
           'recovery_test',
           '-d',
@@ -128,6 +135,7 @@ try {
       await delay(1000);
     }
     assert.ok(ready, 'Isolated PostgreSQL readiness failed');
+    phase = `${role}_empty_schema`;
     assert.equal(
       sql(
         container,

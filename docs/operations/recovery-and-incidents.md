@@ -19,6 +19,8 @@ pnpm test:recovery-drill
 The PostgreSQL tool creates a unique internal Docker network and two fresh
 PostgreSQL 17 containers with temporary in-memory data and no host ports,
 host-directory mounts, production URL, application image or worker. It applies
+the final server's TCP readiness check inside each container, excluding the
+Unix-socket-only initialization server. It then applies
 the actual committed migrations, seeds a synthetic fulfilled financial chain,
 uses custom-format pg_dump and single-transaction pg_restore, compares restored
 rows and source fingerprints, then exercises restored FK, active-placement

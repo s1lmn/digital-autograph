@@ -195,13 +195,16 @@
 }
 .mediaUnavailable {
   width: 100%;
-  padding: 1rem;
+  padding: 0.5rem;
   align-self: stretch;
   background: var(--brand-color-surface);
   color: var(--brand-color-ink);
 }
 .mediaUnavailable p {
   margin-top: 0;
+}
+.page .mediaUnavailable button {
+  padding-inline: 0.5rem;
 }
 .takeoverNotice {
   margin-top: auto;

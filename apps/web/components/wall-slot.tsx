@@ -46,6 +46,11 @@ export function WallSlot({
           <div className={styles.signatureMedia}>
             {showMedia && mediaPath ? (
               <img
+                ref={(image) => {
+                  // SSR media can fail before React attaches the error handler.
+                  if (image?.complete && image.naturalWidth === 0)
+                    setFailedPath(mediaPath);
+                }}
                 className={styles.autograph}
                 src={`${apiOrigin}${mediaPath}`}
                 alt={`Digital autograph in slot ${number}`}

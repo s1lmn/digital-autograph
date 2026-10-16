@@ -3,7 +3,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { WallSlot } from './wall-slot';
 import { frontendCapabilities } from '../lib/frontend-capabilities';
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 it('keeps paid takeover disabled without requests, and retries failed public media', () => {
   const onAction = vi.fn();
   render(
@@ -40,4 +43,40 @@ it('keeps paid takeover disabled without requests, and retries failed public med
   expect(screen.getByRole('img').getAttribute('src')).toBe(
     'https://api.example.test/public/placements/placement/autograph',
   );
+});
+
+it('recovers public media that failed before hydration, retaining occupancy and allowing retry', () => {
+  vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+  const width = vi
+    .spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get')
+    .mockReturnValue(0);
+  render(
+    <ul>
+      <WallSlot
+        apiOrigin="https://api.example.test"
+        slot={{
+          id: 'early-failure',
+          position: 4,
+          occupied: true,
+          currentPlacement: {
+            id: 'placement',
+            source: 'admin',
+            startedAt: '2026-10-02T12:00:00Z',
+            mediaPath: '/public/placements/placement/autograph',
+          },
+        }}
+      />
+    </ul>,
+  );
+  expect(screen.getByText('Autograph unavailable')).toBeTruthy();
+  expect(screen.getByRole('listitem').getAttribute('data-occupied')).toBe(
+    'true',
+  );
+  expect(screen.queryByText('Empty slot')).toBeNull();
+  width.mockReturnValue(320);
+  fireEvent.click(screen.getByRole('button', { name: 'Retry autograph' }));
+  expect(screen.getByRole('img').getAttribute('src')).toBe(
+    'https://api.example.test/public/placements/placement/autograph',
+  );
+  expect(screen.queryByText('Autograph unavailable')).toBeNull();
 });

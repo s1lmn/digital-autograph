@@ -39,6 +39,8 @@ implicitly authorize a partial localization or final marketing claims.
 - Unavailable media remains an occupied placement. Failed public media retains
   the existing retry control. Paid takeover stays disabled by the current
   frontend capability; filtering does not introduce a price or eligibility.
+- Media failures completed before React hydration also show the occupied-state
+  fallback and retry; an early failed image never becomes an empty Slot.
 
 ## Verification and remaining design work
 

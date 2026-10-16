@@ -28,6 +28,13 @@ return nonzero with fixed redacted events. No dump/data/SQL is printed or upload
 as an artifact. A killed process/host may leave its uniquely named disposable
 resources; inspect ownership before operator cleanup.
 
+The financial fixture detects the applied legal/checkout schema. After PR #65,
+it inserts synthetic Order snapshots and bound checkout confirmation before
+fulfillment, includes that evidence in fingerprints, and verifies its restored
+immutability. No guard is disabled and no real acceptance/publication is implied.
+The pre-#65 schema remains supported. Re-run this drill on synchronized main;
+the old-schema CI result alone does not validate the new migration combination.
+
 The private-object drill requires the literal loopback address 127.0.0.1, an
 explicit HTTP port and test environment. It creates fresh source/backup/restore
 buckets with synthetic random bytes only, writes a private temporary archive,

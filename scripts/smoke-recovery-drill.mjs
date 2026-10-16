@@ -153,6 +153,31 @@ try {
   }
   // Real schema and triggers, synthetic fixture. No providers or workers run.
   phase = 'financial_fixture';
+  // Detect the applied schema; never disable guards or publish legal documents.
+  const hasLegalSnapshot =
+    sql(
+      source,
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='payment_orders' AND column_name='offer_hash')",
+    ) === 't';
+  const hasCheckoutConfirmation =
+    sql(
+      source,
+      "SELECT to_regclass('public.checkout_confirmations') IS NOT NULL",
+    ) === 't';
+  assert.ok(!hasCheckoutConfirmation || hasLegalSnapshot);
+  const legalColumns = hasLegalSnapshot
+    ? ',offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash'
+    : '';
+  const legalValues = hasLegalSnapshot
+    ? ", 'synthetic-v1',repeat('c',64),'synthetic-v1',repeat('d',64),'synthetic-v1',repeat('e',64)"
+    : '';
+  const checkoutEvidence = hasCheckoutConfirmation
+    ? `INSERT INTO checkout_confirmations
+      (order_id,user_id,reservation_id,autograph_id,amount_minor,currency,guaranteed_visibility_seconds,reservation_expires_at,target_placement_id,pricing_config_id,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash)
+      SELECT o.id,o.user_id,o.reservation_id,o.autograph_id,o.amount_minor,o.currency,p.guaranteed_visibility_seconds,r.expires_at,o.target_placement_id,o.pricing_config_id,o.offer_version,o.offer_hash,o.content_rules_version,o.content_rules_hash,o.refund_policy_version,o.refund_policy_hash
+      FROM payment_orders o JOIN takeover_reservations r ON r.id=o.reservation_id
+      JOIN pricing_config_versions p ON p.id=o.pricing_config_id WHERE o.id=${id(12)};`
+    : '';
   sql(
     source,
     `BEGIN;
@@ -169,8 +194,9 @@ try {
       VALUES (${id(10)},${id(2)},${id(6)},${id(7)},${id(9)},${id(5)},'takeover_ladder_v1','RUB',65000,0,0,65000,0,now(),now()+interval '5 minutes');
     INSERT INTO takeover_reservations (id,quote_id,user_id,wall_id,slot_id,target_placement_id,pricing_config_id,currency,amount_minor,idempotency_key_hash,status,created_at,expires_at)
       VALUES (${id(11)},${id(10)},${id(2)},${id(6)},${id(7)},${id(9)},${id(5)},'RUB',65000,repeat('a',64),'active',now(),now()+interval '5 minutes');
-    INSERT INTO payment_orders (id,user_id,reservation_id,quote_id,wall_id,slot_id,target_placement_id,autograph_id,creator_id,pricing_config_id,amount_minor,currency,creator_share_bps)
-      VALUES (${id(12)},${id(2)},${id(11)},${id(10)},${id(6)},${id(7)},${id(9)},${id(8)},${id(4)},${id(5)},65000,'RUB',5000);
+    INSERT INTO payment_orders (id,user_id,reservation_id,quote_id,wall_id,slot_id,target_placement_id,autograph_id,creator_id,pricing_config_id,amount_minor,currency,creator_share_bps${legalColumns})
+      VALUES (${id(12)},${id(2)},${id(11)},${id(10)},${id(6)},${id(7)},${id(9)},${id(8)},${id(4)},${id(5)},65000,'RUB',5000${legalValues});
+    ${checkoutEvidence}
     INSERT INTO payments (id,order_id,provider,shop_id,mode,operation_key,request_fingerprint,return_url,amount_minor,currency)
       VALUES (${id(13)},${id(12)},'yookassa','synthetic','sandbox',${id(14)},repeat('b',64),'https://example.test/return',65000,'RUB');
     INSERT INTO placements (id,slot_id,user_id,autograph_id,source) VALUES (${id(15)},${id(7)},${id(2)},${id(8)},'takeover');
@@ -195,6 +221,8 @@ try {
     'payments',
     'creator_earnings',
     'notification_events',
+    ...(hasLegalSnapshot ? ['legal_evidence_events'] : []),
+    ...(hasCheckoutConfirmation ? ['checkout_confirmations'] : []),
   ];
   const fingerprint = (container) =>
     createHash('sha256')
@@ -277,6 +305,16 @@ try {
     `UPDATE payment_orders SET amount_minor=1 WHERE id=${id(12)}`,
     '23514',
   );
+  if (hasLegalSnapshot)
+    rejected(
+      `UPDATE payment_orders SET offer_hash=repeat('f',64) WHERE id=${id(12)}`,
+      '23514',
+    );
+  if (hasCheckoutConfirmation)
+    rejected(
+      `UPDATE checkout_confirmations SET amount_minor=1 WHERE order_id=${id(12)}`,
+      '23514',
+    );
   assert.equal(
     fingerprint(target),
     before,
@@ -294,6 +332,8 @@ try {
       financialChains: 1,
       sourceUnchanged: true,
       restoredConstraintsChecked: true,
+      legalSnapshotChecked: hasLegalSnapshot,
+      checkoutConfirmationChecked: hasCheckoutConfirmation,
       productionRestore: false,
     }),
   );

@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { runPrivateStorageRecoveryDrill } from '../../packages/integrations/src/recovery-storage';
 
@@ -17,6 +18,12 @@ it('dumps and restores the actual schema and synthetic financial history in disp
     financialChains: 1,
     sourceUnchanged: true,
     restoredConstraintsChecked: true,
+    legalSnapshotChecked: existsSync(
+      resolve('packages/db/drizzle/0017_legal_evidence.sql'),
+    ),
+    checkoutConfirmationChecked: existsSync(
+      resolve('packages/db/drizzle/0019_checkout_confirmation.sql'),
+    ),
     productionRestore: false,
   });
   expect(evidence.archiveBytes).toBeGreaterThan(100);

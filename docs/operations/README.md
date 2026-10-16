@@ -1,5 +1,9 @@
 # Operations
 
+[Recovery and incident response](recovery-and-incidents.md) documents the isolated
+PostgreSQL/private-object drill, real backup/restore gates, proposed severities
+and an unfilled operational acceptance record.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.

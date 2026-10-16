@@ -1,5 +1,9 @@
 # Operations
 
+[Read-only operational snapshot](operational-snapshot.md) provides bounded
+database/storage observations and machine alert codes; installation, delivery
+and operator acceptance remain separate gates.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.

@@ -72,7 +72,7 @@ describe('production-critical test gate', () => {
     expect(ci).not.toMatch(
       /self-hosted|pull_request_target|workflow_run|secrets\.|id-token:|permissions:.*write/,
     );
-    expect(ci.match(/uses: actions\/checkout@v4/g)).toHaveLength(5);
+    expect(ci.match(/uses: actions\/checkout@v7/g)).toHaveLength(5);
     expect(ci.match(/persist-credentials: false/g)).toHaveLength(5);
     expect(ci.match(/timeout-minutes:/g)).toHaveLength(5);
     expect(ci).toContain('retention-days: 3');

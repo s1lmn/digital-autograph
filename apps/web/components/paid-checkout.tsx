@@ -109,7 +109,13 @@ export function PaidCheckout({
           { credentials: 'include', cache: 'no-store', signal: c.signal },
         );
         if (!status.ok) throw new Error('unknown');
-        setOrderStatus((await status.json()).status);
+        const order = await status.json();
+        setOrderStatus(order.status);
+        setProviderUrl(
+          order.status === 'provider_pending'
+            ? (safeProviderUrl(order.confirmationUrl) ?? '')
+            : '',
+        );
         setOrderId(value.existingOrderId);
         return;
       }

@@ -184,6 +184,21 @@ test('paid checkout: trusted PG terms, keyboard, stale confirmation, double subm
   await expect(
     page.getByRole('link', { name: 'Проверить состояние заказа' }),
   ).toBeVisible();
+  const recoveredPayment = page.getByRole('link', {
+    name: 'Перейти к оплате в ЮKassa',
+  });
+  await expect(recoveredPayment).toHaveAttribute(
+    'href',
+    'https://yoomoney.ru/api-pages/v2/payment-confirm/epl?synthetic=1',
+  );
+  await page
+    .getByRole('button', { name: 'Повторить проверку условий' })
+    .click();
+  await expect(recoveredPayment).toHaveAttribute(
+    'href',
+    'https://yoomoney.ru/api-pages/v2/payment-confirm/epl?synthetic=1',
+  );
+  expect(requests).toBe(2);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   expect(
     (await db.query('SELECT row_to_json(c) AS c FROM checkout_confirmations c'))

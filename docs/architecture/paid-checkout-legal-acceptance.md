@@ -65,7 +65,9 @@ key/payload and Payment. Twenty parallel admissions across pools produce one set
 of an already-admitted Order is recovery and remains possible, as do owner status,
 refresh, webhook and reconciliation. There is no new provider/payment state machine.
 Publication changes do not rewrite admitted Orders or retry with a new key.
-Browser reload queries the owner-only reservation/Order and restores its status,
+Browser reload queries the owner-only reservation/Order and restores its status
+and safe provider link while payment is pending. Rechecking terms uses the same
+read-only recovery path and never creates another Order or payment identity,
 without persisting acceptance as client authorization. Ambiguous network failure
 retries the same reservation; it never creates another payment identity.
 

@@ -114,6 +114,74 @@ it('shows backend terms and exact three editions; checkbox and private preview a
   expect(body.confirmation.documents).toEqual(summary.documents);
   expect(body.confirmation.terms.amountMinor).toBe('65000');
 });
+it('restores the existing pending payment link on reload and repeated checks without a new order', async () => {
+  const confirmationUrl =
+    'https://yoomoney.ru/payments/external/confirmation?test=existing';
+  const fetch = vi.fn(async (url: string) =>
+    url.includes('/payments/checkout')
+      ? json({ existingOrderId: id })
+      : json({ id, status: 'provider_pending', confirmationUrl }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  render(
+    <PaidCheckout
+      apiOrigin="http://api.test"
+      reservationId={id}
+      autographId={id}
+    />,
+  );
+  expect(
+    (
+      await screen.findByRole('link', { name: 'Перейти к оплате в ЮKassa' })
+    ).getAttribute('href'),
+  ).toBe(confirmationUrl);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Повторить проверку условий' }),
+  );
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+  expect(
+    (
+      await screen.findByRole('link', { name: 'Перейти к оплате в ЮKassa' })
+    ).getAttribute('href'),
+  ).toBe(confirmationUrl);
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  for (const [, options] of fetch.mock.calls as unknown as Array<
+    [string, RequestInit]
+  >) {
+    expect(options.method).toBeUndefined();
+    expect(options.credentials).toBe('include');
+    expect(options.cache).toBe('no-store');
+  }
+});
+it.each([
+  ['provider_pending', 'https://yoomoney.ru.evil.example/pay'],
+  ['provider_pending', 'javascript:alert(1)'],
+  ['provider_pending', null],
+  ['fulfilled', 'https://yoomoney.ru/payments/external/confirmation?test=old'],
+])(
+  'does not restore an unsafe or terminal payment link: %s %s',
+  async (status, confirmationUrl) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/payments/checkout')
+          ? json({ existingOrderId: id })
+          : json({ id, status, confirmationUrl }),
+      ),
+    );
+    render(
+      <PaidCheckout
+        apiOrigin="http://api.test"
+        reservationId={id}
+        autographId={id}
+      />,
+    );
+    await screen.findByRole('link', { name: 'Проверить состояние заказа' });
+    expect(
+      screen.queryByRole('link', { name: 'Перейти к оплате в ЮKassa' }),
+    ).toBeNull();
+  },
+);
 it.each([
   'LEGAL_DOCUMENT_UNAVAILABLE',
   'NEW_PAYMENTS_DISABLED',

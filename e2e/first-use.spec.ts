@@ -91,12 +91,12 @@ test('synthetic published first-use: keyboard/mobile, stale edition, retry, relo
     await checkbox.check();
   }
   await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
-  await expect(page.getByText('Подтверждения сохранены.')).toBeVisible();
+  await expect(page.getByText('Можно продолжить работу.')).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Вернуться к действию' }),
   ).toHaveAttribute('href', `/walls/${e2eWallId}`);
   await page.reload();
-  await expect(page.getByText('Подтверждения сохранены.')).toBeVisible();
+  await expect(page.getByText('Можно продолжить работу.')).toBeVisible();
   const second = await page.context().newPage();
   await second.goto('/autograph/create');
   await expect(

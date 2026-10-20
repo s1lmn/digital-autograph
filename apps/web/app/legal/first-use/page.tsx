@@ -36,7 +36,7 @@ export default async function FirstUsePage({
         apiOrigin={loadWebConfig().API_PUBLIC_ORIGIN}
         loginReturnTo={`/legal/first-use?returnTo=${encodeURIComponent(destination)}`}
       >
-        <p>Подтверждения сохранены.</p>
+        <p>Можно продолжить работу.</p>
         <a href={destination}>Вернуться к действию</a>
       </FirstUseGate>
     </main>

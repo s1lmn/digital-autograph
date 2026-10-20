@@ -207,7 +207,7 @@ jobs:
           unset iam_token
 
       - name: Set up image builder
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and publish commit-tagged images once
         shell: bash

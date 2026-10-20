@@ -77,6 +77,7 @@ pnpm test
 pnpm test:integration
 pnpm build
 pnpm test:build-smoke
+pnpm security:secrets
 ```
 
 On Windows, `pnpm test` runs portable unit tests; Linux runs the full unit suite.
@@ -90,6 +91,11 @@ default macOS TMPDIR and directory aliases; it does not certify the full macOS
 application or deployment suite. CI must pass `checks`, `windows-unit`,
 `windows-integration-runner`, `macos-integration-runner`, `e2e` and PR Policy
 at the final head before merge.
+
+`Secret Scan / secrets` must also pass at the final head. Use the reviewed
+Gitleaks binary and a full clone; see `docs/operations/secret-scanning.md` for
+installation, private triage and credential rotation. Changes to scanner rules
+or exceptions require peer review.
 
 If schema changed, also run:
 

@@ -174,16 +174,15 @@ try {
   // Real schema and triggers, synthetic fixture. No providers or workers run.
   phase = 'financial_fixture';
   // Detect the applied schema; never disable guards or publish legal documents.
-  const hasLegalSnapshot =
-    sql(
-      source,
-      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='payment_orders' AND column_name='offer_hash')",
-    ) === 't';
-  const hasCheckoutConfirmation =
-    sql(
-      source,
-      "SELECT to_regclass('public.checkout_confirmations') IS NOT NULL",
-    ) === 't';
+  const schemaState = sql(
+    source,
+    `SELECT (to_regclass('public.legal_evidence_events') IS NOT NULL)::int AS legal_present,
+            (to_regclass('public.checkout_confirmations') IS NOT NULL)::int AS checkout_present;`,
+  );
+  assert.match(schemaState, /^[01]\|[01]$/);
+  const [legalState, checkoutState] = schemaState.split('|');
+  const hasLegalSnapshot = legalState === '1';
+  const hasCheckoutConfirmation = checkoutState === '1';
   assert.ok(!hasCheckoutConfirmation || hasLegalSnapshot);
   const legalColumns = hasLegalSnapshot
     ? ',offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash'

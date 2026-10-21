@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import type { EventEmitter } from 'node:events';
+import { workerFailureRecord } from './logging';
 import type {
   Database,
   AutographProcessingRepository,
@@ -75,10 +76,16 @@ export async function processOneAutographJob(
           operations.leaseSeconds,
           () => operations.storage.deleteObject(key),
         );
-      } catch {
-        console.warn('Partial cleaned object cleanup failed', {
-          jobId: job.id,
-        });
+      } catch (cleanupError) {
+        console.warn(
+          JSON.stringify(
+            workerFailureRecord(
+              'AUTOGRAPH_PARTIAL_CLEANUP_FAILED',
+              cleanupError,
+              { jobId: job.id },
+            ),
+          ),
+        );
       }
     }
     const permanent =
@@ -99,15 +106,23 @@ export async function processOneAutographJob(
         permanent,
         operations.leaseSeconds,
       );
-    } catch {
-      console.error('Autograph job failure could not be recorded', {
-        jobId: job.id,
-      });
+    } catch (recordError) {
+      console.error(
+        JSON.stringify(
+          workerFailureRecord('AUTOGRAPH_FAILURE_RECORD_FAILED', recordError, {
+            jobId: job.id,
+          }),
+        ),
+      );
     }
-    console.warn('Autograph processing attempt failed', {
-      jobId: job.id,
-      code,
-    });
+    console.warn(
+      JSON.stringify(
+        workerFailureRecord('AUTOGRAPH_PROCESSING_FAILED', error, {
+          jobId: job.id,
+          reason: code,
+        }),
+      ),
+    );
   }
   return true;
 }
@@ -142,14 +157,20 @@ export async function runWorker(
               operations.cleanupGraceSeconds,
               (key) => operations.storage.deleteObject(key),
             );
-        } catch {
-          console.error('Worker polling cycle failed');
+        } catch (error) {
+          console.error(
+            JSON.stringify(workerFailureRecord('WORKER_POLL_FAILED', error)),
+          );
         }
         if (!stopping && operations.notifications) {
           try {
             await operations.notifications();
-          } catch {
-            console.error('Notification polling cycle failed');
+          } catch (error) {
+            console.error(
+              JSON.stringify(
+                workerFailureRecord('NOTIFICATION_POLL_FAILED', error),
+              ),
+            );
           }
         }
         if (
@@ -168,9 +189,11 @@ export async function runWorker(
                   deletedAttempts,
                 }),
               );
-          } catch {
+          } catch (error) {
             console.error(
-              JSON.stringify({ event: 'OAUTH_ATTEMPT_CLEANUP_FAILED' }),
+              JSON.stringify(
+                workerFailureRecord('OAUTH_ATTEMPT_CLEANUP_FAILED', error),
+              ),
             );
           }
         }

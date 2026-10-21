@@ -5,7 +5,10 @@ import {
   AutographService,
   type PrivateOriginalStorage,
 } from '../../packages/autographs/src/index';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import {
   createDatabase,
   createPgAutographRepository,
@@ -101,8 +104,8 @@ async function fixture(
     otherId,
     autographId: autograph.id,
     assetId: asset?.id,
-    ownerToken: (await sessions.createSession(ownerId)).token,
-    otherToken: (await sessions.createSession(otherId)).token,
+    ownerToken: (await acceptedSession(sessions, database, ownerId)).token,
+    otherToken: (await acceptedSession(sessions, database, otherId)).token,
   };
 }
 

@@ -9,13 +9,17 @@ import {
 import { exportPng, type Stroke } from '../lib/drawing';
 import { CanvasEditor } from './canvas-editor';
 import { CleanedAutographReview } from './cleaned-autograph-review';
+import {
+  FirstUseActionNotice,
+  needsFirstUseConfirmation,
+} from './first-use-action-notice';
 import { PhotoUploadEditor } from './photo-upload-editor';
 import styles from './canvas-create-screen.module.css';
 
 type ScreenState =
   | { kind: 'editing' }
   | { kind: 'working'; stage: SubmissionStage; progress?: number }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; legalRequired?: boolean }
   | { kind: 'preview'; assetId: string; url: string; expiresAt: string };
 
 type CreationMode = 'draw' | 'photo';
@@ -110,7 +114,11 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
       });
     } catch (error) {
       if (!nextController.signal.aborted)
-        setState({ kind: 'error', message: errorMessage(error) });
+        setState({
+          kind: 'error',
+          message: errorMessage(error),
+          legalRequired: needsFirstUseConfirmation(error),
+        });
     } finally {
       busy.current = false;
       if (controller.current === nextController) controller.current = null;
@@ -158,7 +166,11 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
       });
     } catch (error) {
       if (!nextController.signal.aborted)
-        setState({ kind: 'error', message: errorMessage(error) });
+        setState({
+          kind: 'error',
+          message: errorMessage(error),
+          legalRequired: needsFirstUseConfirmation(error),
+        });
     } finally {
       busy.current = false;
       if (controller.current === nextController) controller.current = null;
@@ -238,7 +250,11 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
       )}
       {state.kind === 'error' && (
         <div className={styles.error} role="alert">
-          <p>{state.message}</p>
+          {state.legalRequired ? (
+            <FirstUseActionNotice returnTo="/autograph/create" />
+          ) : (
+            <p>{state.message}</p>
+          )}
           <div className={styles.actions}>
             {image.current && (
               <button type="button" onClick={run}>

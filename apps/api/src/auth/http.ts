@@ -19,6 +19,8 @@ export type AuthHttpConfig = {
   appEnvironment: AppEnvironment;
   sessionTtlSeconds: number;
   trustedWebOrigins: readonly string[];
+  // Server composition only; never read from a request or public frontend flag.
+  firstUseEnforced?: boolean;
 };
 
 export type HttpSessionService = Pick<

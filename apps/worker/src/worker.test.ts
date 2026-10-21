@@ -102,9 +102,16 @@ describe('worker lifecycle', () => {
     expect(claim).toHaveBeenCalledTimes(3);
     expect(notifications).toHaveBeenCalledTimes(3);
     expect(cleanupOAuthAttempts).toHaveBeenCalledTimes(2);
-    expect(errorLog.mock.calls).toEqual([
-      [JSON.stringify({ event: 'OAUTH_ATTEMPT_CLEANUP_FAILED' })],
-    ]);
+    expect(errorLog.mock.calls).toHaveLength(1);
+    expect(JSON.parse(errorLog.mock.calls[0]![0])).toMatchObject({
+      event: 'OAUTH_ATTEMPT_CLEANUP_FAILED',
+      runtime: 'worker',
+      level: 50,
+      err: { name: 'Error' },
+    });
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain(
+      'synthetic-secret-canary',
+    );
   });
 
   it('finishes in-flight OAuth cleanup before closing the pool on SIGTERM', async () => {

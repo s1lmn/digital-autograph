@@ -1,3 +1,4 @@
+import { syntheticFirstUseDocuments } from '../../../tests/integration/first-use-fixtures';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { PaymentService } from '@digital-autograph/payments';
@@ -6,6 +7,8 @@ import type {
   TakeoverQuoteService,
   TakeoverReservationService,
 } from '@digital-autograph/walls';
+import { LegalError } from '@digital-autograph/domain';
+import { loadLegalDocuments } from '@digital-autograph/config';
 import { buildApi } from './app';
 import type { IncidentControls } from './incident-controls';
 
@@ -55,9 +58,44 @@ function fixture(controls?: IncidentControls) {
     { create: calls[2] } as unknown as TakeoverReservationService,
     undefined,
     undefined,
-    { create: calls[3] } as unknown as PaymentService,
+    {
+      create: calls[3],
+      existing: async () => null,
+    } as unknown as PaymentService,
     undefined,
     controls,
+    {
+      documents: loadLegalDocuments().map((d) =>
+        d.current && ['terms_of_use', 'community_guidelines'].includes(d.type)
+          ? syntheticFirstUseDocuments.find((x) => x.type === d.type)!
+          : d,
+      ),
+      ageDeclarations: {
+        declaredAt: async () => new Date(),
+        declareAdult: async () => new Date(),
+      },
+      repository: {
+        latest: async (userId, type) => {
+          const d = syntheticFirstUseDocuments.find((d) => d.type === type)!;
+          return {
+            id,
+            userId,
+            documentType: type,
+            documentVersion: d.version,
+            documentHash: d.hash,
+            action: 'accepted',
+            source: 'web',
+            context: 'legal_gate',
+            scope: null,
+            previousEventId: null,
+            occurredAt: new Date(),
+          };
+        },
+        record: async () => {
+          throw new LegalError('LEGAL_DOCUMENT_UNAVAILABLE');
+        },
+      },
+    },
   );
   apps.push(app);
   return { app, calls };
@@ -175,3 +213,49 @@ describe('incident admission controls', () => {
     ).toBe(204);
   });
 });
+
+it.each([
+  { disableNewPayments: true, disableFreeClaims: false },
+  { disableNewPayments: false, disableFreeClaims: true },
+  { disableNewPayments: true, disableFreeClaims: true },
+  { disableNewPayments: false, disableFreeClaims: false },
+])(
+  'preserves legal admission alongside both incident settings %j',
+  async (controls) => {
+    const { app, calls } = fixture(controls);
+    calls[3]!.mockImplementation(async () => {
+      throw new LegalError('LEGAL_DOCUMENT_UNAVAILABLE');
+    });
+    const order = await app.inject({
+      method: 'POST',
+      ...requests[3]!,
+      headers,
+    });
+    expect(order.statusCode).toBe(controls.disableNewPayments ? 503 : 409);
+    expect(order.json().error.code).toBe(
+      controls.disableNewPayments
+        ? 'NEW_PAYMENTS_DISABLED'
+        : 'LEGAL_DOCUMENT_UNAVAILABLE',
+    );
+    const claim = await app.inject({
+      method: 'POST',
+      ...requests[0]!,
+      headers,
+    });
+    expect(claim.statusCode).toBe(controls.disableFreeClaims ? 503 : 200);
+    const document = loadLegalDocuments().find((d) => d.current)!;
+    expect((await app.inject(document.path)).statusCode).toBe(404);
+    const acceptance = await app.inject({
+      method: 'POST',
+      url: '/legal/accept',
+      headers,
+      payload: {
+        type: 'terms_of_use',
+        version: document.version,
+        hash: document.hash,
+      },
+    });
+    expect(acceptance.statusCode).toBe(409);
+    expect(acceptance.json().error.code).toBe('LEGAL_DOCUMENT_CHANGED');
+  },
+);

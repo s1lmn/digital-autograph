@@ -13,6 +13,13 @@ import { rejectDisabledOperation } from '../incident-controls';
 
 function sendReservationError(error: unknown, reply: FastifyReply): unknown {
   if (!(error instanceof ReservationError)) throw error;
+  if (
+    error.code === 'USER_RESERVATION_ACTIVE' ||
+    error.code === 'RESERVATION_RATE_LIMITED'
+  ) {
+    reply.header('Retry-After', error.retryAfterSeconds ?? 60);
+    return reply.code(429).send({ error: { code: error.code } });
+  }
   const status =
     error.code === 'QUOTE_NOT_FOUND' || error.code === 'RESERVATION_NOT_FOUND'
       ? 404
@@ -31,6 +38,7 @@ export function registerTakeoverReservationRoutes(
   app.post(
     '/takeover-reservations',
     {
+      config: { firstUse: true },
       preHandler: [
         requireAuthenticatedUser,
         rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),

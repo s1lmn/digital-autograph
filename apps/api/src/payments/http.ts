@@ -1,4 +1,11 @@
+import { LegalError } from '@digital-autograph/domain';
 import { z } from 'zod';
+import {
+  createPaymentOrderBody,
+  checkoutQuerySchema,
+} from '@digital-autograph/contracts';
+import type { LegalHttp } from '../legal-http';
+import { firstUseState } from '../first-use';
 import { PaymentError, type PaymentService } from '@digital-autograph/payments';
 import type {
   FastifyInstance,
@@ -7,10 +14,7 @@ import type {
   FastifyRequest,
 } from 'fastify';
 import { authenticatedSession, requireAuthenticatedUser } from '../auth/http';
-import { rejectDisabledOperation } from '../incident-controls';
-const createBody = z
-  .object({ reservationId: z.uuid(), autographId: z.uuid() })
-  .strict();
+const createBody = createPaymentOrderBody;
 const params = z.object({ id: z.uuid() });
 const webhook = z.object({
   type: z.literal('notification'),
@@ -22,6 +26,8 @@ const webhook = z.object({
   object: z.object({ id: z.uuid() }),
 });
 function sendError(error: unknown, reply: FastifyReply) {
+  if (error instanceof LegalError)
+    return reply.code(409).send({ error: { code: error.code } });
   if (!(error instanceof PaymentError))
     return reply.code(503).send({ error: { code: 'PAYMENT_UNAVAILABLE' } });
   const code = error.code;
@@ -70,6 +76,8 @@ export function registerPaymentRoutes(
   app: FastifyInstance,
   payments: PaymentService,
   disabled = false,
+  legal?: LegalHttp,
+  firstUseEnforced = false,
 ) {
   // Fixed independent budgets: user traffic cannot consume webhook capacity.
   // Perimeter aggregate limits are still required across multiple replicas.
@@ -80,7 +88,22 @@ export function registerPaymentRoutes(
     {
       preHandler: [
         requireAuthenticatedUser,
-        rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),
+        async (req, reply) => {
+          if (!disabled) return;
+          const body = createBody.safeParse(req.body);
+          if (
+            body.success &&
+            (await payments.existing(
+              authenticatedSession(req).user.id,
+              body.data.reservationId,
+            ))
+          )
+            return;
+          return reply
+            .header('Cache-Control', 'no-store')
+            .code(503)
+            .send({ error: { code: 'NEW_PAYMENTS_DISABLED' } });
+        },
       ],
       bodyLimit: 2048,
       errorHandler: parserError,
@@ -93,15 +116,54 @@ export function registerPaymentRoutes(
       if (!users.acquire())
         return reply.code(429).send({ error: { code: 'RATE_LIMITED' } });
       try {
+        const userId = authenticatedSession(req).user.id;
+        const prior = await payments.existing(userId, body.data.reservationId);
+        if (!prior) {
+          if (disabled)
+            return reply
+              .code(503)
+              .send({ error: { code: 'NEW_PAYMENTS_DISABLED' } });
+          if (firstUseEnforced) {
+            if (!legal) throw new LegalError('LEGAL_DOCUMENT_UNAVAILABLE');
+            if (!(await firstUseState(legal, userId)).complete)
+              throw new PaymentError('FIRST_USE_REQUIRED');
+          }
+        }
         return await payments.create(
           authenticatedSession(req).user.id,
           body.data.reservationId,
           body.data.autographId,
+          body.data.confirmation,
         );
       } catch (e) {
         return sendError(e, reply);
       } finally {
         users.release();
+      }
+    },
+  );
+  app.get(
+    '/payments/checkout',
+    { preHandler: requireAuthenticatedUser },
+    async (req, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      const query = checkoutQuerySchema.safeParse(req.query);
+      if (!query.success)
+        return reply.code(400).send({ error: { code: 'INVALID_REQUEST' } });
+      try {
+        const userId = authenticatedSession(req).user.id;
+        const prior = await payments.existing(userId, query.data.reservationId);
+        if (!prior && disabled)
+          return reply
+            .code(503)
+            .send({ error: { code: 'NEW_PAYMENTS_DISABLED' } });
+        return await payments.checkout(
+          userId,
+          query.data.reservationId,
+          query.data.autographId,
+        );
+      } catch (error) {
+        return sendError(error, reply);
       }
     },
   );

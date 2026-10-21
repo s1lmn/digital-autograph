@@ -21,7 +21,11 @@ describe('typed configuration', () => {
         S3_REGION: 'us-east-1',
         S3_BUCKET: 'autographs-test',
       }),
-    ).toMatchObject({ API_PORT: 4000, APP_ENV: 'local' });
+    ).toMatchObject({
+      API_PORT: 4000,
+      APP_ENV: 'local',
+      FIRST_USE_ENFORCEMENT_ENABLED: false,
+    });
   });
 
   it('reports missing required settings without printing secret values', () => {

@@ -4,6 +4,9 @@
 future report/appeal request boundaries and the transaction/privacy/test plan;
 reporting, actions and persistence are not implemented by those contracts.
 
+[Domain dependency guard](domain-dependencies.md) describes lint enforcement of
+the framework/provider boundary and the imports that still require review.
+
 [Notifications, deep links and sharing](notifications-sharing.md) describes the
 durable outbox, preferences, optional Telegram channel, and public text cards.
 

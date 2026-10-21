@@ -6,7 +6,10 @@ import {
   ModerationService,
   type PrivateOriginalStorage,
 } from '../../packages/autographs/src/index';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import {
   createDatabase,
   createPgAutographModerationRepository,
@@ -80,7 +83,7 @@ async function person(role?: 'moderator' | 'admin' | 'finance') {
   const id = randomUUID();
   await database.db.insert(users).values({ id });
   if (role) await database.db.insert(userRoles).values({ userId: id, role });
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 async function pending(ownerId: string, time = new Date()) {

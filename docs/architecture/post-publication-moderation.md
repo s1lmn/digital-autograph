@@ -14,13 +14,12 @@ Existing pre-publication reason codes can be reused as initial report categories
 they do not automatically imply removal, user sanction or a legal finding.
 No report count/category may automatically authorize a visibility or money change.
 
-PR #65 already owns the unmerged privacy migration chain 0017–0019. CONTRIBUTING
+PR #65 introduced the accepted privacy migration chain 0017–0019. CONTRIBUTING
 forbids competing work on the same migration chain. Before new case migrations,
-accept/synchronize that work through normal review/merge/main-CI or explicitly
-resolve its sequencing with the owner. Do not branch from its unmerged feature
-tree, skip numbering/journal conflicts or weaken immutable finance/privacy guards.
-This first phase is deliberately independent of those migrations and adds only
-strict request shapes and negative-boundary tests.
+synchronize with accepted main and explicitly resolve sequencing with the owner.
+Do not branch from an unmerged feature tree, skip numbering/journal conflicts or
+weaken immutable finance/privacy guards. This phase adds only strict request
+shapes and negative-boundary tests, without new migrations.
 
 Subsequent small PRs should cover: (1) persistent cases/report intake and dedup,
 (2) audited visibility/actions and private appeals, (3) public report/owner/moderator

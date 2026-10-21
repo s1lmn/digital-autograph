@@ -1,0 +1,50 @@
+[
+  {
+    "number": "01",
+    "sourceFile": "01_Публичная_оферта_редакция_1.0.docx",
+    "file": "public/public-offer-destka-20261010.md",
+    "sourceDocxSha256": "17b9ec6ee9db76e0542b0240b02334adf28f96c5919a57c1472752d40c674197"
+  },
+  {
+    "number": "02",
+    "sourceFile": "02_Пользовательское_соглашение_редакция_1.0.docx",
+    "file": "public/user-agreement-destka-20261010.md",
+    "sourceDocxSha256": "0097c73ea7b1309f9ae3ddb8bde3137c6ba3e81caeaff4e7c9e438fa86adee9e"
+  },
+  {
+    "number": "03",
+    "sourceFile": "03_Правила_размещения_контента_редакция_1.0.docx",
+    "file": "public/content-rules-destka-20261010.md",
+    "sourceDocxSha256": "5bf5ca69753fd9173b59b6d6291e1eab6bc2a6d61202ceeb1dab37f6f2bd6b40"
+  },
+  {
+    "number": "04",
+    "sourceFile": "04_Политика_возвратов_редакция_1.0.docx",
+    "file": "public/refund-policy-destka-20261010.md",
+    "sourceDocxSha256": "49b6c6b467431dbee9c4539360ad53a48a7ccd8254325c8513e890273c542669"
+  },
+  {
+    "number": "05",
+    "sourceFile": "05_Политика_обработки_персональных_данных_редакция_1.0.docx",
+    "file": "public/privacy-policy-destka-20261010.md",
+    "sourceDocxSha256": "4b675e457ddc527a1b3ab82b1f41c710da4a581d1b7e63716b6d7bb9296e9651"
+  },
+  {
+    "number": "06",
+    "sourceFile": "06_Согласие_на_обработку_персональных_данных_редакция_1.0.docx",
+    "file": "public/personal-data-consent-destka-20261010.md",
+    "sourceDocxSha256": "94acaa853c1e4215fee1c2adf5b908ec7041f8d38ce61c601653d54240ddefb1"
+  },
+  {
+    "number": "07",
+    "sourceFile": "07_Согласие_на_распространение_персональных_данных_редакция_1.0.docx",
+    "file": "public/dissemination-consent-destka-20261010.md",
+    "sourceDocxSha256": "bd4a2c23fc67815f125a8e93e65ae34370a6e943c24462df0a2a55e0bea4e48b"
+  },
+  {
+    "number": "33",
+    "sourceFile": "33_Политика_сообщения_об_уязвимостях_редакция_1.0.docx",
+    "file": "security/vulnerability-disclosure-destka-20261010.md",
+    "sourceDocxSha256": "fdcf42084f9b8a709f24af56a38afdb22dccde492b681ad6cef4ae19a2027155"
+  }
+]

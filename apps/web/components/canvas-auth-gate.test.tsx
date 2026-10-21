@@ -32,7 +32,7 @@ describe('CanvasAuthGate', () => {
 
 it('retries authentication after a network error without discarding an editor', async () => {
   const fetchMock = vi
-    .fn()
+    .fn<(url: string, options?: RequestInit) => Promise<unknown>>()
     .mockRejectedValueOnce(new TypeError('offline'))
     .mockResolvedValueOnce({ ok: false, status: 401 });
   vi.stubGlobal('fetch', fetchMock);
@@ -43,5 +43,7 @@ it('retries authentication after a network error without discarding an editor', 
   expect(
     await screen.findByRole('heading', { name: 'Sign in to continue' }),
   ).toBeTruthy();
-  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(
+    fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/me')),
+  ).toHaveLength(2);
 });

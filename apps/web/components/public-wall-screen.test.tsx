@@ -65,6 +65,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function firstUse() {
+  return json({
+    available: true,
+    complete: true,
+    adultDeclared: true,
+    documents: ['terms_of_use', 'community_guidelines'].map((type) => ({
+      type,
+      version: 'test-v1',
+      hash: 'a'.repeat(64),
+      path: `/legal/documents/${type}/test-v1`,
+      accepted: true,
+    })),
+  });
+}
+
 function readyList(count = 1) {
   return {
     items: [autographOne, autographTwo].slice(0, count).map((id) => ({
@@ -85,6 +100,7 @@ describe('public Wall and Free Claim UX', () => {
   it('refreshes history with Refresh Wall inside the single page landmark', async () => {
     let historyRequests = 0;
     const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/legal/first-use')) return firstUse();
       if (input.endsWith('/auth/me')) return json({}, 401);
       if (input.endsWith(`/walls/${wallId}`)) return json(occupied());
       if (input.endsWith('/placements')) {
@@ -220,6 +236,7 @@ describe('public Wall and Free Claim UX', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
+        if (input.endsWith('/legal/first-use')) return firstUse();
         if (input.endsWith('/placements'))
           return json({ wallId, placements: [] });
         if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
@@ -249,6 +266,7 @@ describe('public Wall and Free Claim UX', () => {
       completeClaim = resolve;
     });
     const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith('/legal/first-use')) return firstUse();
       if (input.endsWith('/placements')) {
         historyRequests++;
         return json({
@@ -298,13 +316,15 @@ describe('public Wall and Free Claim UX', () => {
     fireEvent.click(
       screen.getAllByRole('button', { name: 'Claim this slot' })[0]!,
     );
-    expect(screen.getByText(/free claim is not restored/i)).toBeTruthy();
+    expect(await screen.findByText(/free claim is not restored/i)).toBeTruthy();
     expect(
       fetchMock.mock.calls.filter(([url]) =>
         String(url).endsWith('/free-claim'),
       ),
     ).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Confirm free claim' }),
+    );
     expect(
       await screen.findByRole('button', { name: 'Claiming…' }),
     ).toHaveProperty('disabled', true);
@@ -353,6 +373,7 @@ describe('public Wall and Free Claim UX', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
+        if (input.endsWith('/legal/first-use')) return firstUse();
         if (input.endsWith('/placements'))
           return json({ wallId, placements: [] });
         if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
@@ -374,7 +395,9 @@ describe('public Wall and Free Claim UX', () => {
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Confirm free claim' }),
+    );
     expect(
       await screen.findByText('Your autograph is on the Wall.'),
     ).toBeTruthy();
@@ -385,6 +408,7 @@ describe('public Wall and Free Claim UX', () => {
 
   it('handles a Slot race by refreshing without claiming another Slot', async () => {
     const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/legal/first-use')) return firstUse();
       if (input.endsWith('/placements'))
         return json({ wallId, placements: [] });
       if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
@@ -405,7 +429,9 @@ describe('public Wall and Free Claim UX', () => {
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Confirm free claim' }),
+    );
     expect(await screen.findByRole('alert')).toHaveProperty(
       'textContent',
       expect.stringContaining('Someone claimed this slot first'),
@@ -424,6 +450,7 @@ describe('public Wall and Free Claim UX', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string) => {
+        if (input.endsWith('/legal/first-use')) return firstUse();
         if (input.endsWith('/placements'))
           return json({ wallId, placements: [] });
         if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
@@ -444,7 +471,9 @@ describe('public Wall and Free Claim UX', () => {
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Confirm free claim' }),
+    );
     expect(
       await screen.findByText(
         'Your one free claim on this Wall has already been used.',
@@ -457,6 +486,7 @@ describe('public Wall and Free Claim UX', () => {
 
   it('disables claim controls when the server says the Wall is no longer claimable', async () => {
     const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith('/legal/first-use')) return firstUse();
       if (input.endsWith('/placements'))
         return json({ wallId, placements: [] });
       if (input.endsWith('/auth/me')) return json({ user: { id: 'owner' } });
@@ -477,7 +507,9 @@ describe('public Wall and Free Claim UX', () => {
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Confirm free claim' }),
+    );
     expect(
       await screen.findByText(
         'This Wall is no longer available for free claims.',
@@ -498,6 +530,7 @@ it('retries failed auth and ready list reads before showing claim actions', asyn
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string) => {
+      if (input.endsWith('/legal/first-use')) return firstUse();
       if (input.endsWith('/placements'))
         return json({ wallId, placements: [] });
       if (input.endsWith('/auth/me')) {
@@ -539,6 +572,7 @@ it.each([
   'AUTOGRAPH_NOT_FOUND',
 ])('explains %s without sending another claim', async (code) => {
   const fetchMock = vi.fn(async (input: string) => {
+    if (input.endsWith('/legal/first-use')) return firstUse();
     if (input.endsWith('/placements')) return json({ wallId, placements: [] });
     if (input.endsWith('/auth/me')) return json({ user: {} });
     if (input.endsWith('/autographs?status=ready')) return json(readyList());
@@ -557,7 +591,9 @@ it.each([
   fireEvent.click(
     (await screen.findAllByRole('button', { name: 'Claim this slot' }))[0]!,
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm free claim' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Confirm free claim' }),
+  );
   expect(
     await screen.findByText(
       code === 'AUTOGRAPH_NOT_FOUND'

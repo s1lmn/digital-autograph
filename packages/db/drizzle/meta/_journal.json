@@ -120,6 +120,27 @@
       "when": 1791140778677,
       "tag": "0016_regular_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791479380331,
+      "tag": "0017_legal_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791663339632,
+      "tag": "0018_age_declaration",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791665870774,
+      "tag": "0019_checkout_confirmation",
+      "breakpoints": true
     }
   ]
 }

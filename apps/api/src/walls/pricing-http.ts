@@ -121,6 +121,7 @@ export function registerPricingRoutes(
   app.post(
     '/walls/:wallId/slots/:slotId/takeover-quote',
     {
+      config: { firstUse: true },
       preHandler: [
         requireAuthenticatedUser,
         rejectDisabledOperation(disabled, 'NEW_PAYMENTS_DISABLED'),

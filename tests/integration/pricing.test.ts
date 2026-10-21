@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
@@ -66,7 +69,7 @@ async function person(role?: 'admin' | 'moderator' | 'finance') {
       [id, role],
     );
   }
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 function headers(token: string) {
@@ -307,7 +310,8 @@ describe('Pricing config and persisted takeover quotes', () => {
     await place(wall.slotId, seller.id, 'admin', 900, false);
     await place(wall.slotId, seller.id, 'takeover', 800, false);
     await place(wall.slotId, seller.id, 'takeover', 600, false);
-    const target = await place(wall.slotId, seller.id, 'takeover', 300);
+    // Keep this pricing fixture inside the fifth decay interval, away from cross-host clock rounding.
+    const target = await place(wall.slotId, seller.id, 'takeover', 305);
     const response = await quote(wall.wallId, wall.slotId, buyer.token);
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({

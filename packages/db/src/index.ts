@@ -48,3 +48,7 @@ export {
   createOperationalReader,
   type OperationalDatabaseState,
 } from './operational-snapshot';
+
+export { createPgLegalRepository } from './legal-repository';
+
+export { createPgAgeDeclarationRepository } from './age-declaration-repository';

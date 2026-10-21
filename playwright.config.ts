@@ -31,7 +31,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: 'pnpm --filter @digital-autograph/api dev',
+      command: 'pnpm exec tsx e2e/synthetic-api.ts',
       url: `${apiUrl}/health/ready`,
       reuseExistingServer: false,
       timeout: 120_000,

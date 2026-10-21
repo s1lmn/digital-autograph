@@ -4,6 +4,13 @@
 PostgreSQL/private-object drill, real backup/restore gates, proposed severities
 and an unfilled operational acceptance record.
 
+[Aggregate API response metrics](api-metrics.md) documents bounded latency and
+status-class events, route-template privacy, rates and sampling limitations.
+[Worker failure diagnostics](worker-diagnostics.md) documents structured,
+bounded errors from image, notification and cleanup cycles.
+[Local public Wall load probe](public-wall-load.md) prepares reproducible,
+bounded public-read measurements for the later EGO-113 capacity exercise.
+
 [Incident admission controls](incident-controls.md) describes independent API
 shutdown of new payments and Free Claim while keeping existing recovery and
 history available.
@@ -21,8 +28,15 @@ for staging/production release, migration, and rollback procedures.
 See [dependency security checks](dependency-security.md) for the CI audit gate
 and the targeted dependency overrides.
 
+See [secret scanning and rotation](secret-scanning.md) for the mandatory
+full-history scanner, private finding triage and credential-owner remediation.
+
 See [staging disk recovery](staging-disk-recovery.md) for the read-only inventory
 tool and the evidence required before capacity remediation and release recovery.
+
+[Reservation admission](../architecture/takeover-reservation.md#reservation-admission-ego-151)
+describes per-user protection against mass Slot locking, HTTP 429 retry behavior,
+and the remaining anti-fraud work.
 
 See [public repository CI/CD controls](public-repository-security.md) for the
 main ruleset proposal, fork/runner trust boundary and remaining owner actions.

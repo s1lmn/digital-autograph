@@ -75,6 +75,10 @@ test('new user uploads, reviews, claims and reads only their persistent history'
     `${apiUrl}/auth/test/start?returnTo=${encodeURIComponent('/autograph/create')}`,
   );
   await expect(page).toHaveURL(`${webUrl}/autograph/create`);
+  await page.getByLabel('Мне исполнилось 18 лет.').check();
+  await page.getByLabel('Принимаю Пользовательское соглашение.').check();
+  await page.getByLabel('Принимаю Правила размещения контента.').check();
+  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
   const canvas = page.getByLabel('Autograph drawing area', { exact: true });
   await expect(
     page.getByRole('heading', { name: 'Draw your autograph' }),

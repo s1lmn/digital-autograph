@@ -132,11 +132,23 @@ export class OAuthAttemptService {
     });
   }
 
+  // OAuth code + PKCE providers need no OIDC nonce. The legacy DB nonce
+  // hash is inert for this flow; only the verifier leaves the browser cookie.
+  async claimOAuthPkce(
+    provider: string,
+    state: string | undefined,
+    browserBinding: string | undefined,
+    codeVerifier: string | undefined,
+  ): Promise<ClaimedOAuthAttempt | null> {
+    if (!codeVerifier || !secretPattern.test(codeVerifier)) return null;
+    return this.claimAttempt(provider, state, browserBinding, { codeVerifier });
+  }
+
   private async claimAttempt(
     provider: string,
     state: string | undefined,
     browserBinding: string | undefined,
-    pkce?: { codeVerifier: string; nonce: string },
+    pkce?: { codeVerifier: string; nonce?: string },
   ): Promise<ClaimedOAuthAttempt | null> {
     if (
       !state ||
@@ -156,7 +168,8 @@ export class OAuthAttemptService {
       (pkce
         ? !attempt.pkceVerifierHash ||
           !sameHash(attempt.pkceVerifierHash, hashSecret(pkce.codeVerifier)) ||
-          !sameHash(attempt.nonceHash, hashSecret(pkce.nonce))
+          (pkce.nonce !== undefined &&
+            !sameHash(attempt.nonceHash, hashSecret(pkce.nonce)))
         : attempt.pkceVerifierHash !== null)
     ) {
       return null;

@@ -327,6 +327,13 @@ describe('Telegram Authentication with PostgreSQL', () => {
         { userId, provider: 'telegram', providerUserId: 'telegram-sub-1' },
       ]);
       expect(await database.db.select().from(sessions)).toHaveLength(1);
+      expect(
+        (await database.pool.query('SELECT * FROM age_declarations')).rowCount,
+      ).toBe(0);
+      expect(
+        (await database.pool.query('SELECT * FROM legal_evidence_events'))
+          .rowCount,
+      ).toBe(0);
       expect((await callback(app, first)).headers.location).toContain(
         'TELEGRAM_AUTH_FAILED',
       );

@@ -65,7 +65,10 @@ export function registerAutographRoutes(
 
   app.post(
     '/autographs',
-    { preHandler: requireAuthenticatedUser },
+    {
+      config: { firstUse: true },
+      preHandler: requireAuthenticatedUser,
+    },
     async (request, reply) => {
       const body = parse(createAutographBody, request.body, reply);
       if (!body) return reply;
@@ -103,7 +106,10 @@ export function registerAutographRoutes(
 
   app.post(
     '/autographs/:id/upload',
-    { preHandler: requireAuthenticatedUser },
+    {
+      config: { firstUse: true },
+      preHandler: requireAuthenticatedUser,
+    },
     async (request, reply) => {
       const params = parse(autographIdParams, request.params, reply);
       const body = parse(initiateOriginalUploadBody, request.body, reply);
@@ -122,7 +128,10 @@ export function registerAutographRoutes(
 
   app.post(
     '/autographs/:id/upload/complete',
-    { preHandler: requireAuthenticatedUser },
+    {
+      config: { firstUse: true },
+      preHandler: requireAuthenticatedUser,
+    },
     async (request, reply) => {
       const params = parse(autographIdParams, request.params, reply);
       const body = parse(completeOriginalUploadBody, request.body ?? {}, reply);
@@ -158,7 +167,10 @@ export function registerAutographRoutes(
 
   app.post(
     '/autographs/:id/approve',
-    { preHandler: requireAuthenticatedUser },
+    {
+      config: { firstUse: true },
+      preHandler: requireAuthenticatedUser,
+    },
     async (request, reply) => {
       const params = parse(autographIdParams, request.params, reply);
       const body = parse(approveAutographBody, request.body, reply);

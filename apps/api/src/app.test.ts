@@ -112,3 +112,30 @@ describe('API response security', () => {
     }
   });
 });
+
+it('exposes only the public legal publication marker to trusted browser origins', async () => {
+  const app = buildApi(
+    { checkConnection: async () => {} },
+    sessionService,
+    authConfig,
+  );
+  try {
+    const trusted = await app.inject({
+      url: '/health/live',
+      headers: { origin: 'http://127.0.0.1:3000' },
+    });
+    expect(trusted.headers['access-control-expose-headers']).toBe(
+      'X-Legal-Document-Status',
+    );
+    expect(trusted.headers['access-control-allow-origin']).toBe(
+      'http://127.0.0.1:3000',
+    );
+    const foreign = await app.inject({
+      url: '/health/live',
+      headers: { origin: 'https://evil.example' },
+    });
+    expect(foreign.headers['access-control-allow-origin']).toBeUndefined();
+  } finally {
+    await app.close();
+  }
+});

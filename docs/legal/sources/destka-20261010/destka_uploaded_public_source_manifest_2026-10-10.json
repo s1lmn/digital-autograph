@@ -1,0 +1,127 @@
+{
+  "date": "2026-10-10",
+  "source_kind": "Eight uploaded public DOCX documents, and companion publication notice",
+  "scope": "Only current uploaded files; excludes other 38 internal DOCX and historical control CSV",
+  "files": [
+    {
+      "number": "01",
+      "filename": "01_Публичная_оферта_редакция_1.0.docx",
+      "bytes": 45617,
+      "docx_sha256": "17b9ec6ee9db76e0542b0240b02334adf28f96c5919a57c1472752d40c674197",
+      "text_extraction_sha256": "2e71d4f916bae73f217f16d8822429a686a2d3eeefd512e3544db46ff5a5e7d6",
+      "pr46_expected_old_docx_sha256": "e1085feed99f2fae5d29d3b8e96e0c19998ebdadc006a305b394cbd6e7f139a5",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/public-offer-v1.md",
+      "placeholders": [
+        "[[URL ПРАВИЛ РАЗМЕЩЕНИЯ КОНТЕНТА]]",
+        "[[URL ПОЛИТИКИ ВОЗВРАТОВ]]",
+        "[[URL ПОЛИТИКИ КОНФИДЕНЦИАЛЬНОСТИ]]",
+        "[[URL ПОЛЬЗОВАТЕЛЬСКОГО СОГЛАШЕНИЯ]]"
+      ],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "02",
+      "filename": "02_Пользовательское_соглашение_редакция_1.0.docx",
+      "bytes": 53790,
+      "docx_sha256": "0097c73ea7b1309f9ae3ddb8bde3137c6ba3e81caeaff4e7c9e438fa86adee9e",
+      "text_extraction_sha256": "077f381e15717232736383a4b40b3111a546ce4b153aed1c50558688e07913f9",
+      "pr46_expected_old_docx_sha256": "9c17b265ab3050d9874f98fae8241a76c95eda895005a8c4d542c80f8affd621",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/user-agreement-v1.md",
+      "placeholders": [
+        "[[URL ПУБЛИЧНОЙ ОФЕРТЫ]]",
+        "[[URL ПРАВИЛ РАЗМЕЩЕНИЯ КОНТЕНТА]]",
+        "[[URL ПОЛИТИКИ КОНФИДЕНЦИАЛЬНОСТИ]]",
+        "[[URL АРХИВА ПРАВИЛ РАЗМЕЩЕНИЯ КОНТЕНТА]]",
+        "[[URL АРХИВА ПОЛЬЗОВАТЕЛЬСКОГО СОГЛАШЕНИЯ]]",
+        "[[URL ПОЛИТИКИ ВОЗВРАТОВ]]"
+      ],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "03",
+      "filename": "03_Правила_размещения_контента_редакция_1.0.docx",
+      "bytes": 45170,
+      "docx_sha256": "5bf5ca69753fd9173b59b6d6291e1eab6bc2a6d61202ceeb1dab37f6f2bd6b40",
+      "text_extraction_sha256": "2aff1c99b09105b2ad3283a14531e726b667c157a7a0c6686d7f149714b757ee",
+      "pr46_expected_old_docx_sha256": "7a908a8cd1f62ffa0ea483b0aec43631febb2994584d4abd11a61617b92eb3c3",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/content-rules-v1.md",
+      "placeholders": [
+        "[[URL АРХИВА ПРАВИЛ РАЗМЕЩЕНИЯ КОНТЕНТА]]"
+      ],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "04",
+      "filename": "04_Политика_возвратов_редакция_1.0.docx",
+      "bytes": 43453,
+      "docx_sha256": "49b6c6b467431dbee9c4539360ad53a48a7ccd8254325c8513e890273c542669",
+      "text_extraction_sha256": "0c0989626e344126881a25d663195d0f886762612bdec8e2bbba7def502cdb17",
+      "pr46_expected_old_docx_sha256": "8795847c3bf569f9445fbcf37bdcddecc7dd5122fd0154a706e6dec1fb6e2ad0",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/refund-policy-v1.md",
+      "placeholders": [
+        "[[URL АРХИВА ПОЛИТИКИ ВОЗВРАТОВ]]"
+      ],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "05",
+      "filename": "05_Политика_обработки_персональных_данных_редакция_1.0.docx",
+      "bytes": 45338,
+      "docx_sha256": "4b675e457ddc527a1b3ab82b1f41c710da4a581d1b7e63716b6d7bb9296e9651",
+      "text_extraction_sha256": "b2be8795dd5c46f72e2409ac01b72acce4b698e894c95b093714e7da9e774f9b",
+      "pr46_expected_old_docx_sha256": "5f065c7af5111288558ad16e6a97c11d5244f07112b64c41f3e1b05342eca928",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/privacy-policy-v1.md",
+      "placeholders": [],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "06",
+      "filename": "06_Согласие_на_обработку_персональных_данных_редакция_1.0.docx",
+      "bytes": 40937,
+      "docx_sha256": "94acaa853c1e4215fee1c2adf5b908ec7041f8d38ce61c601653d54240ddefb1",
+      "text_extraction_sha256": "ef991a3997392c727d7f5131550f621f60f989ae17ac70d41efcd0d6da7f0f98",
+      "pr46_expected_old_docx_sha256": "d98a37f36471c751267b02c19e807c874c2784a569cb50e1f6865c17c00fd317",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/personal-data-consent-v1.md",
+      "placeholders": [],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "07",
+      "filename": "07_Согласие_на_распространение_персональных_данных_редакция_1.0.docx",
+      "bytes": 40599,
+      "docx_sha256": "bd4a2c23fc67815f125a8e93e65ae34370a6e943c24462df0a2a55e0bea4e48b",
+      "text_extraction_sha256": "7f51d3ed5fc9de0e7587aac2e6424368258b485b51868125ac7267df318a3d22",
+      "pr46_expected_old_docx_sha256": "96dc8bfcdb55805f9bb09a17e8c30660728dd06970670e724ce3ab59d9d1f49a",
+      "pr46_binary_sha_status": "NOT_MATCH",
+      "pr46_markdown_path": "public/dissemination-consent-v1.md",
+      "placeholders": [],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    },
+    {
+      "number": "33",
+      "filename": "33_Политика_сообщения_об_уязвимостях_редакция_1.0.docx",
+      "bytes": 41098,
+      "docx_sha256": "fdcf42084f9b8a709f24af56a38afdb22dccde492b681ad6cef4ae19a2027155",
+      "text_extraction_sha256": "07eb479aec2ba05634a16550e24f1db838538af556a2a9f5fc952dc33b046295",
+      "pr46_expected_old_docx_sha256": "",
+      "pr46_binary_sha_status": "NO_PR46_RECORD",
+      "pr46_markdown_path": "отсутствует в PR #46",
+      "placeholders": [],
+      "publication_status": "UNVERIFIED - DO NOT ENABLE LEGAL GATES"
+    }
+  ],
+  "limitations": [
+    "Historical 48-row CSV is not uploaded; its 47 mismatches cannot be independently audited.",
+    "The 38 internal DOCX are not included in this uploaded batch.",
+    "Mismatch of binary DOCX SHA-256 does not establish a legal wording difference.",
+    "Plain text extractions preserve paragraph text but do not represent an approved website canonical rendering.",
+    "PR #46 has 7 core documents registered ready=false; policy 33 is an additional eighth public document.",
+    "This is source inventory, not formal legal approval."
+  ]
+}

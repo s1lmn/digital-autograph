@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { SessionService } from '../../packages/auth/src/index';
 import { AutographService } from '../../packages/autographs/src/index';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import {
   createDatabase,
   createPgAutographRepository,
@@ -83,8 +86,8 @@ async function usersAndTokens() {
   return {
     owner,
     other,
-    ownerToken: (await sessions.createSession(owner.id)).token,
-    otherToken: (await sessions.createSession(other.id)).token,
+    ownerToken: (await acceptedSession(sessions, database, owner.id)).token,
+    otherToken: (await acceptedSession(sessions, database, other.id)).token,
   };
 }
 

@@ -1,16 +1,24 @@
+import { buildApi as unacceptedApi } from '../../apps/api/src/app';
+import { syntheticLegalDocuments } from './legal-fixtures';
 import { randomUUID, createHash } from 'node:crypto';
 import { beforeEach, afterAll, it, expect } from 'vitest';
 import { createYookassaProvider } from '../../packages/integrations/src/yookassa';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
   createPgPaymentRepository,
+  createPgLegalRepository,
+  createPgAgeDeclarationRepository,
   createPgPricingRepository,
   createPgTakeoverReservationRepository,
   createPgSessionRepository,
   createPgNotificationRepository,
 } from '../../packages/db/src/index';
+import { loadLegalDocuments } from '../../packages/config/src/index';
 import { NotificationService } from '../../packages/notifications/src/index';
 import type { IncidentControls } from '../../apps/api/src/incident-controls';
 import {
@@ -69,12 +77,64 @@ const provider: PaymentProvider = {
     return { ...p };
   },
 };
-const repo = createPgPaymentRepository(database.pool);
-function service(repository = repo) {
-  return new PaymentService(repository, provider, settings);
+const repo = createPgPaymentRepository(database.pool, {
+  legalDocuments: syntheticLegalDocuments,
+});
+async function displayedConfirmation(reservationId: string) {
+  const r = (
+    await database.pool.query(
+      `SELECT r.amount_minor,r.currency,r.expires_at,r.target_placement_id,r.pricing_config_id,c.guaranteed_visibility_seconds FROM takeover_reservations r JOIN pricing_config_versions c ON c.id=r.pricing_config_id WHERE r.id=$1`,
+      [reservationId],
+    )
+  ).rows[0];
+  return {
+    confirmed: true as const,
+    documents: syntheticLegalDocuments
+      .filter((d) =>
+        ['public_offer', 'community_guidelines', 'refund_policy'].includes(
+          d.type,
+        ),
+      )
+      .map((d) => ({
+        type: d.type as
+          'public_offer' | 'community_guidelines' | 'refund_policy',
+        version: d.version,
+        hash: d.hash,
+      })),
+    terms: {
+      amountMinor: r.amount_minor,
+      currency: 'RUB' as const,
+      guaranteedVisibilitySeconds: r.guaranteed_visibility_seconds,
+      reservationExpiresAt: r.expires_at.toISOString(),
+      targetPlacementId: r.target_placement_id,
+      pricingConfigId: r.pricing_config_id,
+    },
+  };
 }
-function api(payments = service(), incidentControls?: IncidentControls) {
-  return buildApi(
+function service(repository = repo) {
+  return new PaymentService(
+    {
+      ...repository,
+      async create(userId, reservationId, autographId, settings, confirmation) {
+        return repository.create(
+          userId,
+          reservationId,
+          autographId,
+          settings,
+          confirmation ?? (await displayedConfirmation(reservationId)),
+        );
+      },
+    },
+    provider,
+    settings,
+  );
+}
+function api(
+  payments = service(),
+  incidentControls?: IncidentControls,
+  firstUsePublished = true,
+) {
+  return (firstUsePublished ? buildApi : unacceptedApi)(
     database,
     sessions,
     {
@@ -98,12 +158,17 @@ function api(payments = service(), incidentControls?: IncidentControls) {
     payments,
     undefined,
     incidentControls,
+    {
+      repository: createPgLegalRepository(database.pool),
+      ageDeclarations: createPgAgeDeclarationRepository(database.pool),
+      documents: loadLegalDocuments(),
+    },
   );
 }
 async function person() {
   const id = randomUUID();
   await database.pool.query('INSERT INTO users (id) VALUES ($1::uuid)', [id]);
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 async function fixture(
@@ -366,22 +431,30 @@ it.each(['webhook', 'refresh', 'reconciliation'] as const)(
       cookie: `da_session=${f.buyer.token}`,
       origin: 'http://127.0.0.1:3000',
     };
-    succeed(f.providerId);
     try {
-      // Even an exact create retry is stopped; existing status/recovery routes remain.
-      expect(
-        (
-          await app.inject({
-            method: 'POST',
-            url: '/payments/orders',
-            headers,
-            payload: {
-              reservationId: f.reservationId,
-              autographId: f.autographId,
-            },
-          })
-        ).statusCode,
-      ).toBe(503);
+      // Replay stays pending; the selected webhook/refresh/reconcile path must
+      // still perform fulfillment after the provider actually reports success.
+      const replay = await app.inject({
+        method: 'POST',
+        url: '/payments/orders',
+        headers,
+        payload: {
+          reservationId: f.reservationId,
+          autographId: f.autographId,
+        },
+      });
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json()).toMatchObject({
+        id: f.orderId,
+        status: 'provider_pending',
+      });
+      expect(creates).toBe(1);
+      expect(await counts(f.orderId)).toMatchObject({
+        takeovers: 0,
+        earnings: 0,
+        active: 1,
+      });
+      succeed(f.providerId);
       const progress = async () => {
         if (path === 'reconciliation') {
           await database.pool.query(
@@ -522,7 +595,11 @@ it('50 duplicate handlers across instances plus reconciliation fulfill exactly o
   succeed(f.providerId);
   const other = createDatabase(url!);
   try {
-    const s2 = service(createPgPaymentRepository(other.pool));
+    const s2 = service(
+      createPgPaymentRepository(other.pool, {
+        legalDocuments: syntheticLegalDocuments,
+      }),
+    );
     await Promise.allSettled(
       Array.from({ length: 50 }, (_, i) =>
         i % 3 === 0
@@ -723,6 +800,7 @@ it('transaction fault rolls back old placement, new placement, earning, order; r
   succeed(f.providerId);
   const bad = service(
     createPgPaymentRepository(database.pool, {
+      legalDocuments: syntheticLegalDocuments,
       afterPlacementInsert: async () => {
         throw new Error('simulated crash');
       },
@@ -993,7 +1071,7 @@ it('cannot initialize payment using another owner autograph', async () => {
   const autograph = await autographFixture(other.id);
   await expect(
     service().create(f.buyer.id, f.reservationId, autograph),
-  ).rejects.toThrow('RESERVATION_NOT_ELIGIBLE');
+  ).rejects.toThrow(/RESERVATION_NOT_ELIGIBLE|RESERVATION_EXPIRED/);
   expect(creates).toBe(0);
 });
 it('unknown provider object is acknowledged without local mutation', async () => {
@@ -1131,7 +1209,12 @@ it.each([400, 401, 403, 404, 422])(
       },
     );
     const s = new PaymentService(repo, rejected, settings);
-    const order = await s.create(f.buyer.id, f.reservationId, f.autographId);
+    const order = await s.create(
+      f.buyer.id,
+      f.reservationId,
+      f.autographId,
+      await displayedConfirmation(f.reservationId),
+    );
     expect((await repo.find(order.id))?.reason).toBe('PROVIDER_REJECTED');
     // Even an elapsed create window must not overwrite the retained rejection reason.
     const elapsed = new PaymentService(
@@ -1146,7 +1229,12 @@ it.each([400, 401, 403, 404, 422])(
       settings,
     );
     await elapsed.progress(order.id);
-    await s.create(f.buyer.id, f.reservationId, f.autographId);
+    await s.create(
+      f.buyer.id,
+      f.reservationId,
+      f.autographId,
+      await displayedConfirmation(f.reservationId),
+    );
     await s.refresh(f.buyer.id, order.id);
     await database.pool.query(
       "UPDATE payments SET next_check_at=clock_timestamp()-interval '1 minute' WHERE order_id=$1",
@@ -1187,7 +1275,12 @@ it.each([408, 429, 500, 503])(
       },
     );
     const s = new PaymentService(repo, ambiguous, settings);
-    const order = await s.create(f.buyer.id, f.reservationId, f.autographId);
+    const order = await s.create(
+      f.buyer.id,
+      f.reservationId,
+      f.autographId,
+      await displayedConfirmation(f.reservationId),
+    );
     expect((await repo.find(order.id))?.reason).toBe(
       'PROVIDER_OUTCOME_UNKNOWN',
     );
@@ -1463,3 +1556,693 @@ it('uses one post-User-lock fulfillment instant and preserves paid visibility af
     await processing;
   }
 });
+
+it('pins trusted Offer/Rules/Refund snapshots and rejects rewriting, removal or partial values', async () => {
+  const f = await started();
+  const result = await database.pool.query(
+    'SELECT offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash FROM payment_orders WHERE id=$1',
+    [f.orderId],
+  );
+  const offer = syntheticLegalDocuments.find((d) => d.type === 'public_offer')!;
+  const rules = syntheticLegalDocuments.find(
+    (d) => d.type === 'community_guidelines',
+  )!;
+  const refund = syntheticLegalDocuments.find(
+    (d) => d.type === 'refund_policy',
+  )!;
+  expect(result.rows[0]).toEqual({
+    offer_version: offer.version,
+    offer_hash: offer.hash,
+    content_rules_version: rules.version,
+    content_rules_hash: rules.hash,
+    refund_policy_version: refund.version,
+    refund_policy_hash: refund.hash,
+  });
+  for (const column of [
+    'offer_version',
+    'offer_hash',
+    'content_rules_version',
+    'content_rules_hash',
+    'refund_policy_version',
+    'refund_policy_hash',
+  ]) {
+    await expect(
+      database.pool.query(
+        `UPDATE payment_orders SET ${column}=NULL WHERE id=$1`,
+        [f.orderId],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  }
+  const configured = createPgPaymentRepository(database.pool, {
+    legalDocuments: syntheticLegalDocuments.map((d) => ({
+      ...d,
+      version: 'test-v2',
+      hash: 'c'.repeat(64),
+    })),
+  });
+  expect(
+    (
+      await configured.create(
+        f.buyer.id,
+        f.reservationId,
+        f.autographId,
+        settings,
+      )
+    ).orderId,
+  ).toBe(f.orderId);
+  expect(
+    (
+      await database.pool.query(
+        'SELECT offer_hash FROM payment_orders WHERE id=$1',
+        [f.orderId],
+      )
+    ).rows[0].offer_hash,
+  ).toBe(offer.hash);
+  succeed(f.providerId);
+  await service().webhook(f.providerId, 'payment.succeeded');
+  await service().webhook(f.providerId, 'payment.succeeded');
+  expect(
+    (
+      await database.pool.query(
+        'SELECT offer_hash,status FROM payment_orders WHERE id=$1',
+        [f.orderId],
+      )
+    ).rows[0],
+  ).toEqual({ offer_hash: offer.hash, status: 'fulfilled' });
+});
+it('unpublished contractual documents prevent a new order before provider calls', async () => {
+  const f = await setup();
+  const calls = creates;
+  const blocked = createPgPaymentRepository(database.pool, {
+    legalDocuments: syntheticLegalDocuments.map((d) => ({
+      ...d,
+      ready: false,
+    })),
+  });
+  await expect(
+    service(blocked).create(f.buyer.id, f.reservationId, f.autographId),
+  ).rejects.toThrow('LEGAL_DOCUMENT_UNAVAILABLE');
+  const app = api(service(blocked));
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/payments/orders',
+      headers: {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      },
+      payload: { reservationId: f.reservationId, autographId: f.autographId },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: { code: 'LEGAL_DOCUMENT_UNAVAILABLE' },
+    });
+  } finally {
+    await app.close();
+  }
+  expect(creates).toBe(calls);
+  expect(
+    (await database.pool.query('SELECT id FROM payment_orders')).rowCount,
+  ).toBe(0);
+});
+
+it.each([
+  { disableNewPayments: false, disableFreeClaims: false },
+  { disableNewPayments: true, disableFreeClaims: false },
+  { disableNewPayments: false, disableFreeClaims: true },
+  { disableNewPayments: true, disableFreeClaims: true },
+])(
+  'actual legal registry blocks new Orders while existing recovery remains available %j',
+  async (controls) => {
+    const existing = await started();
+    const blocked = createPgPaymentRepository(database.pool);
+    const blockedService = service(blocked);
+    const app = api(blockedService, controls, false);
+    try {
+      const f = await setup();
+      const calls = creates;
+      const headers = {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      };
+      const response = await app.inject({
+        method: 'POST',
+        url: '/payments/orders',
+        headers,
+        payload: { reservationId: f.reservationId, autographId: f.autographId },
+      });
+      expect(response.statusCode).toBe(controls.disableNewPayments ? 503 : 409);
+      expect(response.json().error.code).toBe(
+        controls.disableNewPayments
+          ? 'NEW_PAYMENTS_DISABLED'
+          : 'LEGAL_DOCUMENT_UNAVAILABLE',
+      );
+      expect(creates).toBe(calls);
+      const priorOrder = await database.pool.query(
+        'SELECT to_jsonb(o) AS snapshot FROM payment_orders o WHERE id=$1',
+        [existing.orderId],
+      );
+      const existingHeaders = {
+        cookie: `da_session=${existing.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      };
+      const replay = await Promise.all(
+        Array.from({ length: 3 }, () =>
+          app.inject({
+            method: 'POST',
+            url: '/payments/orders',
+            headers: existingHeaders,
+            payload: {
+              reservationId: existing.reservationId,
+              autographId: existing.autographId,
+            },
+          }),
+        ),
+      );
+      for (const response of replay) {
+        expect(response.statusCode).toBe(200);
+        expect(response.json().id).toBe(existing.orderId);
+      }
+      expect(creates).toBe(calls);
+      expect(
+        (
+          await database.pool.query(
+            'SELECT to_jsonb(o) AS snapshot FROM payment_orders o WHERE id=$1',
+            [existing.orderId],
+          )
+        ).rows,
+      ).toEqual(priorOrder.rows);
+      expect(
+        (
+          await database.pool.query(
+            'SELECT count(*)::int AS count FROM payments WHERE order_id=$1',
+            [existing.orderId],
+          )
+        ).rows[0].count,
+      ).toBe(1);
+      succeed(existing.providerId);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/payments/webhooks/yookassa',
+            payload: {
+              type: 'notification',
+              event: 'payment.succeeded',
+              object: { id: existing.providerId },
+            },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/payments/orders/${existing.orderId}/refresh`,
+            headers: existingHeaders,
+            payload: {},
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            url: `/payments/orders/${existing.orderId}`,
+            headers: existingHeaders,
+          })
+        ).statusCode,
+      ).toBe(200);
+      await blockedService.webhook(existing.providerId, 'payment.succeeded');
+      await blockedService.refresh(existing.buyer.id, existing.orderId);
+      await blockedService.reconcile();
+      expect(await counts(existing.orderId)).toMatchObject({
+        takeovers: 1,
+        earnings: 1,
+        active: 1,
+      });
+    } finally {
+      await app.close();
+    }
+  },
+);
+
+it('checkout admissions require explicit matching published documents and authoritative economic terms', async () => {
+  const f = await setup();
+  const raw = new PaymentService(repo, provider, settings);
+  const confirm = await displayedConfirmation(f.reservationId);
+  const calls = creates;
+  await expect(
+    raw.create(f.buyer.id, f.reservationId, f.autographId),
+  ).rejects.toThrow('CHECKOUT_CONFIRMATION_REQUIRED');
+  for (const d of confirm.documents) {
+    for (const field of ['version', 'hash'] as const) {
+      const c = structuredClone(confirm);
+      c.documents.find((x) => x.type === d.type)![field] =
+        field === 'hash' ? 'b'.repeat(64) : 'stale-v0';
+      await expect(
+        raw.create(f.buyer.id, f.reservationId, f.autographId, c),
+      ).rejects.toThrow('CHECKOUT_TERMS_CHANGED');
+    }
+  }
+  for (const terms of [
+    { ...confirm.terms, amountMinor: '1' },
+    { ...confirm.terms, guaranteedVisibilitySeconds: 999 },
+    { ...confirm.terms, reservationExpiresAt: new Date(0).toISOString() },
+  ]) {
+    await expect(
+      raw.create(f.buyer.id, f.reservationId, f.autographId, {
+        ...confirm,
+        terms,
+      }),
+    ).rejects.toThrow('CHECKOUT_TERMS_CHANGED');
+  }
+  expect(
+    (await database.pool.query('SELECT 1 FROM payment_orders')).rowCount,
+  ).toBe(0);
+  expect(
+    (await database.pool.query('SELECT 1 FROM checkout_confirmations'))
+      .rowCount,
+  ).toBe(0);
+  expect(creates).toBe(calls);
+  const result = await raw.create(
+    f.buyer.id,
+    f.reservationId,
+    f.autographId,
+    confirm,
+  );
+  const evidence = (
+    await database.pool.query(
+      'SELECT * FROM checkout_confirmations WHERE order_id=$1',
+      [result.id],
+    )
+  ).rows[0];
+  expect(evidence.user_id).toBe(f.buyer.id);
+  expect(evidence.autograph_id).toBe(f.autographId);
+  expect(evidence.amount_minor).toBe(confirm.terms.amountMinor);
+  expect(evidence.context).toBe('paid_checkout');
+  expect(evidence.offer_hash).toBe(
+    confirm.documents.find((d) => d.type === 'public_offer')!.hash,
+  );
+  expect(result.status).toBe('provider_pending');
+  expect((await counts(result.id)).takeovers).toBe(0);
+});
+it.each(['placeholder', 'hash', 'unpublished'] as const)(
+  'checkout refuses %s document bytes before provider I/O',
+  async (failure) => {
+    const f = await setup();
+    const documents = syntheticLegalDocuments.map((d) =>
+      d.type === 'public_offer'
+        ? {
+            ...d,
+            ...(failure === 'placeholder'
+              ? { content: '[[not published]]' }
+              : failure === 'hash'
+                ? { hash: '0'.repeat(64) }
+                : { ready: false }),
+          }
+        : d,
+    );
+    const raw = new PaymentService(
+      createPgPaymentRepository(database.pool, { legalDocuments: documents }),
+      provider,
+      settings,
+    );
+    await expect(
+      raw.checkout(f.buyer.id, f.reservationId, f.autographId),
+    ).rejects.toThrow('LEGAL_DOCUMENT_UNAVAILABLE');
+    await expect(
+      raw.create(
+        f.buyer.id,
+        f.reservationId,
+        f.autographId,
+        await displayedConfirmation(f.reservationId),
+      ),
+    ).rejects.toThrow('LEGAL_DOCUMENT_UNAVAILABLE');
+    expect(creates).toBe(0);
+    expect(
+      (await database.pool.query('SELECT 1 FROM checkout_confirmations'))
+        .rowCount,
+    ).toBe(0);
+  },
+);
+it('owner checkout summary and evidence cannot be reused for a different subject; first-use remains separate', async () => {
+  const f = await setup(60, 3),
+    stranger = await person();
+  const raw = new PaymentService(repo, provider, settings);
+  const displayed = await raw.checkout(
+    f.buyer.id,
+    f.reservationId,
+    f.autographId,
+  );
+  expect(displayed).toMatchObject({
+    amountMinor: (await displayedConfirmation(f.reservationId)).terms
+      .amountMinor,
+    slotNumber: 1,
+    guaranteedVisibilitySeconds: 3,
+    autographId: f.autographId,
+  });
+  await expect(
+    raw.checkout(stranger.id, f.reservationId, f.autographId),
+  ).rejects.toThrow('RESERVATION_NOT_FOUND');
+  await expect(
+    raw.create(
+      stranger.id,
+      f.reservationId,
+      f.autographId,
+      await displayedConfirmation(f.reservationId),
+    ),
+  ).rejects.toThrow('RESERVATION_NOT_FOUND');
+  // Isolated fixture proves explicit checkout does not infer an age declaration.
+  await database.pool.query('TRUNCATE age_declarations');
+  await expect(
+    raw.create(
+      f.buyer.id,
+      f.reservationId,
+      f.autographId,
+      await displayedConfirmation(f.reservationId),
+    ),
+  ).rejects.toThrow('FIRST_USE_REQUIRED');
+  expect(creates).toBe(0);
+});
+it('20 parallel checkout submits across pools and response-loss retry retain one immutable confirmation/Order/Payment', async () => {
+  const f = await setup();
+  const confirm = await displayedConfirmation(f.reservationId);
+  const second = createDatabase(url!);
+  try {
+    const services = [
+      new PaymentService(repo, provider, settings),
+      new PaymentService(
+        createPgPaymentRepository(second.pool, {
+          legalDocuments: syntheticLegalDocuments,
+        }),
+        provider,
+        settings,
+      ),
+    ];
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, i) =>
+        services[i % 2]!.create(
+          f.buyer.id,
+          f.reservationId,
+          f.autographId,
+          confirm,
+        ),
+      ),
+    );
+    const ids = new Set(results.map((r) => r.id));
+    expect(ids.size).toBe(1);
+    const id = results[0]!.id;
+    const before = (
+      await database.pool.query(
+        'SELECT row_to_json(c) AS c FROM checkout_confirmations c WHERE order_id=$1',
+        [id],
+      )
+    ).rows[0].c;
+    const payment = (
+      await database.pool.query(
+        'SELECT operation_key,request_fingerprint,provider_payment_id FROM payments WHERE order_id=$1',
+        [id],
+      )
+    ).rows[0];
+    expect(
+      (
+        await services[1]!.create(
+          f.buyer.id,
+          f.reservationId,
+          f.autographId,
+          confirm,
+        )
+      ).id,
+    ).toBe(id);
+    expect(
+      (
+        await database.pool.query(
+          'SELECT row_to_json(c) AS c FROM checkout_confirmations c WHERE order_id=$1',
+          [id],
+        )
+      ).rows[0].c,
+    ).toEqual(before);
+    expect(
+      (
+        await database.pool.query(
+          'SELECT operation_key,request_fingerprint,provider_payment_id FROM payments WHERE order_id=$1',
+          [id],
+        )
+      ).rows[0],
+    ).toEqual(payment);
+    for (const table of [
+      'payment_orders',
+      'payments',
+      'checkout_confirmations',
+    ])
+      expect(
+        (await database.pool.query(`SELECT count(*)::int AS n FROM ${table}`))
+          .rows[0].n,
+      ).toBe(1);
+    expect(creates).toBe(1);
+    await expect(
+      database.pool.query(
+        "UPDATE checkout_confirmations SET offer_version='other' WHERE order_id=$1",
+        [id],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+    await expect(
+      database.pool.query(
+        'DELETE FROM checkout_confirmations WHERE order_id=$1',
+        [id],
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
+  } finally {
+    await second.close();
+  }
+});
+it('new edition rejects stale admission but existing order retries preserve its terms even when publication and incident admission close', async () => {
+  const f = await setup();
+  const confirm = await displayedConfirmation(f.reservationId);
+  const changed = syntheticLegalDocuments.map((d) =>
+    d.type === 'public_offer'
+      ? {
+          ...d,
+          version: 'test-v2',
+          path: '/legal/documents/public_offer/test-v2',
+        }
+      : d,
+  );
+  const fresh = new PaymentService(
+    createPgPaymentRepository(database.pool, { legalDocuments: changed }),
+    provider,
+    settings,
+  );
+  await expect(
+    fresh.create(f.buyer.id, f.reservationId, f.autographId, confirm),
+  ).rejects.toThrow('CHECKOUT_TERMS_CHANGED');
+  const original = await new PaymentService(repo, provider, settings).create(
+    f.buyer.id,
+    f.reservationId,
+    f.autographId,
+    confirm,
+  );
+  const closed = new PaymentService(
+    createPgPaymentRepository(database.pool),
+    provider,
+    settings,
+  );
+  expect(
+    await closed.checkout(f.buyer.id, f.reservationId, f.autographId),
+  ).toEqual({ existingOrderId: original.id });
+  expect(
+    (await closed.create(f.buyer.id, f.reservationId, f.autographId)).id,
+  ).toBe(original.id);
+  const app = api(
+    closed,
+    { disableNewPayments: true, disableFreeClaims: false },
+    false,
+  );
+  try {
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/payments/orders',
+      headers: {
+        cookie: `da_session=${f.buyer.token}`,
+        origin: 'http://127.0.0.1:3000',
+      },
+      payload: { reservationId: f.reservationId, autographId: f.autographId },
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(retry.json().id).toBe(original.id);
+  } finally {
+    await app.close();
+  }
+  expect(
+    (
+      await database.pool.query(
+        'SELECT offer_version FROM checkout_confirmations WHERE order_id=$1',
+        [original.id],
+      )
+    ).rows[0].offer_version,
+  ).toBe('test-v1');
+  expect(creates).toBe(1);
+  await expect(
+    closed.create(f.buyer.id, f.reservationId, randomUUID(), confirm),
+  ).rejects.toThrow('ORDER_REQUEST_CONFLICT');
+});
+it('expiry and concurrent target change reject checkout with zero financial effects', async () => {
+  const f = await setup(1);
+  const confirm = await displayedConfirmation(f.reservationId);
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await expect(
+    new PaymentService(repo, provider, settings).create(
+      f.buyer.id,
+      f.reservationId,
+      f.autographId,
+      confirm,
+    ),
+  ).rejects.toThrow('RESERVATION_EXPIRED');
+  const g = await setup();
+  const c = await displayedConfirmation(g.reservationId);
+  await database.pool.query(
+    "UPDATE placements SET ended_at=clock_timestamp(),end_reason='wall_ended' WHERE id=$1",
+    [g.slots[0]!.placementId],
+  );
+  await expect(
+    new PaymentService(repo, provider, settings).create(
+      g.buyer.id,
+      g.reservationId,
+      g.autographId,
+      c,
+    ),
+  ).rejects.toThrow('RESERVATION_NOT_ELIGIBLE');
+  expect(creates).toBe(0);
+  expect(
+    (await database.pool.query('SELECT 1 FROM payment_orders')).rowCount,
+  ).toBe(0);
+});
+it('HTTP checkout refuses absent confirmation and strict financial/redirect injections, preserving existing state', async () => {
+  const f = await setup();
+  const raw = new PaymentService(repo, provider, settings);
+  const app = api(raw);
+  const headers = {
+    cookie: `da_session=${f.buyer.token}`,
+    origin: 'http://127.0.0.1:3000',
+  };
+  try {
+    const result = await app.inject({
+      method: 'GET',
+      url: `/payments/checkout?reservationId=${f.reservationId}&autographId=${f.autographId}`,
+      headers,
+    });
+    expect(result.statusCode).toBe(200);
+    const noConfirm = await app.inject({
+      method: 'POST',
+      url: '/payments/orders',
+      headers,
+      payload: { reservationId: f.reservationId, autographId: f.autographId },
+    });
+    expect(noConfirm.json().error.code).toBe('CHECKOUT_CONFIRMATION_REQUIRED');
+    for (const injection of [
+      { amountMinor: '1' },
+      { guaranteedVisibilitySeconds: 999 },
+      { confirmationUrl: 'https://evil.example' },
+      { userId: randomUUID() },
+    ]) {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/payments/orders',
+        headers,
+        payload: {
+          reservationId: f.reservationId,
+          autographId: f.autographId,
+          confirmation: await displayedConfirmation(f.reservationId),
+          ...injection,
+        },
+      });
+      expect(r.statusCode).toBe(400);
+    }
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/payments/orders',
+      headers,
+      payload: {
+        reservationId: f.reservationId,
+        autographId: f.autographId,
+        confirmation: await displayedConfirmation(f.reservationId),
+      },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(
+      (await database.pool.query('SELECT 1 FROM checkout_confirmations'))
+        .rowCount,
+    ).toBe(1);
+  } finally {
+    await app.close();
+  }
+});
+
+it.each(['missing', 'foreign_user', 'wrong_hash'])(
+  'DB rejects %s checkout evidence and rolls back the entire Order/Payment admission',
+  async (failure) => {
+    const f = await setup();
+    const id = randomUUID(),
+      other = await person();
+    const confirmation = await displayedConfirmation(f.reservationId);
+    const client = await database.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO payment_orders(id,user_id,reservation_id,quote_id,wall_id,slot_id,target_placement_id,autograph_id,creator_id,pricing_config_id,amount_minor,currency,creator_share_bps,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash)
+    SELECT $2,user_id,id,quote_id,wall_id,slot_id,target_placement_id,$3,$4,pricing_config_id,amount_minor,currency,5000,'test-v1',$5,'test-v1',$6,'test-v1',$7 FROM takeover_reservations WHERE id=$1`,
+        [
+          f.reservationId,
+          id,
+          f.autographId,
+          (
+            await database.pool.query(
+              'SELECT creator_id FROM walls WHERE id=$1',
+              [f.wallId],
+            )
+          ).rows[0].creator_id,
+          ...['public_offer', 'community_guidelines', 'refund_policy'].map(
+            (type) => confirmation.documents.find((d) => d.type === type)!.hash,
+          ),
+        ],
+      );
+      await client.query(
+        `INSERT INTO payments(order_id,provider,shop_id,mode,operation_key,request_fingerprint,return_url,amount_minor,currency) SELECT id,'yookassa','123','sandbox',$2,repeat('a',64),'https://example.test/return',amount_minor,currency FROM payment_orders WHERE id=$1`,
+        [id, randomUUID()],
+      );
+      if (failure === 'missing')
+        await expect(client.query('COMMIT')).rejects.toMatchObject({
+          code: '23514',
+        });
+      else
+        await expect(
+          client.query(
+            `INSERT INTO checkout_confirmations(order_id,user_id,reservation_id,autograph_id,amount_minor,currency,guaranteed_visibility_seconds,reservation_expires_at,target_placement_id,pricing_config_id,offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash)
+   SELECT o.id,$2,o.reservation_id,o.autograph_id,o.amount_minor,o.currency,$3,$4,o.target_placement_id,o.pricing_config_id,o.offer_version,$5,o.content_rules_version,o.content_rules_hash,o.refund_policy_version,o.refund_policy_hash FROM payment_orders o WHERE o.id=$1`,
+            [
+              id,
+              failure === 'foreign_user' ? other.id : f.buyer.id,
+              confirmation.terms.guaranteedVisibilitySeconds,
+              confirmation.terms.reservationExpiresAt,
+              failure === 'wrong_hash'
+                ? 'f'.repeat(64)
+                : confirmation.documents.find((d) => d.type === 'public_offer')!
+                    .hash,
+            ],
+          ),
+        ).rejects.toMatchObject({ code: '23514' });
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+    for (const table of [
+      'payment_orders',
+      'payments',
+      'checkout_confirmations',
+    ])
+      expect(
+        (await database.pool.query(`SELECT 1 FROM ${table}`)).rowCount,
+      ).toBe(0);
+    expect(creates).toBe(0);
+  },
+);

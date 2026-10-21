@@ -33,6 +33,7 @@
     "payments:reconcile": "dotenv -e .env -- tsx apps/api/src/payments/reconcile.ts",
     "test:portable": "vitest run --config vitest.portable.config.ts",
     "test:posix": "vitest run --config vitest.posix.config.ts",
+    "test:legal-pages": "node scripts/smoke-legal-pages.mjs",
     "security:secrets": "node scripts/scan-secrets.mjs"
   },
   "devDependencies": {

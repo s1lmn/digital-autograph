@@ -39,6 +39,11 @@ export default function RootLayout({
         <div id="main-content" tabIndex={-1}>
           {children}
         </div>
+        <footer className="siteFooter" lang="ru">
+          <nav aria-label="Юридическая информация">
+            <a href="/legal">Юридические документы Destka</a>
+          </nav>
+        </footer>
       </body>
     </html>
   );

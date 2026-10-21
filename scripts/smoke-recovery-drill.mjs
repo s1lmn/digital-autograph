@@ -18,6 +18,7 @@ const id = (n) => `'00000000-0000-4000-8000-${String(n).padStart(12, '0')}'`;
 const started = performance.now();
 let phase = 'network';
 let sqlState = null;
+let sqlColumnOffset = null;
 
 function invoke(args, input) {
   return spawnSync('docker', args, {
@@ -32,6 +33,17 @@ function docker(args, input) {
   if (result.error || result.status !== 0) {
     sqlState =
       result.stderr?.toString().match(/ERROR:\s+([0-9A-Z]{5})\b/)?.[1] ?? null;
+    // Publish only a numeric offset into this checked-in synthetic SQL, never
+    // exception text, SQL, row values or arbitrary identifiers.
+    if (sqlState === '42703' && input !== undefined) {
+      const column = result.stderr
+        ?.toString()
+        .match(
+          /\bcolumn (?:"([^"\r\n]{1,128})"|([a-zA-Z_][a-zA-Z0-9_.]{0,127}))/,
+        );
+      const identifier = column?.[1] ?? column?.[2];
+      if (identifier) sqlColumnOffset = input.toString().indexOf(identifier);
+    }
     throw new Error('Isolated recovery command failed');
   }
   return result.stdout;
@@ -51,7 +63,7 @@ function sql(container, query) {
       '-v',
       'ON_ERROR_STOP=1',
       '-v',
-      'VERBOSITY=sqlstate',
+      'VERBOSITY=verbose',
     ],
     query,
   )
@@ -351,6 +363,7 @@ try {
       event: 'SYNTHETIC_RECOVERY_DRILL_FAILED',
       phase,
       sqlState,
+      sqlColumnOffset,
     }),
   );
   process.exitCode = 1;

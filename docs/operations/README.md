@@ -1,5 +1,8 @@
 # Operations
 
+[Local image-processing benchmark](image-processing-benchmark.md) documents the
+bounded synthetic processor workload, JSON measurements and capacity-test limits.
+
 [Aggregate API response metrics](api-metrics.md) documents bounded latency and
 status-class events, route-template privacy, rates and sampling limitations.
 [Worker failure diagnostics](worker-diagnostics.md) documents structured,

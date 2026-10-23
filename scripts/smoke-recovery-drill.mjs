@@ -184,6 +184,9 @@ try {
       source,
       "SELECT to_regclass('public.checkout_confirmations') IS NOT NULL",
     ) === 't';
+  const hasAgeDeclaration =
+    sql(source, "SELECT to_regclass('public.age_declarations') IS NOT NULL") ===
+    't';
   assert.ok(!hasCheckoutConfirmation || hasLegalSnapshot);
   const legalColumns = hasLegalSnapshot
     ? ',offer_version,offer_hash,content_rules_version,content_rules_hash,refund_policy_version,refund_policy_hash'
@@ -198,10 +201,26 @@ try {
       FROM payment_orders o JOIN takeover_reservations r ON r.id=o.reservation_id
       JOIN pricing_config_versions p ON p.id=o.pricing_config_id WHERE o.id=${id(12)};`
     : '';
+  const privacyEvidence = hasLegalSnapshot
+    ? `
+    INSERT INTO legal_evidence_events (user_id,document_type,document_version,document_hash,action,source,context)
+      VALUES (${id(2)},'terms_of_use','synthetic-v1',repeat('c',64),'accepted','web','legal_gate');
+    INSERT INTO legal_evidence_events (user_id,document_type,document_version,document_hash,action,source,context,purpose,scope)
+      VALUES (${id(2)},'personal_data_consent','synthetic-v1',repeat('d',64),'granted','web','optional_notifications','optional_notifications',
+      '{"purpose":"optional_notifications","dataItems":["contact"],"resourceUrls":[],"conditions":[]}'::jsonb);
+    INSERT INTO legal_evidence_events (user_id,document_type,document_version,document_hash,action,source,context,purpose,scope,previous_event_id)
+      SELECT user_id,document_type,document_version,document_hash,'withdrawn','web','privacy_settings',purpose,scope,id
+      FROM legal_evidence_events WHERE document_type='personal_data_consent';`
+    : '';
+  const ageEvidence = hasAgeDeclaration
+    ? `INSERT INTO age_declarations (user_id) VALUES (${id(2)});`
+    : '';
   sql(
     source,
     `BEGIN;
     INSERT INTO users (id) VALUES (${id(1)}),(${id(2)}),(${id(3)});
+    ${privacyEvidence}
+    ${ageEvidence}
     INSERT INTO creators (id,owner_user_id) VALUES (${id(4)},${id(1)});
     INSERT INTO pricing_config_versions (id,algorithm_version,currency,base_amount_minor,minimum_amount_minor,maximum_amount_minor,dynamic_takeover_limit,takeover_step_size,step_amount_minor,decay_interval_seconds,decay_amount_minor,decay_floor_amount_minor,guaranteed_visibility_seconds,created_by_user_id)
       VALUES (${id(5)},'takeover_ladder_v1','RUB',65000,10000,100000,3,1,1000,60,100,10000,0,${id(1)});
@@ -243,6 +262,7 @@ try {
     'notification_events',
     ...(hasLegalSnapshot ? ['legal_evidence_events'] : []),
     ...(hasCheckoutConfirmation ? ['checkout_confirmations'] : []),
+    ...(hasAgeDeclaration ? ['age_declarations'] : []),
   ];
   const fingerprint = (container) =>
     createHash('sha256')
@@ -251,7 +271,7 @@ try {
           .map((table) =>
             sql(
               container,
-              `SELECT coalesce(json_agg(t ORDER BY ${table === 'checkout_confirmations' ? 'order_id' : 'id'}),'[]') FROM ${table} t`,
+              `SELECT coalesce(json_agg(t ORDER BY ${table === 'checkout_confirmations' ? 'order_id' : table === 'age_declarations' ? 'user_id' : 'id'}),'[]') FROM ${table} t`,
             ),
           )
           .join('\n'),
@@ -336,6 +356,29 @@ try {
       `UPDATE checkout_confirmations SET amount_minor=1 WHERE order_id=${id(12)}`,
       '23514',
     );
+  if (hasLegalSnapshot) {
+    assert.equal(
+      sql(target, 'SELECT count(*) FROM legal_evidence_events'),
+      '3',
+    );
+    assert.equal(
+      sql(
+        target,
+        "SELECT count(*) FROM legal_evidence_events WHERE action='withdrawn' AND previous_event_id IS NOT NULL",
+      ),
+      '1',
+    );
+    rejected(
+      "UPDATE legal_evidence_events SET document_hash=repeat('f',64)",
+      '23514',
+    );
+    rejected('DELETE FROM legal_evidence_events', '23514');
+  }
+  if (hasAgeDeclaration) {
+    assert.equal(sql(target, 'SELECT count(*) FROM age_declarations'), '1');
+    rejected("UPDATE age_declarations SET context='changed'", '23514');
+    rejected('DELETE FROM age_declarations', '23514');
+  }
   assert.equal(
     fingerprint(target),
     before,
@@ -354,6 +397,8 @@ try {
       sourceUnchanged: true,
       restoredConstraintsChecked: true,
       legalSnapshotChecked: hasLegalSnapshot,
+      legalEvidenceChecked: hasLegalSnapshot,
+      ageDeclarationChecked: hasAgeDeclaration,
       checkoutConfirmationChecked: hasCheckoutConfirmation,
       productionRestore: false,
     }),

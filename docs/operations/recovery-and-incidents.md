@@ -211,3 +211,10 @@ do not edit the expected outcome to manufacture a pass.
 - [Yandex Managed PostgreSQL backups](https://yandex.cloud/en/docs/managed-postgresql/concepts/backup)
   and [Object Storage versioning](https://yandex.cloud/en/docs/storage/concepts/versioning)
   are provider references to verify when provisioning; this PR does not enable them.
+
+The synthetic restore also seeds an actual age declaration and three legal
+journal events (contract acceptance, optional grant, then withdrawal linked to
+the grant). Their exact rows are fingerprinted through restore, including the
+age table's user_id primary key. Restored UPDATE/DELETE guards must reject both
+journals. Synthetic grants do not publish documents, enable optional processing
+or represent real users' consent.

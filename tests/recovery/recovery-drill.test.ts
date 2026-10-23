@@ -21,6 +21,12 @@ it('dumps and restores the actual schema and synthetic financial history in disp
     legalSnapshotChecked: existsSync(
       resolve('packages/db/drizzle/0017_legal_evidence.sql'),
     ),
+    legalEvidenceChecked: existsSync(
+      resolve('packages/db/drizzle/0017_legal_evidence.sql'),
+    ),
+    ageDeclarationChecked: existsSync(
+      resolve('packages/db/drizzle/0018_age_declaration.sql'),
+    ),
     checkoutConfirmationChecked: existsSync(
       resolve('packages/db/drizzle/0019_checkout_confirmation.sql'),
     ),

@@ -1,5 +1,9 @@
 # Architecture boundaries
 
+[Proposed post-publication moderation](post-publication-moderation.md) defines
+future report/appeal request boundaries and the transaction/privacy/test plan;
+reporting, actions and persistence are not implemented by those contracts.
+
 [Domain dependency guard](domain-dependencies.md) describes lint enforcement of
 the framework/provider boundary and the imports that still require review.
 

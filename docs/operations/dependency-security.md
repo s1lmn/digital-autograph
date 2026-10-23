@@ -64,10 +64,9 @@ compatibility; no new feature, readiness flag or provider is enabled.
 The lockfile also resolves Vitest's transitive Vite to 7.3.7 for
 [GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm), a
 Windows editor-launch path issue. This is the same minimal lockfile repair as
-PR #71, included here so the security update can pass the full audit from accepted
-main without depending on that unmerged Actions upgrade. No package range,
-override, release-age rule or audit threshold is relaxed. The shared Vite change
-will disappear from the net diff when the other branch is accepted and synced.
+PR #71, which is now merged in main. This PR is synchronized with that accepted
+main; the shared Vite repair is therefore absent from its final net diff. No
+package range, override, release-age rule or audit threshold is relaxed.
 Lower-severity findings still require separate triage under EGO-109.
 
 ## Handling a failing audit

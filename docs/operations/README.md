@@ -1,5 +1,9 @@
 # Operations
 
+[Recovery and incident response](recovery-and-incidents.md) documents the isolated
+PostgreSQL/private-object drill, real backup/restore gates, proposed severities
+and an unfilled operational acceptance record.
+
 [Aggregate API response metrics](api-metrics.md) documents bounded latency and
 status-class events, route-template privacy, rates and sampling limitations.
 [Worker failure diagnostics](worker-diagnostics.md) documents structured,

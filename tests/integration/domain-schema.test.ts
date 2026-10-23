@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createDatabase, eq } from '../../packages/db/src/index';
+import { createDatabase, eq, sql } from '../../packages/db/src/index';
 import {
   consentRecords,
   creatorProfiles,
@@ -154,11 +154,19 @@ describe('domain schema constraints', () => {
     const revoked = required(
       await db
         .update(sessions)
-        .set({ revokedAt: new Date() })
+        // PostgreSQL owns this timeline; JS rounds created_at to milliseconds.
+        .set({ revokedAt: sql`statement_timestamp()` })
         .where(eq(sessions.id, session.id))
         .returning(),
     );
     expect(revoked.revokedAt).toBeInstanceOf(Date);
+    await expectPgError(
+      db
+        .update(sessions)
+        .set({ revokedAt: sql`created_at - interval '1 millisecond'` })
+        .where(eq(sessions.id, session.id)),
+      '23514',
+    );
     await expectPgError(
       db.insert(sessions).values({
         userId: fixtureId(999),

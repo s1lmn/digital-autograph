@@ -38,6 +38,11 @@ export function WallSlot({
         <div className={styles.slotContent}>
           {showMedia && mediaPath ? (
             <img
+              ref={(image) => {
+                // A server-rendered image may fail before React attaches onError.
+                if (image?.complete && image.naturalWidth === 0)
+                  setFailedPath(mediaPath);
+              }}
               className={styles.autograph}
               src={`${apiOrigin}${mediaPath}`}
               alt={`Digital autograph in slot ${number}`}

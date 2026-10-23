@@ -28,7 +28,7 @@ it('renders the existing editor only on explicit server-disabled enforcement wit
   await screen.findByText('Existing editor');
   expect(screen.queryByRole('checkbox')).toBeNull();
   expect(fetch).toHaveBeenCalledOnce();
-  expect(ready).toHaveBeenCalled();
+  await waitFor(() => expect(ready).toHaveBeenCalledOnce());
 });
 const docs = ['terms_of_use', 'community_guidelines'].map((type) => ({
   type,

@@ -39,6 +39,48 @@ Keep the committed lockfile and overrides together. The sharp security-release
 age exceptions already present in the workspace remain narrowly versioned.
 Do not add broad release-age exceptions or disable package-manager protections.
 
+## Next.js and Vite security updates in EGO-167
+
+The web pins Next.js 16.4.1, with matching `@next/env` and optional SWC binaries,
+to address the advisories added to the registry audit on 22 October 2026:
+
+- [GHSA-2464-fhr4-w9xw](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw):
+  image optimization of SVGs can lead to remote code execution on glibc Linux.
+  The existing Next.js `sharp` resolution is already 0.35.5, which meets the
+  published workaround; that override is preserved.
+- [GHSA-673q-mjm6-r5xr](https://github.com/vercel/next.js/security/advisories/GHSA-673q-mjm6-r5xr):
+  remote code execution in Cache Components using `use cache` functions returning
+  multiple typed arrays.
+- [GHSA-p3m5-59mp-jv5r](https://github.com/vercel/next.js/security/advisories/GHSA-p3m5-59mp-jv5r):
+  denial of service in App Router applications with a Server Action.
+
+At this update, application source has no `use cache` or `use server` directives
+or `next/image` imports. This source check is not a production exploitability
+assessment and does not exempt the framework from updating. All three advisories
+are fixed by the [16.4.1 release](https://github.com/vercel/next.js/releases/tag/v16.4.1).
+Existing unit, browser, build, standalone legal SSR and container checks exercise
+compatibility; no new feature, readiness flag or provider is enabled.
+
+The lockfile also resolves Vitest's transitive Vite to 7.3.7 for
+[GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm), a
+Windows editor-launch path issue. This is the same minimal lockfile repair as
+PR #71, which is now merged in main. This PR is synchronized with that accepted
+main; the shared Vite repair is therefore absent from its final net diff. No
+package range, override, release-age rule or audit threshold is relaxed.
+Lower-severity findings still require separate triage under EGO-109.
+
+## Zod collection validation update in EGO-109
+
+The API, configuration and contracts packages require Zod ^4.6.6 and resolve
+4.6.6 in the lockfile for
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+The fresh 24 October 2026 audit reports the previously locked 4.6.5 as High.
+The preferences contract regression uses 1000 invalid synthetic collection
+elements: the maximum-size rejection must not accumulate an issue for every
+element. HTTP body limits remain necessary; this patch does not authorize
+larger requests or change consent, pricing, ownership or provider activation.
+No audit threshold, advisory ignore or release-age exclusion is added.
+
 ## Handling a failing audit
 
 1. Read the advisory and all dependency paths, including build/test tools and
@@ -103,3 +145,28 @@ until support and a representative lockfile update are verified. Continue the
 manual audit, targeted-update and frozen-lockfile process above, preserving
 overrides and release-age protections. EGO-88's broader dependency-maintenance
 and developer-workflow acceptance remains open.
+
+## Additional runtime patch and development-only triage (EGO-109)
+
+Fastify is raised from 5.12.5 to 5.12.7, retaining its major version, for
+[GHSA-389g-gv7q-r4x8](https://github.com/advisories/GHSA-389g-gv7q-r4x8).
+The advisory concerns case-sensitive propertyNames in a header schema. Current
+handlers use Zod and do not configure that header-schema feature; this does not
+justify retaining the vulnerable runtime dependency. Full API/integration/browser
+regressions validate the compatible patch. No audit threshold or override changes.
+
+The remaining 4 Moderate and 1 Low findings are development-tool dependencies:
+legacy esbuild via drizzle-kit, esbuild via tsup, and Vitest 3/@vitest/mocker.
+The esbuild findings require its development HTTP server; this workspace invokes
+its transformation/build APIs and does not expose esbuild.serve. The two mocker
+advisories concern the public mockerPlugin/interceptorPlugin development-server
+WebSocket handlers; this workspace uses Node/jsdom vitest run without either
+standalone plugin. See
+[redirect mock scope](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) and
+[manual mock scope](https://github.com/advisories/GHSA-qxg6-89mg-rqv8).
+This is source/configuration triage, not a proof that those package versions are
+patched or a broad exemption for future configurations. Do not expose either
+server or enable those plugins with these resolutions. Resolving the package
+findings requires a reviewed Vitest major/toolchain migration and legacy esbuild
+compatibility verification under EGO-109; there is no advisory ignore or accepted
+risk bypass. The current production dependency audit has no findings.

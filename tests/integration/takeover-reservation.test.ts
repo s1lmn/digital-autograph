@@ -1,6 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildApi } from '../../apps/api/src/app';
+import {
+  buildAcceptedApi as buildApi,
+  acceptedSession,
+} from './first-use-fixtures';
 import { SessionService } from '../../packages/auth/src/index';
 import {
   createDatabase,
@@ -46,7 +49,7 @@ const app = buildApi(
 async function person() {
   const id = randomUUID();
   await database.pool.query('INSERT INTO users (id) VALUES ($1::uuid)', [id]);
-  return { id, token: (await sessions.createSession(id)).token };
+  return { id, token: (await acceptedSession(sessions, database, id)).token };
 }
 
 function headers(token: string, key?: string) {
@@ -560,6 +563,179 @@ describe('Takeover Reservation / Slot locking', () => {
     expect(await count(f.slots[1]!.slotId)).toEqual({ active: 0, total: 0 });
   });
 
+  it('allows only one live reservation across Slots, Walls and repository instances', async () => {
+    const f = await fixture(10);
+    const otherWall = await fixture();
+    const buyer = await person();
+    const targets = [
+      ...f.slots.map((slot) => ({ wallId: f.wallId, slotId: slot.slotId })),
+      { wallId: otherWall.wallId, slotId: otherWall.slots[0]!.slotId },
+    ];
+    const quotes = await Promise.all(
+      targets.map((t) => quote(t.wallId, t.slotId, buyer.token)),
+    );
+    // Separate repositories represent independent API instances/pools.
+    const secondDatabase = createDatabase(url!);
+    const services = [database, secondDatabase].map(
+      (db) =>
+        new TakeoverReservationService(
+          createPgTakeoverReservationRepository(db.pool),
+        ),
+    );
+    try {
+      const outcomes = await Promise.allSettled(
+        quotes.map((q, index) =>
+          services[index % 2]!.create(
+            index % 2 ? buyer.id.toUpperCase() : buyer.id,
+            q.id,
+            `admission-concurrent-${index}`,
+          ),
+        ),
+      );
+      expect(outcomes.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      const rejected = outcomes.filter((r) => r.status === 'rejected');
+      expect(rejected).toHaveLength(10);
+      for (const result of rejected) {
+        if (result.status === 'rejected') {
+          expect(result.reason).toMatchObject({
+            code: 'USER_RESERVATION_ACTIVE',
+          });
+        }
+      }
+      const winner = outcomes.find((r) => r.status === 'fulfilled');
+      if (!winner || winner.status !== 'fulfilled')
+        throw new Error('No winner');
+      const blockedQuote = quotes.find(
+        (q) => q.id !== winner.value.reservation.quoteId,
+      )!;
+      const blocked = await reserve(
+        blockedQuote.id,
+        buyer.token,
+        'blocked-new-attempt-01',
+      );
+      expect(blocked.statusCode).toBe(429);
+      expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+      expect(blocked.headers['cache-control']).toBe('no-store');
+      await cancel(winner.value.reservation.id, buyer.token);
+      expect(
+        (await reserve(blockedQuote.id, buyer.token, 'blocked-new-attempt-01'))
+          .statusCode,
+      ).toBe(201);
+    } finally {
+      await secondDatabase.close();
+    }
+  });
+
+  it('counts cancelled reservations toward velocity, preserves replay and isolates users', async () => {
+    const f = await fixture(2);
+    const buyer = await person();
+    let last!: { quoteId: string; id: string; key: string };
+    for (let index = 0; index < 5; index++) {
+      const q = await quote(f.wallId, f.slots[0]!.slotId, buyer.token);
+      const key = `velocity-reservation-${index}`;
+      const created = await reserve(q.id, buyer.token, key);
+      expect(created.statusCode).toBe(201);
+      last = { quoteId: q.id, id: created.json().id, key };
+      expect((await cancel(last.id, buyer.token)).statusCode).toBe(200);
+    }
+    const next = await quote(f.wallId, f.slots[0]!.slotId, buyer.token);
+    const blocked = await reserve(
+      next.id,
+      buyer.token,
+      'velocity-blocked-attempt',
+    );
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().error.code).toBe('RESERVATION_RATE_LIMITED');
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    expect(Number(blocked.headers['retry-after'])).toBeLessThanOrEqual(60);
+    const replay = await reserve(last.quoteId, buyer.token, last.key);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({ id: last.id, status: 'cancelled' });
+    expect(
+      (await reserve(next.id, buyer.token, last.key)).json().error.code,
+    ).toBe('IDEMPOTENCY_KEY_REUSED');
+    expect((await read(last.id, buyer.token)).statusCode).toBe(200);
+    expect((await cancel(last.id, buyer.token)).statusCode).toBe(200);
+    const another = await person();
+    const independent = await quote(
+      f.wallId,
+      f.slots[1]!.slotId,
+      another.token,
+    );
+    expect(
+      (await reserve(independent.id, another.token, 'other-user-reservation'))
+        .statusCode,
+    ).toBe(201);
+    expect(await count(f.slots[0]!.slotId)).toEqual({ active: 0, total: 5 });
+  });
+
+  it('ignores effectively expired reservations without a cleanup/read and replays after Wall changes', async () => {
+    const f = await fixture(2);
+    const buyer = await person();
+    const q = await quote(f.wallId, f.slots[0]!.slotId, buyer.token);
+    // Seed immutable historical evidence; no production clock override.
+    const past = await database.pool.query<{ id: string }>(
+      `INSERT INTO takeover_reservations
+         (quote_id, user_id, wall_id, slot_id, target_placement_id,
+          pricing_config_id, currency, amount_minor, idempotency_key_hash,
+          created_at, expires_at)
+       SELECT id, user_id, wall_id, slot_id, target_placement_id,
+              pricing_config_id, currency, amount_minor, $2,
+              clock_timestamp() - interval '5 minutes',
+              clock_timestamp() - interval '1 minute'
+       FROM takeover_quotes WHERE id = $1::uuid RETURNING id`,
+      [
+        q.id,
+        createHash('sha256').update('historical-replay-key').digest('hex'),
+      ],
+    );
+    const next = await quote(f.wallId, f.slots[1]!.slotId, buyer.token);
+    expect(
+      (await reserve(next.id, buyer.token, 'after-expiry-new-attempt'))
+        .statusCode,
+    ).toBe(201);
+    await database.pool.query(
+      "UPDATE walls SET status = 'paused' WHERE id = $1::uuid",
+      [f.wallId],
+    );
+    const replay = await reserve(q.id, buyer.token, 'historical-replay-key');
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({
+      id: past.rows[0]!.id,
+      status: 'expired',
+    });
+  });
+
+  it('restores velocity budget when historical reservations leave the rolling window', async () => {
+    const f = await fixture(6);
+    const buyer = await person();
+    for (let index = 0; index < 5; index++) {
+      const q = await quote(f.wallId, f.slots[index]!.slotId, buyer.token);
+      const inserted = await database.pool.query<{ id: string }>(
+        `INSERT INTO takeover_reservations
+           (quote_id, user_id, wall_id, slot_id, target_placement_id,
+            pricing_config_id, currency, amount_minor, idempotency_key_hash,
+            created_at, expires_at)
+         SELECT id, user_id, wall_id, slot_id, target_placement_id,
+                pricing_config_id, currency, amount_minor, $2,
+                clock_timestamp() - interval '61 seconds',
+                clock_timestamp() - interval '1 second'
+         FROM takeover_quotes WHERE id = $1::uuid RETURNING id`,
+        [
+          q.id,
+          createHash('sha256').update(`old-velocity-${index}`).digest('hex'),
+        ],
+      );
+      expect(
+        (await read(inserted.rows[0]!.id, buyer.token)).json().status,
+      ).toBe('expired');
+    }
+    const q = await quote(f.wallId, f.slots[5]!.slotId, buyer.token);
+    expect(
+      (await reserve(q.id, buyer.token, 'new-window-reservation')).statusCode,
+    ).toBe(201);
+  });
+
   it('serializes 50 buyers for one Slot', async () => {
     const f = await fixture();
     const slotId = f.slots[0]!.slotId;
@@ -597,6 +773,7 @@ describe('Takeover Reservation / Slot locking', () => {
     expect(retries.filter((r) => r.statusCode === 201)).toHaveLength(1);
     expect(retries.filter((r) => r.statusCode === 200)).toHaveLength(24);
     expect(new Set(retries.map((r) => r.json().id)).size).toBe(1);
+    await cancel(retries[0]!.json().id, buyer.token);
     const q1 = await quote(f.wallId, f.slots[1]!.slotId, buyer.token);
     const q2 = await quote(f.wallId, f.slots[2]!.slotId, buyer.token);
     const [a, b] = await Promise.all([

@@ -52,7 +52,7 @@ export function createTelegramOidcClient(
       return oidc.buildAuthorizationUrl(client, {
         redirect_uri: config.redirectUri,
         response_type: 'code',
-        scope: 'openid profile',
+        scope: 'openid',
         state,
         nonce,
         code_challenge: codeChallenge,

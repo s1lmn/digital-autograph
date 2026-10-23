@@ -1,5 +1,8 @@
 'use client';
 
+import { YandexSignIn } from './yandex-sign-in';
+import { VkIdSignIn } from './vk-id-sign-in';
+
 import { useEffect, useRef, useState } from 'react';
 import { wallClaimApi } from '../lib/wall-claim-api';
 
@@ -83,6 +86,8 @@ export function AccountSession({ apiOrigin }: { apiOrigin: string }) {
           <a href={`${apiOrigin}/auth/telegram/start?returnTo=%2Fme`}>
             Continue with Telegram
           </a>
+          <YandexSignIn apiOrigin={apiOrigin} returnTo="/me" />
+          <VkIdSignIn apiOrigin={apiOrigin} returnTo="/me" />
         </div>
         <p>
           If sign-in cannot open inside this app, open this page in Safari or

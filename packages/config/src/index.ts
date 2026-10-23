@@ -37,6 +37,10 @@ const exactOrigin = z.string().refine((value) => {
 
 const apiSchema = databaseSchema
   .extend({
+    FIRST_USE_ENFORCEMENT_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     DISABLE_NEW_PAYMENTS: z
       .enum(['true', 'false'])
       .default('false')
@@ -437,4 +441,129 @@ export function loadNotificationTelegramWorkerConfig(
     ['NOTIFICATION_TELEGRAM_BOT_TOKEN'],
     environment,
   );
+}
+export { loadLegalDocuments } from './legal';
+
+export { loadSecurityDocuments } from './security-documents';
+export type { SecurityDocument } from './security-documents';
+
+// Separate opt-in and operator approval. Neither credentials alone nor a public
+// frontend flag can activate Yandex login. Disabled installations need no keys.
+export function loadYandexAuthConfig(environment = process.env) {
+  try {
+    const gates = z
+      .object({
+        YANDEX_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+        YANDEX_AUTH_APPROVED: z.enum(['true', 'false']).default('false'),
+      })
+      .parse(environment);
+    if (
+      gates.YANDEX_AUTH_ENABLED !== 'true' ||
+      gates.YANDEX_AUTH_APPROVED !== 'true'
+    )
+      return null;
+    const config = z
+      .object({
+        APP_ENV: appEnvironment,
+        WEB_ORIGIN: exactOrigin,
+        GOOGLE_REDIRECT_URI: z.url(),
+        YANDEX_CLIENT_ID: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+        YANDEX_CLIENT_SECRET: z.string().min(1).max(4096),
+        YANDEX_REDIRECT_URI: z.url(),
+      })
+      .parse(environment);
+    const callback = new URL(config.YANDEX_REDIRECT_URI);
+    const web = new URL(config.WEB_ORIGIN);
+    const local = ['local', 'test', 'development'].includes(config.APP_ENV);
+    if (
+      callback.href !== config.YANDEX_REDIRECT_URI ||
+      callback.pathname !== '/auth/yandex/callback' ||
+      callback.search ||
+      callback.hash ||
+      callback.username ||
+      callback.password ||
+      callback.origin !== new URL(config.GOOGLE_REDIRECT_URI).origin ||
+      (callback.protocol !== 'https:' &&
+        !(
+          local &&
+          callback.protocol === 'http:' &&
+          ['localhost', '127.0.0.1'].includes(callback.hostname)
+        )) ||
+      (!local &&
+        (web.protocol !== 'https:' ||
+          !(
+            callback.hostname === web.hostname ||
+            callback.hostname === `api.${web.hostname}`
+          )))
+    )
+      throw new Error();
+    return {
+      clientId: config.YANDEX_CLIENT_ID,
+      clientSecret: config.YANDEX_CLIENT_SECRET,
+      redirectUri: config.YANDEX_REDIRECT_URI,
+    };
+  } catch {
+    throw new Error(
+      'Invalid Yandex authentication configuration (values redacted)',
+    );
+  }
+}
+
+// Separate opt-in and operator approval. Neither credentials alone nor a public
+// frontend flag can activate VkId login. Disabled installations need no keys.
+export function loadVkIdAuthConfig(environment = process.env) {
+  try {
+    const gates = z
+      .object({
+        VK_AUTH_ENABLED: z.enum(['true', 'false']).default('false'),
+        VK_AUTH_APPROVED: z.enum(['true', 'false']).default('false'),
+      })
+      .parse(environment);
+    if (gates.VK_AUTH_ENABLED !== 'true' || gates.VK_AUTH_APPROVED !== 'true')
+      return null;
+    const config = z
+      .object({
+        APP_ENV: appEnvironment,
+        WEB_ORIGIN: exactOrigin,
+        GOOGLE_REDIRECT_URI: z.url(),
+        VK_CLIENT_ID: z.string().regex(/^[1-9][0-9]{0,19}$/),
+        VK_SERVICE_TOKEN: z.string().min(1).max(4096),
+        VK_REDIRECT_URI: z.url(),
+      })
+      .parse(environment);
+    const callback = new URL(config.VK_REDIRECT_URI);
+    const web = new URL(config.WEB_ORIGIN);
+    const local = ['local', 'test', 'development'].includes(config.APP_ENV);
+    if (
+      callback.href !== config.VK_REDIRECT_URI ||
+      callback.pathname !== '/auth/vk-id/callback' ||
+      callback.search ||
+      callback.hash ||
+      callback.username ||
+      callback.password ||
+      callback.origin !== new URL(config.GOOGLE_REDIRECT_URI).origin ||
+      (callback.protocol !== 'https:' &&
+        !(
+          local &&
+          callback.protocol === 'http:' &&
+          ['localhost', '127.0.0.1'].includes(callback.hostname)
+        )) ||
+      (!local &&
+        (web.protocol !== 'https:' ||
+          !(
+            callback.hostname === web.hostname ||
+            callback.hostname === `api.${web.hostname}`
+          )))
+    )
+      throw new Error();
+    return {
+      clientId: config.VK_CLIENT_ID,
+      serviceToken: config.VK_SERVICE_TOKEN,
+      redirectUri: config.VK_REDIRECT_URI,
+    };
+  } catch {
+    throw new Error(
+      'Invalid VkId authentication configuration (values redacted)',
+    );
+  }
 }

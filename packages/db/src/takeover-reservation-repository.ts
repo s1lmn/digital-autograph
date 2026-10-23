@@ -108,6 +108,26 @@ async function createInTransaction(
   input: Parameters<TakeoverReservationRepository['create']>[0],
   afterSlotLock?: () => Promise<void>,
 ): Promise<ReservationCreation> {
+  // Global per-user admission lock, acquired before Wall -> Slot. No other
+  // writer takes this lock, and admission never locks other users' Slots.
+  await db.query(
+    "SELECT pg_advisory_xact_lock(hashtextextended('reservation-admission:' || $1::uuid::text, 0))",
+    [input.userId],
+  );
+  const replay = await existingByKey(
+    db,
+    input.userId,
+    input.idempotencyKeyHash,
+  );
+  if (replay) {
+    if (replay.quote_id !== input.quoteId) {
+      throw new ReservationError('IDEMPOTENCY_KEY_REUSED');
+    }
+    return {
+      reservation: await ownedInTransaction(db, input.userId, replay.id, false),
+      created: false,
+    };
+  }
   const quoteResult = await db.query<QuoteRow>(
     `SELECT id, user_id, wall_id, slot_id, target_placement_id,
             pricing_config_id, algorithm_version, currency, amount_minor,
@@ -225,6 +245,44 @@ async function createInTransaction(
     [quote.slot_id],
   );
   if (active.rowCount) throw new ReservationError('SLOT_RESERVED');
+
+  // Read effective state without locking other Slots. Expired rows need not
+  // be updated to stop counting. All historical states count toward velocity.
+  const admission = await db.query<{
+    active_until: Date | null;
+    recent_count: string;
+    oldest_recent: Date | null;
+  }>(
+    `SELECT min(expires_at) FILTER (
+              WHERE status = 'active' AND expires_at > $2::timestamptz
+            ) AS active_until,
+            count(*) FILTER (
+              WHERE created_at > $2::timestamptz - interval '60 seconds'
+            ) AS recent_count,
+            min(created_at) FILTER (
+              WHERE created_at > $2::timestamptz - interval '60 seconds'
+            ) AS oldest_recent
+     FROM takeover_reservations
+     WHERE user_id = $1::uuid
+       AND (created_at > $2::timestamptz - interval '60 seconds'
+            OR (status = 'active' AND expires_at > $2::timestamptz))`,
+    [input.userId, time.now],
+  );
+  const state = admission.rows[0]!;
+  const retryAfter = (until: Date) =>
+    Math.max(1, Math.ceil((until.getTime() - time.now.getTime()) / 1000));
+  if (state.active_until) {
+    throw new ReservationError(
+      'USER_RESERVATION_ACTIVE',
+      retryAfter(state.active_until),
+    );
+  }
+  if (Number(state.recent_count) >= 5 && state.oldest_recent) {
+    throw new ReservationError(
+      'RESERVATION_RATE_LIMITED',
+      retryAfter(new Date(state.oldest_recent.getTime() + 60_000)),
+    );
+  }
 
   // Copy all financial/target fields from the immutable Quote inside SQL.
   const inserted = await db.query<ReservationRow>(

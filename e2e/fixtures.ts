@@ -1,3 +1,4 @@
+import { acceptedSession } from '../tests/integration/first-use-fixtures';
 import { test as base, expect, type BrowserContext } from '@playwright/test';
 import { SessionService } from '../packages/auth/src/index';
 import {
@@ -74,7 +75,7 @@ export const test = base.extend<{ scenario: Scenario }>({
           database,
           ownerId,
           async actorContext(userId) {
-            const issued = await sessions.createSession(userId);
+            const issued = await acceptedSession(sessions, database, userId);
             const context = await browser.newContext();
             contexts.push(context);
             await context.addCookies([

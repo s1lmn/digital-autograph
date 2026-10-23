@@ -25,7 +25,7 @@ export function createGoogleOidcClient(
     authorizationUrl({ state, nonce }) {
       return client.generateAuthUrl({
         response_type: 'code',
-        scope: ['openid', 'email', 'profile'],
+        scope: ['openid'],
         access_type: 'online',
         state,
         nonce,

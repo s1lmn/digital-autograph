@@ -1,0 +1,24 @@
+title = "Digital Autograph secret scanning"
+
+[extend]
+useDefault = true
+
+# Synthetic request idempotency keys in the original reservation integration
+# fixtures (c50bf736), not credentials. Both exact value AND exact path required.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "Reviewed reservation request fixtures only"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^tests/integration/takeover-reservation\.test\.ts$''']
+regexes = ['''^(strict-body-key-01|fresh-after-expiry-01|same-key-two-quotes-01)$''']
+
+# Public validation comment in checkout (3db21bd4), not credential material.
+# Match the complete scanner match AND exact source/test/runbook files.
+[[rules.allowlists]]
+description = "Public checkout validation comment only"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(apps/web/components/paid-checkout\.tsx|scripts/smoke-secret-scan\.mjs|docs/operations/secret-scanning\.md)$''']
+regexes = ['''^API bytes too: unavailable/tampered/placeholder[\s`]*$''']

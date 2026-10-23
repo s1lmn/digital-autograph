@@ -69,6 +69,18 @@ main; the shared Vite repair is therefore absent from its final net diff. No
 package range, override, release-age rule or audit threshold is relaxed.
 Lower-severity findings still require separate triage under EGO-109.
 
+## Zod collection validation update in EGO-109
+
+The API, configuration and contracts packages require Zod ^4.6.6 and resolve
+4.6.6 in the lockfile for
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+The fresh 24 October 2026 audit reports the previously locked 4.6.5 as High.
+The preferences contract regression uses 1000 invalid synthetic collection
+elements: the maximum-size rejection must not accumulate an issue for every
+element. HTTP body limits remain necessary; this patch does not authorize
+larger requests or change consent, pricing, ownership or provider activation.
+No audit threshold, advisory ignore or release-age exclusion is added.
+
 ## Handling a failing audit
 
 1. Read the advisory and all dependency paths, including build/test tools and

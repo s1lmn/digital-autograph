@@ -133,3 +133,28 @@ until support and a representative lockfile update are verified. Continue the
 manual audit, targeted-update and frozen-lockfile process above, preserving
 overrides and release-age protections. EGO-88's broader dependency-maintenance
 and developer-workflow acceptance remains open.
+
+## Additional runtime patch and development-only triage (EGO-109)
+
+Fastify is raised from 5.12.5 to 5.12.7, retaining its major version, for
+[GHSA-389g-gv7q-r4x8](https://github.com/advisories/GHSA-389g-gv7q-r4x8).
+The advisory concerns case-sensitive propertyNames in a header schema. Current
+handlers use Zod and do not configure that header-schema feature; this does not
+justify retaining the vulnerable runtime dependency. Full API/integration/browser
+regressions validate the compatible patch. No audit threshold or override changes.
+
+The remaining 4 Moderate and 1 Low findings are development-tool dependencies:
+legacy esbuild via drizzle-kit, esbuild via tsup, and Vitest 3/@vitest/mocker.
+The esbuild findings require its development HTTP server; this workspace invokes
+its transformation/build APIs and does not expose esbuild.serve. The two mocker
+advisories concern the public mockerPlugin/interceptorPlugin development-server
+WebSocket handlers; this workspace uses Node/jsdom vitest run without either
+standalone plugin. See
+[redirect mock scope](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) and
+[manual mock scope](https://github.com/advisories/GHSA-qxg6-89mg-rqv8).
+This is source/configuration triage, not a proof that those package versions are
+patched or a broad exemption for future configurations. Do not expose either
+server or enable those plugins with these resolutions. Resolving the package
+findings requires a reviewed Vitest major/toolchain migration and legacy esbuild
+compatibility verification under EGO-109; there is no advisory ignore or accepted
+risk bypass. The current production dependency audit has no findings.

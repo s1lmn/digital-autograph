@@ -46,7 +46,7 @@ and [Fastify request/reply hooks](https://fastify.dev/docs/latest/Reference/Hook
 ## OAuth resource budgets
 
 Each API process limits each registered Google/Telegram/Yandex/VK start and
-callback route to 600 requests per monotonic 60-second window. Eight fixed
+callback route to 200 requests per monotonic 60-second window. Eight fixed
 buckets retain no IP, account or client-controlled keys. GET query variants and
 Fastify's implicit HEAD routes share a bucket. Rejected requests receive no-store
 429 AUTH_RATE_LIMITED and Retry-After before session lookup or provider work.
@@ -59,3 +59,9 @@ This bounds application admission per process, not across replicas. It does not
 replace ingress connection/concurrency controls, a distributed abuse policy,
 provider registration or a measured drop-capacity acceptance. Those remain
 pre-launch requirements under EGO-90/EGO-108/EGO-109.
+
+The 200-per-route budget permits at most 800 new attempts/minute across the four
+providers in a single API process, below the existing worker's 1000-row/minute
+cleanup batch. This comparison assumes a functioning single worker/API pair;
+multiple API replicas and worker outages still need aggregate ingress limits,
+queue monitoring and operational response. It is not a drop-capacity claim.

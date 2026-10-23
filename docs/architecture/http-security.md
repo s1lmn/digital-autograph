@@ -42,3 +42,20 @@ creator lifecycle and payment return.
 
 Implementation references: [Next.js response headers](https://nextjs.org/docs/app/api-reference/config/next-config-js/headers)
 and [Fastify request/reply hooks](https://fastify.dev/docs/latest/Reference/Hooks/).
+
+## OAuth resource budgets
+
+Each API process limits each registered Google/Telegram/Yandex/VK start and
+callback route to 600 requests per monotonic 60-second window. Eight fixed
+buckets retain no IP, account or client-controlled keys. GET query variants and
+Fastify's implicit HEAD routes share a bucket. Rejected requests receive no-store
+429 AUTH_RATE_LIMITED and Retry-After before session lookup or provider work.
+Providers and start/callback budgets are independent; a busy login-start route
+cannot exhaust a callback's quota. The Google transport has a 10-second per-HTTP
+request timeout; Telegram's OIDC client already defaults to 30 seconds, while
+Yandex/VK requests use 10-second abort signals.
+
+This bounds application admission per process, not across replicas. It does not
+replace ingress connection/concurrency controls, a distributed abuse policy,
+provider registration or a measured drop-capacity acceptance. Those remain
+pre-launch requirements under EGO-90/EGO-108/EGO-109.

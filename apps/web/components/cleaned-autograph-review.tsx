@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AutographApiError } from '../lib/autograph-api';
+import {
+  FirstUseActionNotice,
+  needsFirstUseConfirmation,
+} from './first-use-action-notice';
 import styles from './canvas-create-screen.module.css';
 
 type Preview = { assetId: string; url: string; expiresAt: string };
@@ -20,7 +24,7 @@ type ReviewApi = {
 type ApprovalState =
   | { kind: 'preview' }
   | { kind: 'approving' }
-  | { kind: 'approval_error'; message: string }
+  | { kind: 'approval_error'; message: string; legalRequired?: boolean }
   | { kind: 'submitted_for_moderation'; approvedAt: string };
 
 function approvalError(error: unknown): string {
@@ -82,7 +86,11 @@ export function CleanedAutographReview({
       }
     } catch (error) {
       if (!next.signal.aborted)
-        setPhase({ kind: 'approval_error', message: approvalError(error) });
+        setPhase({
+          kind: 'approval_error',
+          message: approvalError(error),
+          legalRequired: needsFirstUseConfirmation(error),
+        });
     } finally {
       inFlight.current = false;
       if (controller.current === next) controller.current = null;
@@ -156,7 +164,13 @@ export function CleanedAutographReview({
             and product actions. Do not use a bank or legal signature.
           </p>
           {phase.kind === 'approval_error' && (
-            <p role="alert">{phase.message}</p>
+            <div role="alert">
+              {phase.legalRequired ? (
+                <FirstUseActionNotice returnTo="/autograph/create" />
+              ) : (
+                <p>{phase.message}</p>
+              )}
+            </div>
           )}
           <button
             className={styles.primary}

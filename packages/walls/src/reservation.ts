@@ -30,13 +30,18 @@ export type ReservationErrorCode =
   | 'WALL_NOT_TAKEOVER_ELIGIBLE'
   | 'TAKEOVER_COOLDOWN_ACTIVE'
   | 'SLOT_RESERVED'
+  | 'USER_RESERVATION_ACTIVE'
+  | 'RESERVATION_RATE_LIMITED'
   | 'IDEMPOTENCY_KEY_REQUIRED'
   | 'INVALID_IDEMPOTENCY_KEY'
   | 'IDEMPOTENCY_KEY_REUSED'
   | 'RESERVATION_NOT_FOUND';
 
 export class ReservationError extends Error {
-  constructor(readonly code: ReservationErrorCode) {
+  constructor(
+    readonly code: ReservationErrorCode,
+    readonly retryAfterSeconds?: number,
+  ) {
     super(code);
   }
 }

@@ -129,7 +129,7 @@ describe('Telegram production OIDC adapter with local discovery and JWKS', () =>
     expect(url.searchParams.get('client_id')).toBe(clientId);
     expect(url.searchParams.get('redirect_uri')).toBe(redirectUri);
     expect(url.searchParams.get('response_type')).toBe('code');
-    expect(url.searchParams.get('scope')).toBe('openid profile');
+    expect(url.searchParams.get('scope')).toBe('openid');
     expect(url.searchParams.get('state')).toBe('test-state');
     expect(url.searchParams.get('nonce')).toBe('test-nonce');
     expect(url.searchParams.get('code_challenge')).toBe('test-challenge');

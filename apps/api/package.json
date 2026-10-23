@@ -27,6 +27,7 @@
     "zod": "^4.1.0",
     "@digital-autograph/payments": "workspace:*",
     "@digital-autograph/notifications": "workspace:*",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "@digital-autograph/domain": "workspace:*"
   }
 }

@@ -13,10 +13,10 @@ jobs:
     timeout-minutes: 15
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v7
@@ -30,10 +30,10 @@ jobs:
     timeout-minutes: 15
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v7
@@ -47,10 +47,10 @@ jobs:
     timeout-minutes: 15
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v7
@@ -101,10 +101,10 @@ jobs:
       S3_SECRET_ACCESS_KEY: local_minio_password
       UPLOAD_URL_TTL_SECONDS: 300
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v7
@@ -114,6 +114,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Audit all workspace dependencies for High/Critical advisories
         run: pnpm security:audit
+      - name: Verify pinned DOCX conversion and canonical bytes
+        run: python3 scripts/legal-canonical.py --check
       - run: pnpm format:check
       - name: Verify brand tokens, exports and approved contrast pairs
         run: pnpm brand:check
@@ -137,7 +139,9 @@ jobs:
       - run: pnpm test:integration
       - run: pnpm build
       - run: pnpm test:build-smoke
-      - uses: docker/setup-buildx-action@v3
+      - name: Verify built legal SSR publication and history boundaries
+        run: pnpm test:legal-pages
+      - uses: docker/setup-buildx-action@v4
       - name: Build release container targets
         env:
           YC_REGISTRY_ID: ci-placeholder
@@ -191,10 +195,10 @@ jobs:
       PREVIEW_URL_TTL_SECONDS: 120
       E2E_WEB_URL: http://127.0.0.1:3000
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.19.0
       - uses: actions/setup-node@v7

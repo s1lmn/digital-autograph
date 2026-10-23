@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import type {
+  CheckoutConfirmation,
+  CheckoutSummary,
+} from '@digital-autograph/domain';
 
 export const paymentStates = [
   'created',
@@ -129,7 +133,17 @@ export interface PaymentRepository {
     reservationId: string,
     autographId: string,
     settings: PaymentSettings,
+    confirmation?: CheckoutConfirmation,
   ): Promise<PaymentAttempt>;
+  checkout?(
+    userId: string,
+    reservationId: string,
+    autographId: string,
+  ): Promise<CheckoutSummary | { existingOrderId: string }>;
+  findByReservation?(
+    userId: string,
+    reservationId: string,
+  ): Promise<PaymentAttempt | null>;
   find(id: string): Promise<PaymentAttempt | null>;
   lease(id: string): Promise<string | null>;
   release(id: string, token: string): Promise<void>;
@@ -168,12 +182,26 @@ export class PaymentService {
       placementId: p.placementId,
     };
   }
-  async create(userId: string, reservationId: string, autographId: string) {
+  async existing(userId: string, reservationId: string) {
+    return this.repository.findByReservation?.(userId, reservationId) ?? null;
+  }
+  async checkout(userId: string, reservationId: string, autographId: string) {
+    if (!this.repository.checkout)
+      throw new PaymentError('PAYMENT_UNAVAILABLE');
+    return this.repository.checkout(userId, reservationId, autographId);
+  }
+  async create(
+    userId: string,
+    reservationId: string,
+    autographId: string,
+    confirmation?: CheckoutConfirmation,
+  ) {
     const attempt = await this.repository.create(
       userId,
       reservationId,
       autographId,
       this.settings,
+      confirmation,
     );
     await this.progress(attempt.orderId);
     return this.status(userId, attempt.orderId);

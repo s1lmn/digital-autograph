@@ -39,6 +39,60 @@ Keep the committed lockfile and overrides together. The sharp security-release
 age exceptions already present in the workspace remain narrowly versioned.
 Do not add broad release-age exceptions or disable package-manager protections.
 
+## Next.js and Vite security updates in EGO-167
+
+The web pins Next.js 16.4.1, with matching `@next/env` and optional SWC binaries,
+to address the advisories added to the registry audit on 22 October 2026:
+
+- [GHSA-2464-fhr4-w9xw](https://github.com/vercel/next.js/security/advisories/GHSA-2464-fhr4-w9xw):
+  image optimization of SVGs can lead to remote code execution on glibc Linux.
+  The existing Next.js `sharp` resolution is already 0.35.5, which meets the
+  published workaround; that override is preserved.
+- [GHSA-673q-mjm6-r5xr](https://github.com/vercel/next.js/security/advisories/GHSA-673q-mjm6-r5xr):
+  remote code execution in Cache Components using `use cache` functions returning
+  multiple typed arrays.
+- [GHSA-p3m5-59mp-jv5r](https://github.com/vercel/next.js/security/advisories/GHSA-p3m5-59mp-jv5r):
+  denial of service in App Router applications with a Server Action.
+
+At this update, application source has no `use cache` or `use server` directives
+or `next/image` imports. This source check is not a production exploitability
+assessment and does not exempt the framework from updating. All three advisories
+are fixed by the [16.4.1 release](https://github.com/vercel/next.js/releases/tag/v16.4.1).
+Existing unit, browser, build, standalone legal SSR and container checks exercise
+compatibility; no new feature, readiness flag or provider is enabled.
+
+The lockfile also resolves Vitest's transitive Vite to 7.3.7 for
+[GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm), a
+Windows editor-launch path issue. This is the same minimal lockfile repair as
+PR #71, which is now merged in main. This PR is synchronized with that accepted
+main; the shared Vite repair is therefore absent from its final net diff. No
+package range, override, release-age rule or audit threshold is relaxed.
+Lower-severity findings still require separate triage under EGO-109.
+
+## Zod collection validation update in EGO-167
+
+The API, configuration and contracts packages require Zod ^4.6.6 and resolve
+4.6.6 in the lockfile for
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+The fresh 25 October 2026 audit confirms the previously locked 4.6.5 as High.
+The preferences contract regression uses 1000 invalid synthetic collection
+elements: the maximum-size rejection must not accumulate an issue for every
+element. HTTP body limits remain necessary; this patch does not authorize
+larger requests or change consent, pricing, ownership or provider activation.
+No audit threshold, advisory ignore or release-age exclusion is added.
+
+## Undici test dependency update in EGO-167
+
+The same fresh audit reports the development-only `jsdom` dependency on
+Undici 8.11.2 as High for
+[GHSA-xjj6-f33q-929c](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c).
+The lockfile now resolves 8.12.2, the patched release in the existing compatible
+range. Both the web tests and Vitest use this dependency; no direct dependency,
+override, release-age exception or audit threshold is changed. The patch prevents
+an unhandled stream error when a remote server sends excessive content codings
+and closes early. This update does not replace the Node.js runtime or its bundled
+fetch implementation. The full unit suite exercises the installed jsdom tooling.
+
 ## Handling a failing audit
 
 1. Read the advisory and all dependency paths, including build/test tools and

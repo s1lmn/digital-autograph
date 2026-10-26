@@ -69,17 +69,29 @@ main; the shared Vite repair is therefore absent from its final net diff. No
 package range, override, release-age rule or audit threshold is relaxed.
 Lower-severity findings still require separate triage under EGO-109.
 
-## Zod collection validation update in EGO-109
+## Zod collection validation update in EGO-167
 
 The API, configuration and contracts packages require Zod ^4.6.6 and resolve
 4.6.6 in the lockfile for
 [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
-The fresh 24 October 2026 audit reports the previously locked 4.6.5 as High.
+The fresh 25 October 2026 audit confirms the previously locked 4.6.5 as High.
 The preferences contract regression uses 1000 invalid synthetic collection
 elements: the maximum-size rejection must not accumulate an issue for every
 element. HTTP body limits remain necessary; this patch does not authorize
 larger requests or change consent, pricing, ownership or provider activation.
 No audit threshold, advisory ignore or release-age exclusion is added.
+
+## Undici test dependency update in EGO-167
+
+The same fresh audit reports the development-only `jsdom` dependency on
+Undici 8.11.2 as High for
+[GHSA-xjj6-f33q-929c](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c).
+The lockfile now resolves 8.12.2, the patched release in the existing compatible
+range. Both the web tests and Vitest use this dependency; no direct dependency,
+override, release-age exception or audit threshold is changed. The patch prevents
+an unhandled stream error when a remote server sends excessive content codings
+and closes early. This update does not replace the Node.js runtime or its bundled
+fetch implementation. The full unit suite exercises the installed jsdom tooling.
 
 ## Handling a failing audit
 
@@ -146,7 +158,7 @@ manual audit, targeted-update and frozen-lockfile process above, preserving
 overrides and release-age protections. EGO-88's broader dependency-maintenance
 and developer-workflow acceptance remains open.
 
-## Additional runtime patch and development-only triage (EGO-109)
+## Runtime patch and remaining dependency triage (EGO-109)
 
 Fastify is raised from 5.12.5 to 5.12.7, retaining its major version, for
 [GHSA-389g-gv7q-r4x8](https://github.com/advisories/GHSA-389g-gv7q-r4x8).
@@ -155,8 +167,19 @@ handlers use Zod and do not configure that header-schema feature; this does not
 justify retaining the vulnerable runtime dependency. Full API/integration/browser
 regressions validate the compatible patch. No audit threshold or override changes.
 
-The remaining 4 Moderate and 1 Low findings are development-tool dependencies:
-legacy esbuild via drizzle-kit, esbuild via tsup, and Vitest 3/@vitest/mocker.
+On 26 October 2026, the full workspace audit reports 8 Moderate and 5 Low
+findings; the production audit reports 4 Moderate and 4 Low. Neither audit has
+High or Critical findings. Runtime findings remain in the two transitive
+`fast-uri` major versions:
+[GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg),
+[GHSA-xhq7-xmqj-769h](https://github.com/advisories/GHSA-xhq7-xmqj-769h),
+[GHSA-wjr9-j795-jxcr](https://github.com/advisories/GHSA-wjr9-j795-jxcr) and
+[GHSA-333x-w4r6-6crp](https://github.com/advisories/GHSA-333x-w4r6-6crp).
+These findings still require a reviewed compatibility fix under EGO-109; they
+are not dismissed by the High/Critical gate.
+
+Development tooling contributes another 4 Moderate and 1 Low: legacy esbuild
+via drizzle-kit, esbuild via tsup, and Vitest 3/@vitest/mocker.
 The esbuild findings require its development HTTP server; this workspace invokes
 its transformation/build APIs and does not expose esbuild.serve. The two mocker
 advisories concern the public mockerPlugin/interceptorPlugin development-server
@@ -169,4 +192,4 @@ patched or a broad exemption for future configurations. Do not expose either
 server or enable those plugins with these resolutions. Resolving the package
 findings requires a reviewed Vitest major/toolchain migration and legacy esbuild
 compatibility verification under EGO-109; there is no advisory ignore or accepted
-risk bypass. The current production dependency audit has no findings.
+risk bypass. Rerun both audits on the final head because registry findings change.

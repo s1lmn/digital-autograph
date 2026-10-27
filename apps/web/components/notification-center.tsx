@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from './locale-provider';
+
 import { useEffect, useState } from 'react';
 import { notificationKinds } from '@digital-autograph/domain';
 import styles from './notification-panel.module.css';
@@ -21,6 +23,8 @@ type Item = {
   readAt: string | null;
 };
 export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
+  const { t } = useLocale();
+
   const [preferences, setPreferences] = useState<Pref | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [error, setError] = useState('');
@@ -67,16 +71,16 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
   }
   return (
     <main className={styles.panel}>
-      <h1>Notifications</h1>
-      {error && <p role="alert">{error}</p>}
+      <h1>{t('Notifications')}</h1>
+      {error && <p role="alert">{t(error)}</p>}
       <button
         type="button"
         disabled={busy}
         onClick={() => setVersion((v) => v + 1)}
       >
-        Refresh
+        {t('Refresh')}
       </button>
-      {!preferences && !error && <p role="status">Loading…</p>}
+      {!preferences && !error && <p role="status">{t('Loading…')}</p>}
       {preferences && (
         <>
           <form
@@ -92,7 +96,7 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
             }}
           >
             <fieldset disabled={busy}>
-              <legend>Preferences</legend>
+              <legend>{t('Preferences')}</legend>
               <label>
                 <input
                   type="checkbox"
@@ -101,7 +105,7 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
                     setPreferences({ ...preferences, web: e.target.checked })
                   }
                 />{' '}
-                In-app notifications
+                {t('In-app notifications')}
               </label>
               <label>
                 <input
@@ -115,7 +119,7 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
                     })
                   }
                 />{' '}
-                Telegram notifications
+                {t('Telegram notifications')}
               </label>
               {notificationKinds.map((kind) => (
                 <label key={kind}>
@@ -131,10 +135,10 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
                       })
                     }
                   />{' '}
-                  {kind.replaceAll('_', ' ')}
+                  {t(kind.replaceAll('_', ' '))}
                 </label>
               ))}
-              <button type="submit">Save preferences</button>
+              <button type="submit">{t('Save preferences')}</button>
             </fieldset>
           </form>
           {preferences.telegramAvailable && !preferences.telegramLinked && (
@@ -152,7 +156,7 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
                 })
               }
             >
-              Connect Telegram and consent to notifications
+              {t('Connect Telegram and consent to notifications')}
             </button>
           )}
           {preferences.telegramLinked && (
@@ -165,24 +169,23 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
                 )
               }
             >
-              Disconnect Telegram
+              {t('Disconnect Telegram')}
             </button>
           )}
           <p>
-            You can turn off all channels or individual events. Telegram also
-            accepts /stop. Ordinary notices of the same type are limited to one
-            per Wall in 10 minutes. Financial notices are not combined by that
-            short window. All channels remain limited to 20 notices per hour.
+            {t(
+              'You can turn off all channels or individual events. Telegram also accepts /stop. Ordinary notices of the same type are limited to one per Wall in 10 minutes. Financial notices are not combined by that short window. All channels remain limited to 20 notices per hour.',
+            )}
           </p>
-          <h2>Inbox</h2>
+          <h2>{t('Inbox')}</h2>
           {items.length === 0 ? (
-            <p>No notifications.</p>
+            <p>{t('No notifications.')}</p>
           ) : (
             <ul>
               {items.map((item) => (
                 <li key={item.id}>
-                  <a href={item.deepLink}>{item.title}</a>
-                  {item.detail && <p>{item.detail}</p>}
+                  <a href={item.deepLink}>{t(item.title)}</a>
+                  {item.detail && <p>{t(item.detail)}</p>}
                   {!item.readAt && (
                     <button
                       type="button"
@@ -197,7 +200,7 @@ export function NotificationCenter({ apiOrigin }: { apiOrigin: string }) {
                         )
                       }
                     >
-                      Mark read
+                      {t('Mark read')}
                     </button>
                   )}
                 </li>

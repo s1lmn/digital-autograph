@@ -1,4 +1,14 @@
 import { test, expect } from '@playwright/test';
+
+test.beforeEach(async ({ context }) => {
+  await context.addCookies([
+    {
+      name: 'destka-locale',
+      value: 'en',
+      url: process.env.E2E_WEB_URL ?? 'http://127.0.0.1:3000',
+    },
+  ]);
+});
 // UI contract fixtures only. Real money/locking lives in PostgreSQL integration tests.
 test('provider return is navigation only; status comes from the owner-only backend', async ({
   page,

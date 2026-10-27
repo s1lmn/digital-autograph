@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -21,6 +22,8 @@ export function PhotoUploadEditor({
   onPhotoChange,
   disabled = false,
 }: PhotoUploadEditorProps) {
+  const { t } = useLocale();
+
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [format, setFormat] = useState<'image/jpeg' | 'image/png'>(
@@ -203,13 +206,16 @@ export function PhotoUploadEditor({
   return (
     <section aria-labelledby="photo-upload-heading" className={styles.editor}>
       <div>
-        <h2 id="photo-upload-heading">Use a photo</h2>
+        <h2 id="photo-upload-heading">{t('Use a photo')}</h2>
         <p>
-          Choose a photo or take one with your phone. Crop and rotate it here;
-          only the edited image is uploaded.
+          {t(
+            'Choose a photo or take one with your phone. Crop and rotate it here; only the edited image is uploaded.',
+          )}
         </p>
         <p className={styles.photoHint}>
-          For best results, photograph your signature on clean, unlined paper.
+          {t(
+            'For best results, photograph your signature on clean, unlined paper.',
+          )}
         </p>
       </div>
       <input
@@ -219,7 +225,7 @@ export function PhotoUploadEditor({
         aria-hidden="true"
         type="file"
         accept="image/jpeg,image/png"
-        aria-label="Choose a photo"
+        aria-label={t('Choose a photo')}
         onChange={readFileInput}
         disabled={disabled}
       />
@@ -231,7 +237,7 @@ export function PhotoUploadEditor({
         type="file"
         accept="image/*"
         capture="environment"
-        aria-label="Take a photo"
+        aria-label={t('Take a photo')}
         onChange={readFileInput}
         disabled={disabled}
       />
@@ -241,14 +247,14 @@ export function PhotoUploadEditor({
           onClick={() => cameraInputRef.current?.click()}
           disabled={disabled}
         >
-          Take a photo
+          {t('Take a photo')}
         </button>
         <button
           type="button"
           onClick={() => imageInputRef.current?.click()}
           disabled={disabled}
         >
-          Choose a photo
+          {t('Choose a photo')}
         </button>
       </div>
       {sourceUrl && (
@@ -256,7 +262,7 @@ export function PhotoUploadEditor({
           <div className={styles.cropArea}>
             <canvas
               ref={canvasRef}
-              aria-label="Crop preview"
+              aria-label={t('Crop preview')}
               aria-describedby="crop-help"
               tabIndex={disabled ? -1 : 0}
               onKeyDown={(event) => {
@@ -322,13 +328,13 @@ export function PhotoUploadEditor({
               }}
             />
             <p id="crop-help">
-              Drag the photo to crop it inside the frame. Keyboard: focus the
-              preview and use arrow keys to move the photo; Shift makes smaller
-              steps, Home recenters it.
+              {t(
+                'Drag the photo to crop it inside the frame. Keyboard: focus the preview and use arrow keys to move the photo; Shift makes smaller steps, Home recenters it.',
+              )}
             </p>
           </div>
           <div className={styles.controls}>
-            <label htmlFor="photo-zoom">Zoom</label>
+            <label htmlFor="photo-zoom">{t('Zoom')}</label>
             <input
               id="photo-zoom"
               type="range"
@@ -348,28 +354,28 @@ export function PhotoUploadEditor({
                 }}
                 disabled={disabled}
               >
-                Rotate 90°
+                {t('Rotate 90°')}
               </button>
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
                 disabled={disabled}
               >
-                Change photo
+                {t('Change photo')}
               </button>
             </div>
           </div>
           {previewUrl && (
             <div className={styles.preview}>
-              <h3>Edited photo preview</h3>
-              <img src={previewUrl} alt="Edited autograph photo preview" />
+              <h3>{t('Edited photo preview')}</h3>
+              <img src={previewUrl} alt={t('Edited autograph photo preview')} />
             </div>
           )}
         </>
       )}
       {error && (
         <p role="alert" className={styles.error}>
-          {error}
+          {t(error)}
         </p>
       )}
     </section>

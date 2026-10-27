@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { YandexSignIn } from './yandex-sign-in';
 import { VkIdSignIn } from './vk-id-sign-in';
@@ -24,6 +25,7 @@ import { WallPlacementHistory } from './placement-history';
 import { WallSlot } from './wall-slot';
 import { WallCountdown } from './wall-countdown';
 import { ShareControls } from './share-controls';
+import { SignatureArt } from './signature-art';
 import styles from '../app/walls/[id]/page.module.css';
 
 type AuthState = 'checking' | 'anonymous' | 'authenticated' | 'unavailable';
@@ -57,6 +59,8 @@ export function PublicWallScreen({
   initialWall: PublicWall;
   apiOrigin: string;
 }) {
+  const { t, locale } = useLocale();
+
   const [wall, setWall] = useState(initialWall);
   const [now, setNow] = useState(() => Date.now());
   const [auth, setAuth] = useState<AuthState>('checking');
@@ -244,41 +248,78 @@ export function PublicWallScreen({
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <p className="eyebrow">Digital Autograph Platform</p>
-        <h1>{wall.creator.displayName}&apos;s Wall</h1>
-        <p className={styles.state}>
-          Wall status: <strong>{wall.status}</strong>
-        </p>
-        <p>{wallNotice(wall, now)}</p>
-        <p>
-          <a href={`/creators/${encodeURIComponent(wall.creator.slug)}`}>
-            View creator
-          </a>
-        </p>
-        <WallCountdown
-          startAt={wall.startAt}
-          endAt={wall.endAt}
-          status={wall.status}
-        />
-        {auth === 'authenticated' && (
-          <a href="/me/placements">View your placement history</a>
-        )}
-        {wall.startAt && <p>Starts: {new Date(wall.startAt).toUTCString()}</p>}
-        {wall.endAt && <p>Ends: {new Date(wall.endAt).toUTCString()}</p>}
-        <button
-          type="button"
-          onClick={() => void refreshWall()}
-          disabled={refreshing}
-        >
-          {refreshing ? 'Refreshing…' : 'Refresh Wall'}
-        </button>
-        {refreshError && (
-          <p role="alert">The Wall could not be refreshed. Try again.</p>
-        )}
+        <div className={styles.wallIdentity}>
+          <p className="eyebrow">
+            {t('A creator. A community. Your autograph.')}
+          </p>
+          <h1>{t("{name}'s Wall", { name: wall.creator.displayName })}</h1>
+          <p className={styles.state}>
+            {t('Wall status: ')}
+            <strong>{t(wall.status)}</strong>
+          </p>
+          <p>{t(wallNotice(wall, now))}</p>
+          <p>
+            <a href={`/creators/${encodeURIComponent(wall.creator.slug)}`}>
+              {t('View creator')}
+            </a>
+          </p>
+          <WallCountdown
+            startAt={wall.startAt}
+            endAt={wall.endAt}
+            status={wall.status}
+          />
+          {auth === 'authenticated' && (
+            <a href="/me/placements">{t('View your placement history')}</a>
+          )}
+          {wall.startAt && (
+            <p>
+              {t('Starts: ')}
+              {new Date(wall.startAt).toLocaleString(
+                locale === 'ru' ? 'ru-RU' : 'en-US',
+                { timeZone: 'UTC' },
+              ) + ' UTC'}
+            </p>
+          )}
+          {wall.endAt && (
+            <p>
+              {t('Ends: ')}
+              {new Date(wall.endAt).toLocaleString(
+                locale === 'ru' ? 'ru-RU' : 'en-US',
+                { timeZone: 'UTC' },
+              ) + ' UTC'}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => void refreshWall()}
+            disabled={refreshing}
+          >
+            {refreshing ? t('Refreshing…') : t('Refresh Wall')}
+          </button>
+          {refreshError && (
+            <p role="alert">
+              {t('The Wall could not be refreshed. Try again.')}
+            </p>
+          )}
+        </div>
+        <aside className={styles.wallSummary} aria-label={t('Wall overview')}>
+          <SignatureArt />
+          <p>{t('Every mark makes it personal.')}</p>
+          <div>
+            <strong>
+              {wall.slots.filter((slot) => slot.occupied).length}
+              <span>{t(' autographs')}</span>
+            </strong>
+            <strong>
+              {wall.slotCount}
+              <span>{t(' total slots')}</span>
+            </strong>
+          </div>
+        </aside>
       </header>
 
       <section aria-labelledby="slots-heading">
-        <h2 id="slots-heading">Slots</h2>
+        <h2 id="slots-heading">{t('Slots')}</h2>
         <ol className={styles.grid}>
           {wall.slots.map((slot) => {
             const actionLabel =
@@ -308,11 +349,11 @@ export function PublicWallScreen({
       </section>
 
       {canClaim && auth === 'checking' && (
-        <p role="status">Checking sign-in…</p>
+        <p role="status">{t('Checking sign-in…')}</p>
       )}
       {canClaim && auth === 'unavailable' && (
         <section>
-          <p role="alert">Sign-in is temporarily unavailable.</p>
+          <p role="alert">{t('Sign-in is temporarily unavailable.')}</p>
           <button
             type="button"
             onClick={() => {
@@ -320,19 +361,22 @@ export function PublicWallScreen({
               setAuthRetry((value) => value + 1);
             }}
           >
-            Retry sign-in check
+            {t('Retry sign-in check')}
           </button>
         </section>
       )}
       {canClaim &&
         auth === 'authenticated' &&
         ready === null &&
-        !readyError && <p role="status">Loading your ready autographs…</p>}
+        !readyError && (
+          <p role="status">{t('Loading your ready autographs…')}</p>
+        )}
       {canClaim && auth === 'authenticated' && readyError && (
         <section>
           <p role="alert">
-            Your ready autographs could not be loaded. Check your connection and
-            retry.
+            {t(
+              'Your ready autographs could not be loaded. Check your connection and retry.',
+            )}
           </p>
           <button
             type="button"
@@ -342,15 +386,19 @@ export function PublicWallScreen({
               setReadyRetry((value) => value + 1);
             }}
           >
-            Retry ready autographs
+            {t('Retry ready autographs')}
           </button>
         </section>
       )}
       {canClaim && auth === 'authenticated' && ready?.length === 0 && (
         <section className={styles.panel}>
-          <h2>Create an autograph first</h2>
-          <p>You need a moderated, ready digital autograph to claim a Slot.</p>
-          <a href="/autograph/create">Create your digital autograph</a>
+          <h2>{t('Create an autograph first')}</h2>
+          <p>
+            {t(
+              'You need a moderated, ready digital autograph to claim a Slot.',
+            )}
+          </p>
+          <a href="/autograph/create">{t('Create your digital autograph')}</a>
         </section>
       )}
       {canClaim && auth === 'authenticated' && ready && ready.length > 0 && (
@@ -365,14 +413,15 @@ export function PublicWallScreen({
       {canClaim && target && !target.occupied && auth === 'anonymous' && (
         <section className={styles.panel} aria-labelledby="sign-in-heading">
           <h2 id="sign-in-heading" ref={confirmationRef} tabIndex={-1}>
-            Sign in to claim Slot {target.position + 1}
+            {t('Sign in to claim Slot ')}
+            {target.position + 1}
           </h2>
           <div className={styles.actions}>
             <a href={`${apiOrigin}/auth/google/start?returnTo=${returnTo}`}>
-              Continue with Google
+              {t('Continue with Google')}
             </a>
             <a href={`${apiOrigin}/auth/telegram/start?returnTo=${returnTo}`}>
-              Continue with Telegram
+              {t('Continue with Telegram')}
             </a>
             <YandexSignIn
               apiOrigin={apiOrigin}
@@ -391,17 +440,25 @@ export function PublicWallScreen({
           <FirstUseGate apiOrigin={apiOrigin} onReady={focusConfirmation}>
             <section className={styles.panel} aria-labelledby="confirm-heading">
               <h2 id="confirm-heading" ref={confirmationRef} tabIndex={-1}>
-                Confirm your free claim
+                {t('Confirm your free claim')}
               </h2>
-              <p>Wall: {wall.creator.displayName}</p>
-              <p>Slot: {target.position + 1}</p>
               <p>
-                Autograph: {selected.source === 'canvas' ? 'Drawn' : 'Photo'}{' '}
-                autograph
+                {t('Wall: ')}
+                {wall.creator.displayName}
               </p>
               <p>
-                You can use the free claim once on this Wall. If your autograph
-                is later displaced, the free claim is not restored.
+                {t('Slot: ')}
+                {target.position + 1}
+              </p>
+              <p>
+                {t('Autograph: ')}
+                {selected.source === 'canvas' ? t('Drawn') : t('Photo')}{' '}
+                {t('autograph')}
+              </p>
+              <p>
+                {t(
+                  'You can use the free claim once on this Wall. If your autograph is later displaced, the free claim is not restored.',
+                )}
               </p>
               <div className={styles.actions}>
                 <button
@@ -410,10 +467,10 @@ export function PublicWallScreen({
                   disabled={phase === 'claiming' || refreshing}
                 >
                   {phase === 'claiming'
-                    ? 'Claiming…'
+                    ? t('Claiming…')
                     : phase === 'error'
-                      ? 'Retry same claim'
-                      : 'Confirm free claim'}
+                      ? t('Retry same claim')
+                      : t('Confirm free claim')}
                 </button>
                 <button
                   type="button"
@@ -425,7 +482,7 @@ export function PublicWallScreen({
                   }}
                   disabled={phase === 'claiming' || refreshing}
                 >
-                  Cancel
+                  {t('Cancel')}
                 </button>
               </div>
             </section>
@@ -443,7 +500,7 @@ export function PublicWallScreen({
           aria-live="polite"
           className={styles.message}
         >
-          {message}
+          {t(message)}
         </p>
       )}
       <WallPlacementHistory

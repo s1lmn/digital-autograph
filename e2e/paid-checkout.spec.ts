@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { test, expect, e2eUserId, e2eWallId, e2eSlotId } from './fixtures';
 import { createPrivateS3Storage } from '../packages/integrations/src/private-s3';
 import { isolatedE2EEnvironment } from './environment';
+test.use({ uiLocale: 'ru' });
 const api = process.env.API_PUBLIC_ORIGIN ?? 'http://127.0.0.1:4000';
 test('paid checkout: trusted PG terms, keyboard, stale confirmation, double submit, response loss and reload', async ({
   scenario,
@@ -205,5 +206,5 @@ test('paid checkout: trusted PG terms, keyboard, stale confirmation, double subm
       .rows,
   ).toEqual(snapshot);
   await page.getByRole('link', { name: 'Проверить состояние заказа' }).click();
-  await expect(page.getByRole('status')).toHaveText('Payment is pending.');
+  await expect(page.getByRole('status')).toHaveText('Ожидаем оплату.');
 });

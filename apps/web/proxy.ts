@@ -1,4 +1,5 @@
 import tokens from '../../docs/brand/tokens.json';
+import { localeCookie, parseLocale, translate } from './lib/i18n';
 import { NextRequest, NextResponse } from 'next/server';
 import { loadWebConfig } from '@digital-autograph/config';
 import {
@@ -18,6 +19,8 @@ export async function proxy(request: NextRequest) {
     return response;
   };
   const failure = (status: number) => {
+    const locale = parseLocale(request.cookies.get(localeCookie)?.value);
+    const t = (text: string) => translate(text, locale);
     const title =
       status === 404 ? 'Документ не найден' : 'Документы временно недоступны';
     const message =
@@ -26,7 +29,7 @@ export async function proxy(request: NextRequest) {
         : 'Не удалось загрузить опубликованные документы. Попробуйте обновить страницу позже.';
     // Controlled copy only, with the existing token source. Returning the status
     // directly avoids rewrites whose streamed destination can reset it to 200.
-    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${title} | Destka</title><style>body{margin:0;background:${tokens.color.paper};color:${tokens.color.ink};font-family:${tokens.font.body}}main{max-width:65ch;margin:2rem auto;padding:1rem;overflow-wrap:anywhere}h1{font-family:${tokens.font.display};font-size:clamp(1.75rem,5vw,2.75rem)}p{line-height:1.65}a{color:${tokens.color.primary};display:inline-flex;align-items:center;min-height:44px}a:focus-visible{outline:3px solid ${tokens.color.focus};outline-offset:3px}</style></head><body><main><p>Destka</p><h1>${title}</h1><p>${message}</p><a href="/legal">Каталог опубликованных документов</a></main></body></html>`;
+    const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${t(title)} | Destka</title><style>body{margin:0;background:${tokens.color.paper};color:${tokens.color.ink};font-family:${tokens.font.body}}main{max-width:65ch;margin:2rem auto;padding:1rem;overflow-wrap:anywhere}h1{font-family:${tokens.font.display};font-size:clamp(1.75rem,5vw,2.75rem)}p{line-height:1.65}a{color:${tokens.color.primary};display:inline-flex;align-items:center;min-height:44px}a:focus-visible{outline:3px solid ${tokens.color.focus};outline-offset:3px}</style></head><body><main><p>Destka</p><h1>${t(title)}</h1><p>${t(message)}</p><a href="/legal">${t('Каталог опубликованных документов')}</a></main></body></html>`;
     return safe(
       new NextResponse(html, {
         status,

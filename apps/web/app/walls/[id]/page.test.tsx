@@ -49,3 +49,7 @@ describe('public Wall server page', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => ({ value: 'en' }) }),
+}));

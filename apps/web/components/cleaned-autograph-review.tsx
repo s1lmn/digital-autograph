@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useEffect, useRef, useState } from 'react';
 import { AutographApiError } from '../lib/autograph-api';
@@ -49,6 +50,8 @@ export function CleanedAutographReview({
   initialPreview: Preview;
   onStartOver: () => void;
 }) {
+  const { t } = useLocale();
+
   const [preview, setPreview] = useState(initialPreview);
   const [phase, setPhase] = useState<ApprovalState>({ kind: 'preview' });
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -124,15 +127,16 @@ export function CleanedAutographReview({
 
   return (
     <section className={styles.preview} aria-labelledby="preview-heading">
-      <h2 id="preview-heading">Your cleaned preview</h2>
+      <h2 id="preview-heading">{t('Your cleaned preview')}</h2>
       <p>
-        This cleaned version is private. Review it before you submit it for
-        moderation.
+        {t(
+          'This cleaned version is private. Review it before you submit it for moderation.',
+        )}
       </p>
       <img
         key={`${preview.assetId}:${preview.url}`}
         src={preview.url}
-        alt="Cleaned digital autograph preview"
+        alt={t('Cleaned digital autograph preview')}
         referrerPolicy="no-referrer"
         onLoad={() => {
           setImageLoaded(true);
@@ -145,30 +149,34 @@ export function CleanedAutographReview({
           );
         }}
       />
-      {refreshError && <p role="alert">{refreshError}</p>}
+      {refreshError && <p role="alert">{t(refreshError)}</p>}
       {phase.kind === 'submitted_for_moderation' ? (
         <div role="status" className={styles.status}>
-          <h3>Submitted for moderation</h3>
+          <h3>{t('Submitted for moderation')}</h3>
           <p>
-            Your approval is recorded. No public placement has occurred yet.
+            {t(
+              'Your approval is recorded. No public placement has occurred yet.',
+            )}
           </p>
         </div>
       ) : (
         <div className={styles.approval}>
           <p>
-            I approve this cleaned version of my digital autograph and submit it
-            for moderation.
+            {t(
+              'I approve this cleaned version of my digital autograph and submit it for moderation.',
+            )}
           </p>
           <p>
-            It is not public yet. It may become public after later moderation
-            and product actions. Do not use a bank or legal signature.
+            {t(
+              'It is not public yet. It may become public after later moderation and product actions. Do not use a bank or legal signature.',
+            )}
           </p>
           {phase.kind === 'approval_error' && (
             <div role="alert">
               {phase.legalRequired ? (
                 <FirstUseActionNotice returnTo="/autograph/create" />
               ) : (
-                <p>{phase.message}</p>
+                <p>{t(phase.message)}</p>
               )}
             </div>
           )}
@@ -179,10 +187,10 @@ export function CleanedAutographReview({
             disabled={!imageLoaded || refreshing || phase.kind === 'approving'}
           >
             {phase.kind === 'approving'
-              ? 'Submitting approval…'
+              ? t('Submitting approval…')
               : phase.kind === 'approval_error'
-                ? 'Retry approval'
-                : 'Approve and submit for moderation'}
+                ? t('Retry approval')
+                : t('Approve and submit for moderation')}
           </button>
         </div>
       )}
@@ -192,14 +200,14 @@ export function CleanedAutographReview({
           onClick={refresh}
           disabled={refreshing || phase.kind === 'approving'}
         >
-          {refreshing ? 'Refreshing preview…' : 'Refresh private preview'}
+          {refreshing ? t('Refreshing preview…') : t('Refresh private preview')}
         </button>
         <button
           type="button"
           onClick={onStartOver}
           disabled={refreshing || phase.kind === 'approving'}
         >
-          Start a new autograph
+          {t('Start a new autograph')}
         </button>
       </div>
     </section>

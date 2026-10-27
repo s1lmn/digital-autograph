@@ -1,16 +1,24 @@
+import { localizeMetadata } from '../../../lib/i18n-server';
+
+import { getTranslator } from '../../../lib/i18n-server';
 import { checkoutQuerySchema } from '@digital-autograph/contracts';
 import { loadWebConfig } from '@digital-autograph/config';
 import { FirstUseGate } from '../../../components/first-use-gate';
 export const dynamic = 'force-dynamic';
-export const metadata = {
+const pageMetadata = {
   title: 'Перед первым действием | Destka',
   robots: { index: false, follow: false },
 };
+export async function generateMetadata() {
+  return localizeMetadata(pageMetadata);
+}
 export default async function FirstUsePage({
   searchParams,
 }: {
   searchParams: Promise<{ returnTo?: string }>;
 }) {
+  const t = await getTranslator();
+
   const { returnTo } = await searchParams;
   // Only known interactive destinations, never an external/user-supplied redirect.
   let checkoutDestination = '';
@@ -30,14 +38,14 @@ export default async function FirstUsePage({
       ? returnTo!
       : checkoutDestination || '/autograph/create';
   return (
-    <main lang="ru">
-      <h1>Подтверждения для Destka</h1>
+    <main>
+      <h1>{t('Подтверждения для Destka')}</h1>
       <FirstUseGate
         apiOrigin={loadWebConfig().API_PUBLIC_ORIGIN}
         loginReturnTo={`/legal/first-use?returnTo=${encodeURIComponent(destination)}`}
       >
-        <p>Можно продолжить работу.</p>
-        <a href={destination}>Вернуться к действию</a>
+        <p>{t('Можно продолжить работу.')}</p>
+        <a href={destination}>{t('Вернуться к действию')}</a>
       </FirstUseGate>
     </main>
   );

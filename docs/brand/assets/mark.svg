@@ -6,16 +6,16 @@
   role="img"
   aria-labelledby="title"
 >
-  <title id="title">Digital Autograph working symbol</title>
-  <g
-    transform="translate(0 0) scale(1)"
-    fill="none"
-    stroke="#b2f2d6"
-    stroke-width="4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <rect x="4" y="4" width="56" height="56" rx="12" />
-    <path d="M16 40 27 24l-2 20 15-22-3 19 11-8" />
+  <title id="title">Destka working symbol</title>
+  <g transform="translate(0 0) scale(1.7777777777777777)">
+    <rect width="36" height="36" rx="11" fill="#b0bfff" />
+    <path
+      d="M8 24C12 19 16 9 19 9c4 0-6 20-3 18 2-1 5-12 8-11 2 1-2 6 0 6l5-4M9 28l18-3"
+      fill="none"
+      stroke="#1d2857"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
   </g>
 </svg>

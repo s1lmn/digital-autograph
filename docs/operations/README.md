@@ -1,5 +1,8 @@
 # Operations
 
+[Local image-processing benchmark](image-processing-benchmark.md) documents the
+bounded synthetic processor workload, JSON measurements and capacity-test limits.
+
 [Recovery and incident response](recovery-and-incidents.md) documents the isolated
 PostgreSQL/private-object drill, real backup/restore gates, proposed severities
 and an unfilled operational acceptance record.

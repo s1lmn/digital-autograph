@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useState } from 'react';
 import { frontendCapabilities } from '../lib/frontend-capabilities';
@@ -21,6 +22,8 @@ export function WallSlot({
   actionDisabled?: boolean;
   onAction?: () => void;
 }) {
+  const { t } = useLocale();
+
   const [failedPath, setFailedPath] = useState<string | null>(null);
   const number = slot.position + 1;
   const mediaPath = slot.currentPlacement?.mediaPath;
@@ -31,34 +34,37 @@ export function WallSlot({
       id={`slot-${slot.id}`}
       tabIndex={-1}
       className={styles.slot}
-      aria-label={`Slot ${number}`}
+      aria-label={t(`Slot ${number}`)}
     >
-      <span className={styles.slotNumber}>Slot {number}</span>
+      <span className={styles.slotNumber}>
+        {t('Slot ')}
+        {number}
+      </span>
       {slot.occupied ? (
         <div className={styles.slotContent}>
           {showMedia && mediaPath ? (
             <img
               className={styles.autograph}
               src={`${apiOrigin}${mediaPath}`}
-              alt={`Digital autograph in slot ${number}`}
+              alt={t(`Digital autograph in slot ${number}`)}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onError={() => setFailedPath(mediaPath)}
             />
           ) : (
             <div>
-              <p>Autograph unavailable</p>
+              <p>{t('Autograph unavailable')}</p>
               {mediaPath && (
                 <button type="button" onClick={() => setFailedPath(null)}>
-                  Retry autograph
+                  {t('Retry autograph')}
                 </button>
               )}
             </div>
           )}
           <p>
-            Current placement
+            {t('Current placement')}
             {slot.currentPlacement
-              ? ` · ${placementSourceLabel(slot.currentPlacement.source)}`
+              ? ` · ${t(placementSourceLabel(slot.currentPlacement.source))}`
               : ''}
           </p>
           {!frontendCapabilities.paidTakeover && (
@@ -68,17 +74,20 @@ export function WallSlot({
                 disabled
                 aria-describedby={`takeover-unavailable-${slot.id}`}
               >
-                Paid takeover
+                {t('Paid takeover')}
               </button>
               <p id={`takeover-unavailable-${slot.id}`}>
-                Paid takeover is not available yet.
+                {t('Paid takeover is not available yet.')}
               </p>
             </div>
           )}
         </div>
       ) : (
         <div className={styles.slotContent}>
-          <p>Empty slot</p>
+          <span className={styles.emptyMark} aria-hidden="true">
+            +
+          </span>
+          <p>{t('Empty slot')}</p>
           {actionLabel && (
             <button
               id={`slot-action-${slot.id}`}
@@ -86,7 +95,7 @@ export function WallSlot({
               disabled={actionDisabled}
               onClick={onAction}
             >
-              {actionLabel}
+              {t(actionLabel)}
             </button>
           )}
         </div>

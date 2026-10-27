@@ -1,6 +1,10 @@
-# Digital Autograph Platform
+# Destka
 
 Modular monolith with a Next.js web shell, Fastify API, Node.js worker, PostgreSQL, and local MinIO. The backend provides Creator/Wall and private Autograph upload APIs; claims, processing, and payment flows are still to come.
+
+## Interface
+
+Destka offers Russian (default) and English interfaces, with light, dark and system themes. Language and theme selections persist; switching language preserves an unfinished autograph. Published legal documents remain in their original Russian. See the [interface design notes](docs/design/interface-refresh.md) and [verification record](docs/design/verification.md) for implementation scope and visual previews.
 
 ## Prerequisites
 

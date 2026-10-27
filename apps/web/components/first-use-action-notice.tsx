@@ -1,3 +1,6 @@
+'use client';
+import { useLocale } from './locale-provider';
+
 export function needsFirstUseConfirmation(error: unknown): boolean {
   return (
     !!error &&
@@ -11,18 +14,21 @@ export function needsFirstUseConfirmation(error: unknown): boolean {
   );
 }
 export function FirstUseActionNotice({ returnTo }: { returnTo: string }) {
+  const { t } = useLocale();
+
   return (
-    <p lang="ru">
-      Перед новым действием проверьте актуальные условия.{' '}
+    <p>
+      {t('Перед новым действием проверьте актуальные условия.')}{' '}
       <a
         href={`/legal/first-use?returnTo=${encodeURIComponent(returnTo)}`}
         target="_blank"
         rel="noopener noreferrer"
       >
-        Открыть подтверждения в новой вкладке
+        {t('Открыть подтверждения в новой вкладке')}
       </a>
-      . Затем вернитесь сюда и повторите действие. Текущая вкладка остаётся
-      открытой.
+      {t(
+        '. Затем вернитесь сюда и повторите действие. Текущая вкладка остаётся открытой.',
+      )}
     </p>
   );
 }

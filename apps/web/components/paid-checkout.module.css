@@ -78,3 +78,22 @@
     width: 100%;
   }
 }
+
+.checkout {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--color-border);
+  border-radius: 1.5rem;
+  background: var(--color-surface);
+}
+.checkout fieldset {
+  border-radius: 0.85rem;
+}
+.checkout dl {
+  background: var(--ui-surface-subtle);
+  padding: 1.25rem;
+  border-radius: 0.85rem;
+}
+.checkout img {
+  padding: 1rem;
+  border-radius: 0.85rem;
+}

@@ -185,7 +185,7 @@ test('default deployment exposes no VkId route or public button; UI uses server 
     page.getByRole('heading', { name: 'Sign in to continue' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: 'Продолжить через VK ID' }),
+    page.getByRole('link', { name: 'Continue with VK ID' }),
   ).toHaveCount(0);
   // Component visibility only; this does not enable the runtime route.
   await page.route(`${apiOrigin}/auth/providers`, (route) =>
@@ -199,7 +199,7 @@ test('default deployment exposes no VkId route or public button; UI uses server 
   );
   await page.goto(`/walls/${e2eWallId}`);
   await page.getByRole('button', { name: 'Sign in to claim' }).click();
-  const link = page.getByRole('link', { name: 'Продолжить через VK ID' });
+  const link = page.getByRole('link', { name: 'Continue with VK ID' });
   await expect(link).toHaveAttribute(
     'href',
     `${apiOrigin}/auth/vk-id/start?returnTo=${encodeURIComponent(`/walls/${e2eWallId}`)}`,

@@ -213,6 +213,11 @@ export function createPgAutographProcessingRepository(pool: Pool) {
       deleteObject: (key: string) => Promise<void>,
     ): Promise<boolean> {
       return transaction(pool, async (client) => {
+        // One cleanup operation across worker processes; non-waiting admission.
+        const permit = await client.query<{ acquired: boolean }>(
+          'SELECT pg_try_advisory_xact_lock(764212, 0) AS acquired',
+        );
+        if (!permit.rows[0]?.acquired) return false;
         const selected = await client.query<{
           autograph_id: string;
           asset_id: string;
@@ -226,8 +231,33 @@ export function createPgAutographProcessingRepository(pool: Pool) {
           [graceSeconds],
         );
         const row = selected.rows[0];
-        if (!row) return false;
+        if (!row) {
+          const retired = await client.query<{ storage_key: string }>(
+            `SELECT storage_key FROM original_upload_tombstones WHERE next_check_at <= now()
+             ORDER BY next_check_at LIMIT 1 FOR UPDATE SKIP LOCKED`,
+          );
+          const tombstone = retired.rows[0];
+          if (!tombstone) return false;
+          // Commit the backoff even on provider failure. Never drop a tombstone on
+          // a successful HEAD/delete: an older aborted PUT can still arrive later.
+          await client.query(
+            `UPDATE original_upload_tombstones SET next_check_at = now() + interval '1 hour' WHERE storage_key = $1`,
+            [tombstone.storage_key],
+          );
+          try {
+            await deleteObject(tombstone.storage_key);
+          } catch {
+            console.warn('Retired private upload cleanup failed');
+          }
+          return true;
+        }
+
         await deleteObject(row.storage_key);
+        await client.query(
+          `INSERT INTO original_upload_tombstones(storage_key, next_check_at)
+          VALUES ($1, now() + interval '1 hour') ON CONFLICT (storage_key) DO NOTHING`,
+          [row.storage_key],
+        );
         await client.query(
           `DELETE FROM autograph_assets WHERE id = $1::uuid AND status = 'reserved'`,
           [row.asset_id],

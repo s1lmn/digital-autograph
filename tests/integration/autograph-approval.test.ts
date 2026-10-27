@@ -32,7 +32,7 @@ const sessions = new SessionService(
   1209600,
 );
 const storage: PrivateOriginalStorage = {
-  signUpload: async () => {
+  putOriginal: async () => {
     throw new Error('Unexpected upload signing');
   },
   statObject: async () => null,

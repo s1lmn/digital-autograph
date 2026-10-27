@@ -133,20 +133,24 @@ test('new user uploads, reviews, claims and reads only their persistent history'
   );
   const upload = page.waitForResponse(
     (response) =>
-      response.url().startsWith(process.env.S3_ENDPOINT!) &&
+      response.url().startsWith(`${apiUrl}/autographs/`) &&
+      response.url().includes('/upload/') &&
       response.request().method() === 'PUT',
   );
   await page.getByRole('button', { name: 'Create private preview' }).click();
   const autograph = await (await created).json();
   const uploaded = await upload;
-  expect(uploaded.status()).toBe(200);
+  expect(uploaded.status()).toBe(204);
   expect(uploaded.request().headers()).toMatchObject({
     'content-type': 'image/png',
-    'if-none-match': '*',
   });
   await expect(
     page.getByRole('heading', { name: 'Your cleaned preview' }),
   ).toBeVisible({ timeout: 30_000 });
+  // Conditional create is enforced by the backend S3 request and integration race tests.
+  expect((await uploaded.request().allHeaders()).cookie).toContain(
+    'da_session=',
+  );
   const preview = page.getByRole('img', {
     name: 'Cleaned digital autograph preview',
   });

@@ -141,6 +141,20 @@
       "when": 1791665870774,
       "tag": "0019_checkout_confirmation",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793113822787,
+      "tag": "0020_bounded_original_upload",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793114024929,
+      "tag": "0021_retired_upload_keys",
+      "breakpoints": true
     }
   ]
 }

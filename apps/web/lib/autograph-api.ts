@@ -89,8 +89,8 @@ export function autographApi(origin: string) {
         await new Promise<void>((resolve, reject) => {
           const request = new XMLHttpRequest();
           const abort = () => request.abort();
-          request.open(signed.method, signed.url);
-          request.withCredentials = false;
+          request.open(signed.method, new URL(signed.url, origin).href);
+          request.withCredentials = true;
           for (const [name, value] of Object.entries(signed.headers)) {
             request.setRequestHeader(name, value);
           }
@@ -126,11 +126,11 @@ export function autographApi(origin: string) {
         });
         return;
       }
-      const response = await fetch(signed.url, {
+      const response = await fetch(new URL(signed.url, origin).href, {
         method: signed.method,
         headers: signed.headers,
         body: image,
-        credentials: 'omit',
+        credentials: 'include',
         signal,
       });
       if (!response.ok)

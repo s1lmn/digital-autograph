@@ -26,42 +26,102 @@ After approval and after either moderation outcome, the owner may still request 
 
 An original Asset belongs to one Autograph. Partial unique indexes allow at most one original and one cleaned Asset per Autograph; the storage key is independently unique and nonblank. Original rows retain declared type/size, reservation expiry, HEAD size, and upload timestamps. Cleaned rows instead store verified PNG type/size/dimensions and creation/upload timestamps. Role-dependent checks prohibit meaningless original-upload fields on cleaned rows. Both objects are private; the cleaned derivative has a different key and never overwrites the original.
 
-Storage keys are generated server-side from opaque Autograph and Asset UUIDs: `autographs/<autograph-id>/original/<asset-id>`. They contain no filename, identity-provider information, username, email, or session material. The API never returns the key. The one signed PUT URL is an upload capability, not a public or permanent read URL; request/response logging must not record it or its query signature.
+Storage keys are generated server-side from opaque Autograph and Asset UUIDs: `autographs/<autograph-id>/original/<asset-id>`. They contain no filename, identity-provider information, username, email, or session material. The API never returns the key. The upload response contains a relative API route and Asset UUID, never a storage capability or key. Session authorization is required for every upload.
 
-## Direct upload
+## Bounded original upload
 
-The canvas client at `/autograph/create` uses this same upload flow. It keeps
-strokes in browser memory, rasterizes a cropped transparent PNG no larger than
-1200 × 600, and submits only the PNG bytes. The frontend never sends stroke
-JSON or a base64 data URL. Login is checked by the browser through `/auth/me` and
-Google/Telegram start links return to that fixed local path. Browser API
-requests use the session cookie and the API's trusted-origin check; direct
-object-storage PUT uses only the signed method, URL, and headers, with no
-session credentials. `API_PUBLIC_ORIGIN` is the browser-visible API origin,
-distinct from the web server's `API_INTERNAL_URL`. The local MinIO CORS origin
-must match the web origin.
+See [ADR 0010](../adr/0010-bounded-original-upload.md). The canvas/photo UI keeps
+its existing create → initiate → upload → complete → preview/approval flow.
+Only the byte transport changes: credentialed PUT to the API, using the session
+cookie and trusted-origin check. The original never becomes publicly readable.
 
-After completion, the client polls the owner-only status endpoint with an
-abortable, bounded wait. On `awaiting_approval`, it fetches a short-lived
-owner-only preview capability. The UI can request a fresh preview after expiry.
-The signed preview URL is not logged by the client and is displayed with
-`referrerPolicy="no-referrer"`. A failed worker job asks the user to start a new
-drawing; it never marks an Autograph approved or public.
+1. `POST /autographs` creates an owned draft under atomic admission quotas.
+2. `POST /autographs/:id/upload` reserves one original with server-generated UUID
+   key and declared PNG/JPEG type/size (1–10 MiB). Matching retry returns the same
+   Asset and the same expiry. Expired reservations must be cleaned before reuse.
+3. The response contains `method: PUT`, relative `url:
+/autographs/<id>/upload/<asset-id>`, Content-Type and expiry. It contains no S3
+   credentials or signature. The browser resolves the URL against its API origin
+   and includes the session cookie, including on XHR progress uploads.
+4. The raw-body parser does not buffer. After authentication, legal/age gate,
+   ownership, reservation/expiry and PostgreSQL I/O admission, the handler counts
+   actual stream bytes up to 10 MiB. Missing/false Content-Length cannot bypass it.
+   Only a complete body matching the reservation may reach the S3 adapter.
+5. The backend performs a bounded single PutObject with actual ContentLength,
+   expected ContentType and **If-None-Match: `*`**. The provider's conditional write
+   protects an existing object; HTTP 412 means completion may recover an earlier
+   successful write whose response was lost. No multipart upload is initiated.
+6. Completion retains HEAD metadata validation and atomically enqueues one private
+   image-processing job. Bytes remain untrusted until processing, owner approval
+   and moderation. Free Claim/payment/history authorization is unchanged.
 
-1. `POST /autographs` creates a draft owned by the session User.
-2. `POST /autographs/:id/upload` reserves one original Asset under a PostgreSQL row lock. The request declares `image/png` or `image/jpeg` and 1–10 MiB. Repeating initiation with the same metadata refreshes the reservation and signs the same key; different metadata or an already completed upload is rejected.
-3. The response returns a short-lived signed PUT URL and the required `Content-Type` and `If-None-Match: *` headers. `UPLOAD_URL_TTL_SECONDS` defaults to 300 and is bounded to 60–600. Both headers are signed. Conditional PUT prevents a replayed URL from overwriting an already stored original. The client uploads directly to private object storage.
-4. `POST /autographs/:id/upload/complete` locks the Autograph, performs a backend HEAD, and rejects a missing, zero-length, oversized, mismatched-size, or mismatched-content-type object. Rejected oversized/mismatched objects are deleted best-effort while the lock is held; a failed deletion leaves the reserved row for eventual cleanup. A PostgreSQL transaction changes Asset and Autograph state and enqueues one processing job together. Repeated completion is idempotent until owner approval; after approval it is rejected.
+Every API instance uses the same PostgreSQL limits (engineering admission caps,
+not pricing/eligibility): 100 total Autographs/account; 20 creates/account/hour;
+2000 creates globally/hour; 3 reserved originals/account; 300 globally. Reserved
+capacity is charged at the worst case of 10 MiB per upload (30 MiB/account,
+3000 MiB globally), including expired reservations until cleanup actually succeeds.
+New reservation admission also caps original Assets at 100/account, including
+completed objects, so pre-existing legacy drafts cannot bypass the object budget.
+Existing originals/history are preserved. A short
+global advisory transaction lock serializes quota checks/insertion; no storage I/O
+occurs under that quota lock. Counts come from persisted rows, with DB-clock rolling
+creation windows; API restarts cannot reset quotas. Matching initiation retry does
+not consume a second reservation or renew its lifetime.
 
-The declared MIME type and size, S3 Content-Type metadata, and a successful PUT are untrusted. The signed URL limits the upload route, key, headers, and time; it does not validate image bytes. Size is checked at HEAD and must be enforced again while reading bytes in the processing worker. SVG, PDF, and arbitrary binary types cannot be requested through the API.
+Each reservation allows five byte-upload attempts. An atomic UPDATE charges the
+attempt before external I/O; cancellation, failure and missing acknowledgement do
+not refund it. Initiation does not reset it. Four shared PostgreSQL transaction
+advisory permits cap original byte upload/completion I/O across API processes;
+four incoming byte bodies per process are admitted before parsing. Excess requests
+receive 429; retry with backoff. The handler has a 30-second abort deadline and
+S3 PUT/HEAD/delete have actual SDK abort deadlines of 10 seconds. Chunk accumulation
+plus final concatenation uses at most approximately 80 MiB for four bodies, besides
+runtime/SDK overhead. This is an engineering bound, not a staging capacity result.
 
-## Bucket and access
+## Failure, expiry and orphan reconciliation
 
-The S3-compatible adapter signs writes and performs private HEAD/delete through server credentials. It never generates a read URL or public ACL. Local/test startup creates the configured bucket when absent and removes any bucket policy, leaving anonymous access disabled. Integration tests prove an unsigned GET cannot read an uploaded original. Staging/production must provision a private bucket and least-privilege credentials outside this repository; the app does not auto-create or mutate production buckets. S3-compatible production endpoints must use HTTPS. Credentials may come from an explicit pair or the SDK's environment/role provider chain.
+A rejected or cancelled body is not forwarded to storage. The reservation remains
+charged and can be retried within its expiry/attempt budget. On unknown PUT outcome,
+never delete a possibly valid object or issue a replacement key immediately: retry
+is conditional and completion can recover it. The Autograph row lock serializes
+upload, completion and abandoned cleanup. A02 retains bounded storage I/O under
+this existing lock; [A03](../architecture/autograph-io-next-stage.md) is the separate
+plan to remove it safely.
 
-The pinned local MinIO build does not implement S3 `PutBucketCors`; local/CI CORS is configured with `MINIO_API_CORS_ALLOW_ORIGIN`. A production S3 bucket's CORS policy must allow the web origin, PUT, `Content-Type`, and `If-None-Match`. CORS enables browser upload but does not grant anonymous object reads.
+The worker removes abandoned reserved objects after expiry plus cleanup grace,
+then atomically retires the key in `original_upload_tombstones`, removes the Asset
+reservation and returns its Autograph to draft. Failed deletion preserves the
+reservation for retry, without releasing quota. A fresh attempt uses a new Asset
+UUID/key. Tombstones have no subject FK and survive reservation or account removal;
+they contain only a private opaque key and timestamps, never original image bytes.
+When there is no expired reservation to clean, the worker reconciles due tombstones,
+with a one-hour backoff on success or failure. They are not discarded after one
+successful DELETE: an aborted request can have a late, unknown provider outcome.
+Thus a later object at a retired key stays tracked and is deleted again. Cleanup
+uses a single non-waiting PostgreSQL permit across workers. New reservation admission also caps pending reservations plus durable tombstones
+at 10,000 keys globally. Reconciliation does not automatically discard this evidence;
+reaching the cap fails closed for new reservations and requires an operator-reviewed
+retention/reconciliation decision. Existing completion and payment recovery continue.
+Persistent provider
+failures, tombstone growth and cleanup lag require monitoring/privacy operations;
+this PR does not claim production retention acceptance or run a cloud lifecycle job.
 
-The worker deletes abandoned reserved objects after `upload_expires_at` plus the configured grace period, while holding the Autograph row lock and rechecking state. Successful cleanup removes the reservation and returns the Autograph to `draft`; failed S3 deletion leaves it eligible for retry. See [autograph-processing.md](autograph-processing.md) for job leases, safety limits, and storage reconciliation.
+## Bucket and rollout
+
+Local/test bootstrap creates a private bucket; staging/production bucket/IAM are
+provisioned separately and never changed by application startup. Anonymous original
+reads stay forbidden. Existing bucket PUT CORS configuration is retained for rollout
+compatibility but does not authorize writes; new clients need only the API CORS
+Content-Type allowance. Preview URLs remain short-lived, owner-only private read
+capabilities displayed with `referrerPolicy="no-referrer"`.
+
+Deploy API and web together only after a separately approved release. Old clients
+cannot use the new session-protected URL with `credentials: omit`; they must reload.
+Drain old API versions and wait at least the former maximum upload URL TTL (600s)
+plus clock skew before claiming that no previously minted direct PUT remains usable.
+Do not enable Release or change bucket settings as part of this code PR. A real
+isolated target-provider conditional-PUT contract test is still a staging gate;
+local MinIO proof does not certify the deployed provider's configuration.
 
 ## Placement relationship
 

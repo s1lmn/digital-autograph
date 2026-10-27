@@ -24,4 +24,10 @@ repository audit, ЮKassa/Т-Бизнес decision inputs, merchant website gaps
 human-only onboarding checklist. The [offline acquiring cost model](payment-economics.md)
 compares configurable fee assumptions. ЮKassa is the selected primary, Т-Бизнес
 the fallback; ЮKassa sandbox credentials are stored externally in Lockbox.
-Payment runtime and production activation remain deferred.
+Payment orchestration and the ЮKassa adapter are implemented; real provider
+verification, merchant approval and production activation remain separate gates.
+
+[Merchant Review Readiness Checklist](merchant-review-readiness.md),
+[commercial owner decisions](commercial-owner-decisions.md) and the
+[launch critical path](../operations/destka-launch-readiness.md) record the
+27.10.2026 evidence and remaining approvals.

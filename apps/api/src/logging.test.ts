@@ -119,3 +119,51 @@ describe('real API logging and exception boundary', () => {
     }
   });
 });
+
+it('logs only route templates and request correlation, excluding subject paths, client host and address', async () => {
+  let output = '';
+  const app = Fastify({
+    logger: apiLoggerOptions({
+      write: (line) => {
+        output += line;
+      },
+    }),
+  });
+  registerSafeApiErrors(app);
+  app.get('/owners/:id', async () => ({ ok: true }));
+  try {
+    const response = await app.inject({
+      url: `/owners/${secret}?token=${secret}`,
+      remoteAddress: '198.51.100.77',
+      headers: { host: `${secret}.example.test`, cookie: `session=${secret}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const missing = await app.inject(`/unknown/${secret}`);
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json()).toEqual({
+      message: `Route GET:/unknown/${secret} not found`,
+      error: 'Not Found',
+      statusCode: 404,
+    });
+    expect(output).not.toContain(secret);
+    expect(output).not.toContain('198.51.100.77');
+    const lines = output
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(lines.filter((line) => line.req).map((line) => line.req)).toEqual([
+      { method: 'GET', url: '/owners/:id' },
+      { method: 'GET', url: '<unmatched>' },
+    ]);
+    expect(
+      lines
+        .filter((line) => line.req)
+        .every((line) => typeof line.reqId === 'string'),
+    ).toBe(true);
+    expect(
+      lines.filter((line) => line.res).map((line) => line.res.statusCode),
+    ).toEqual([200, 404]);
+  } finally {
+    await app.close();
+  }
+});

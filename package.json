@@ -6,6 +6,7 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "test:recovery-drill": "vitest run --config vitest.recovery.config.ts",
     "ops:snapshot": "pnpm --filter @digital-autograph/api exec tsx scripts/operational-snapshot.ts",
     "brand:export": "node scripts/brand-kit.mjs",
     "brand:check": "node scripts/brand-kit.mjs --check",

@@ -1,5 +1,9 @@
 # Operations
 
+[Recovery and incident response](recovery-and-incidents.md) documents the isolated
+PostgreSQL/private-object drill, real backup/restore gates, proposed severities
+and an unfilled operational acceptance record.
+
 [Read-only operational snapshot](operational-snapshot.md) provides bounded
 database/storage observations and machine alert codes; installation, delivery
 and operator acceptance remain separate gates.

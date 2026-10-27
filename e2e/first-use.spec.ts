@@ -1,6 +1,7 @@
 import { test, expect, e2eUserId, e2eWallId } from './fixtures';
 import { SessionService } from '../packages/auth/src/index';
 import { createPgSessionRepository } from '../packages/db/src/index';
+test.use({ uiLocale: 'ru' });
 const api = process.env.API_PUBLIC_ORIGIN ?? 'http://127.0.0.1:4000';
 test('synthetic published first-use: keyboard/mobile, stale edition, retry, reload and new tab', async ({
   page,
@@ -49,7 +50,7 @@ test('synthetic published first-use: keyboard/mobile, stale edition, retry, relo
       name: /Пользовательское соглашение — редакция test-v0/,
     }),
   ).toBeVisible();
-  await expect(heading.locator('..')).toHaveAttribute('lang', 'ru');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
   for (const width of [1440, 1024, 390, 320])
     for (const scale of [100, 200]) {
       await page.setViewportSize({ width, height: 900 });
@@ -100,7 +101,7 @@ test('synthetic published first-use: keyboard/mobile, stale edition, retry, relo
   const second = await page.context().newPage();
   await second.goto('/autograph/create');
   await expect(
-    second.getByRole('heading', { name: 'Draw your autograph' }),
+    second.getByRole('heading', { name: 'Нарисуй автограф' }),
   ).toBeVisible();
   await expect(
     second.getByRole('checkbox', { name: 'Мне исполнилось 18 лет.' }),

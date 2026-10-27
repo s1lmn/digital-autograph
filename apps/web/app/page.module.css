@@ -1,0 +1,328 @@
+.page {
+  max-width: 90rem;
+  margin: 0 auto;
+  padding: 0 var(--space-page);
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 5rem);
+  padding-block: clamp(3rem, 6vw, 6.5rem);
+}
+.heroCopy {
+  padding-bottom: 0.5rem;
+}
+.introduction {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1.75rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+.introduction span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-color-primary);
+}
+.hero h1 {
+  font-size: clamp(3.5rem, 6.8vw, 6.5rem);
+  font-weight: 700;
+  letter-spacing: -0.075em;
+  line-height: 1.03;
+  margin: 0 0 1.75rem;
+}
+.description {
+  max-width: 26rem;
+  margin: 0 0 2rem;
+  color: var(--color-muted);
+  font-size: clamp(1rem, 1.3vw, 1.15rem);
+  line-height: 1.8;
+}
+.heroActions {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.howLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+.privateNote {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  margin-top: 1.5rem;
+}
+.artwork {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 1.8rem 2rem 1.2rem;
+  background: var(--ui-stage);
+  border-radius: 2rem;
+  color: var(--ui-stage-ink);
+}
+.artHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.7rem;
+  padding-bottom: 2.5rem;
+}
+.paper {
+  margin: 0 0.8rem 2rem;
+  padding: 1.4rem 1.5rem;
+  background: #fff;
+  color: #252c43;
+  box-shadow: var(--ui-shadow);
+  transform: rotate(-5deg);
+  border-radius: 0.4rem;
+}
+.paperHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid #e4e6ef;
+}
+.signatureGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding-block: 0.25rem;
+}
+.signatureGrid > div {
+  min-width: 0;
+  color: #3455db;
+}
+.signatureGrid > div:nth-child(2),
+.signatureGrid > div:nth-child(3) {
+  color: #363b4b;
+}
+.signatureGrid > div:nth-child(2n) {
+  border-left: 1px solid #eceef4;
+}
+.signatureGrid > div:nth-child(-n + 2) {
+  border-bottom: 1px solid #eceef4;
+}
+.signatureGrid svg {
+  display: block;
+  width: 100%;
+}
+.paperFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid #e4e6ef;
+  font-size: 0.55rem;
+  color: #646875;
+}
+.signatureNote {
+  width: max-content;
+  max-width: 100%;
+  position: relative;
+  margin: -1.8rem -0.75rem 1rem auto;
+  transform: rotate(3deg);
+  background: #3455db;
+  color: #fff;
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.artwork figcaption {
+  text-align: center;
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+.process {
+  display: grid;
+  grid-template-columns: 1fr 2.1fr;
+  gap: 4rem;
+  padding-block: 3rem 3.5rem;
+  border-top: 1px solid var(--color-border);
+}
+.processIntro h2 {
+  margin: 0 0 0.8rem;
+  font-size: 2rem;
+  letter-spacing: -0.05em;
+}
+.processIntro p {
+  max-width: 24ch;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  gap: 2rem;
+}
+.stepNumber {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--brand-color-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.steps h3 {
+  font-size: 0.95rem;
+  margin: 1rem 0 0.65rem;
+}
+.steps p {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  line-height: 1.8;
+  margin: 0;
+}
+.wallNote {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 3rem;
+  margin-bottom: 4rem;
+  padding: 1.8rem 2rem;
+  background: var(--ui-surface-subtle);
+  border-radius: 1.25rem;
+}
+.wallNote h2 {
+  font-size: 1rem;
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+.wallNote p {
+  max-width: 75ch;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  margin: 0;
+}
+.wallNote a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  gap: 1rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  flex-shrink: 0;
+}
+@media (min-width: 100rem) {
+  .hero {
+    padding-block: 6.5rem;
+  }
+}
+@media (max-width: 60rem) {
+  .hero {
+    gap: 2rem;
+  }
+  .artwork {
+    padding-inline: 1rem;
+  }
+  .process {
+    gap: 2rem;
+    grid-template-columns: 1fr 2.5fr;
+  }
+  .steps {
+    gap: 1rem;
+  }
+  .wallNote {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+@media (max-width: 45rem) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    padding-block: 3rem;
+  }
+  .hero h1 {
+    font-size: clamp(3.5rem, 12vw, 5.5rem);
+  }
+  .heroActions {
+    gap: 1.2rem;
+  }
+  .artwork {
+    max-width: 32rem;
+    width: 100%;
+    justify-self: center;
+    padding: 1.5rem;
+  }
+  .artHeading {
+    padding-bottom: 2rem;
+  }
+  .paper {
+    max-width: 24rem;
+    margin-inline: auto;
+  }
+  .process {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .processIntro p {
+    max-width: 100%;
+  }
+  .steps {
+    gap: 1.5rem;
+  }
+  .wallNote {
+    padding: 1.5rem;
+  }
+}
+@media (max-width: 28rem) {
+  .steps {
+    grid-template-columns: 1fr;
+    gap: 1.75rem;
+  }
+  .steps li {
+    padding-left: 3rem;
+    position: relative;
+  }
+  .stepNumber {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+  .steps h3 {
+    margin-top: 0;
+  }
+  .paper {
+    padding-inline: 1rem;
+  }
+  .heroActions {
+    align-items: flex-start;
+  }
+  .signatureNote {
+    font-size: 0.65rem;
+  }
+}
+
+.hero h1:lang(ru) {
+  font-size: clamp(2.4rem, 5.6vw, 5rem);
+}
+@media (max-width: 45rem) {
+  .hero h1:lang(ru) {
+    font-size: clamp(2.15rem, 10vw, 4.5rem);
+  }
+}

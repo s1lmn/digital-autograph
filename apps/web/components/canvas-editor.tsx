@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -23,6 +24,8 @@ export function CanvasEditor({
   onStrokesChange,
   disabled = false,
 }: CanvasEditorProps) {
+  const { t } = useLocale();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokesRef = useRef<Stroke[]>([]);
   const activePointerRef = useRef<number | null>(null);
@@ -184,10 +187,11 @@ export function CanvasEditor({
     <section aria-labelledby="drawing-heading" className={styles.editor}>
       <div className={styles.header}>
         <div>
-          <h2 id="drawing-heading">Draw your autograph</h2>
+          <h2 id="drawing-heading">{t('Draw your autograph')}</h2>
           <p>
-            Use your finger, mouse, or stylus. The canvas stays private while
-            you edit.
+            {t(
+              'Use your finger, mouse, or stylus. The canvas stays private while you edit.',
+            )}
           </p>
         </div>
         <div className={styles.actions}>
@@ -196,21 +200,21 @@ export function CanvasEditor({
             onClick={undo}
             disabled={disabled || strokeCount === 0}
           >
-            Undo
+            {t('Undo')}
           </button>
           <button
             type="button"
             onClick={clear}
             disabled={disabled || strokeCount === 0}
           >
-            Clear
+            {t('Clear')}
           </button>
         </div>
       </div>
       <canvas
         ref={canvasRef}
         className={styles.canvas}
-        aria-label="Autograph drawing area"
+        aria-label={t('Autograph drawing area')}
         aria-describedby="drawing-help"
         tabIndex={disabled ? -1 : 0}
         onKeyDown={onKeyDown}
@@ -224,12 +228,12 @@ export function CanvasEditor({
         }}
       />
       <p id="drawing-help" className={styles.help}>
-        Draw inside the bordered area. Keyboard: focus the canvas, press Space
-        to lower or lift the pen, and use arrow keys to move; hold Shift for
-        smaller steps. Use Undo or Clear to correct your drawing.
+        {t(
+          'Draw inside the bordered area. Keyboard: focus the canvas, press Space to lower or lift the pen, and use arrow keys to move; hold Shift for smaller steps. Use Undo or Clear to correct your drawing.',
+        )}
       </p>
       <p className={styles.srOnly} role="status" aria-live="polite">
-        {message}
+        {t(message)}
       </p>
     </section>
   );

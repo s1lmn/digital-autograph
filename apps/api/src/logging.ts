@@ -28,9 +28,11 @@ export function apiLoggerOptions(stream?: {
       req(request) {
         return {
           method: request.method,
-          url: request.url?.split('?')[0],
-          host: request.headers.host,
-          remoteAddress: request.ip,
+          // Route metadata is server-controlled; raw paths can contain subject
+          // IDs or secrets even when their query string has been removed.
+          url: request.is404
+            ? '<unmatched>'
+            : (request.routeOptions?.url ?? '<unmatched>'),
         };
       },
       res(reply) {
@@ -53,6 +55,14 @@ export function apiLoggerOptions(stream?: {
 }
 
 export function registerSafeApiErrors(app: FastifyInstance): void {
+  // Preserve Fastify's public 404 contract without its default raw-URL log.
+  app.setNotFoundHandler((request, reply) =>
+    reply.code(404).send({
+      message: `Route ${request.method}:${request.url} not found`,
+      error: 'Not Found',
+      statusCode: 404,
+    }),
+  );
   app.setErrorHandler((error, request, reply) => {
     let status =
       reply.statusCode >= 400 && reply.statusCode <= 599

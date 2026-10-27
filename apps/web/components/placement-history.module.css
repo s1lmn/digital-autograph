@@ -47,3 +47,18 @@
   align-items: center;
   min-height: 44px;
 }
+
+.item {
+  padding: 1.5rem;
+  background: var(--brand-color-surface);
+  border-radius: 1rem;
+}
+.item p {
+  font-size: 0.85rem;
+  color: var(--brand-color-muted);
+  line-height: 1.8;
+}
+.item h2,
+.item h3 {
+  font-size: 1.15rem;
+}

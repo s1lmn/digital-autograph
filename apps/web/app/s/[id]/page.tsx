@@ -1,3 +1,4 @@
+import { getTranslator } from '../../../lib/i18n-server';
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
@@ -29,12 +30,13 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  const t = await getTranslator();
   const { id } = await params;
   const share = await load(id);
-  const title = `${share.creator} · ${share.slotNumber === null ? 'Final Wall' : `Slot ${share.slotNumber}`}`;
+  const title = `${share.creator} · ${share.slotNumber === null ? t('Final Wall') : t(`Slot ${share.slotNumber}`)}`;
   const description = share.publicAlias
-    ? `${share.publicAlias} left a mark. View the Wall.`
-    : 'View this digital autograph Wall.';
+    ? t('{name} left a mark. View the Wall.', { name: share.publicAlias })
+    : t('View this digital autograph Wall.');
   const image = {
     url: `${loadWebConfig().API_PUBLIC_ORIGIN}/public/shares/${id}/card`,
     width: 1200,
@@ -59,6 +61,8 @@ export default async function Page({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getTranslator();
+
   const share = await load((await params).id);
   const apiOrigin = loadWebConfig().API_PUBLIC_ORIGIN;
   const destination = `/walls/${share.wallId}${share.slotId ? `#slot-${share.slotId}` : ''}`;
@@ -66,7 +70,9 @@ export default async function Page({
     <main>
       <h1>{share.creator}</h1>
       <p>
-        {share.slotNumber === null ? 'Final Wall' : `Slot ${share.slotNumber}`}
+        {share.slotNumber === null
+          ? t('Final Wall')
+          : t(`Slot ${share.slotNumber}`)}
       </p>
       {share.publicAlias && <p>{share.publicAlias}</p>}
       <img
@@ -74,10 +80,10 @@ export default async function Page({
         width="1200"
         height="630"
         style={{ maxWidth: '100%', height: 'auto' }}
-        alt="Digital autograph share card"
+        alt={t('Digital autograph share card')}
       />
       <a className="actionLink" href={destination}>
-        View the Wall
+        {t('View the Wall')}
       </a>
       <ShareReferral shareId={share.id} apiOrigin={apiOrigin} />
     </main>

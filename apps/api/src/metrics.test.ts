@@ -122,18 +122,34 @@ describe('Fastify aggregate metrics', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const { app, snapshots } = fixture();
     app.get('/ok', async () => ({ ok: true }));
-    const info = vi.spyOn(app.log, 'info').mockImplementation(() => {
+    const originalInfo = app.log.info;
+    const metricSink = vi.fn(() => {
       throw new Error('sink canary');
+    });
+    const info = vi.spyOn(app.log, 'info').mockImplementation((...args) => {
+      const record = args[0];
+      // Fastify also emits request logs through this logger. Inject failure
+      // only at the metric sink whose recovery behavior this test exercises.
+      if (
+        record &&
+        typeof record === 'object' &&
+        'event' in record &&
+        record.event === 'API_METRICS'
+      ) {
+        return metricSink();
+      }
+      Reflect.apply(originalInfo, app.log, args);
     });
     try {
       expect((await app.inject('/ok')).statusCode).toBe(200);
       vi.advanceTimersByTime(apiMetricsIntervalMs);
-      expect(info).toHaveBeenCalledOnce();
+      expect(metricSink).toHaveBeenCalledOnce();
       expect((await app.inject('/ok')).statusCode).toBe(200);
     } finally {
       await app.close();
     }
-    expect(info).toHaveBeenCalledTimes(2);
+    info.mockRestore();
+    expect(metricSink).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(0);
     expect(snapshots()).toHaveLength(0);
   });

@@ -1,6 +1,6 @@
 # Destka
 
-Modular monolith with a Next.js web shell, Fastify API, Node.js worker, PostgreSQL, and local MinIO. The backend provides Creator/Wall and private Autograph upload APIs; claims, processing, and payment flows are still to come.
+Modular monolith with a Next.js web shell, Fastify API, Node.js worker, PostgreSQL, and local MinIO. The backend provides Creator/Wall, private Autograph uploads and processing, moderated Free Claim, placement history, and tested payment/takeover orchestration. Paid takeover and Creator Dashboard remain disabled in the frontend; real payment activation, legal publication, provider acceptance and launch operations remain separate gates.
 
 ## Interface
 
@@ -83,7 +83,7 @@ failure makes the command fail.
 
 - `apps/web`: presentation and a server-side API health call.
 - `apps/api`: HTTP endpoints and application orchestration.
-- `apps/worker`: process lifecycle and future background tasks.
+- `apps/worker`: private image processing, notification delivery and expired OAuth-attempt cleanup.
 - `packages/domain`: framework-independent rules.
 - `packages/auth`: provider-independent session lifecycle.
 - `packages/walls`: Creator/Wall application rules.

@@ -157,3 +157,39 @@ until support and a representative lockfile update are verified. Continue the
 manual audit, targeted-update and frozen-lockfile process above, preserving
 overrides and release-age protections. EGO-88's broader dependency-maintenance
 and developer-workflow acceptance remains open.
+
+## Runtime patch and remaining dependency triage (EGO-109)
+
+Fastify is raised from 5.12.5 to 5.12.7, retaining its major version, for
+[GHSA-389g-gv7q-r4x8](https://github.com/advisories/GHSA-389g-gv7q-r4x8).
+The advisory concerns case-sensitive propertyNames in a header schema. Current
+handlers use Zod and do not configure that header-schema feature; this does not
+justify retaining the vulnerable runtime dependency. Full API/integration/browser
+regressions validate the compatible patch. No audit threshold or override changes.
+
+On 26 October 2026, the full workspace audit reports 8 Moderate and 5 Low
+findings; the production audit reports 4 Moderate and 4 Low. Neither audit has
+High or Critical findings. Runtime findings remain in the two transitive
+`fast-uri` major versions:
+[GHSA-w74x-v6f9-j3xg](https://github.com/advisories/GHSA-w74x-v6f9-j3xg),
+[GHSA-xhq7-xmqj-769h](https://github.com/advisories/GHSA-xhq7-xmqj-769h),
+[GHSA-wjr9-j795-jxcr](https://github.com/advisories/GHSA-wjr9-j795-jxcr) and
+[GHSA-333x-w4r6-6crp](https://github.com/advisories/GHSA-333x-w4r6-6crp).
+These findings still require a reviewed compatibility fix under EGO-109; they
+are not dismissed by the High/Critical gate.
+
+Development tooling contributes another 4 Moderate and 1 Low: legacy esbuild
+via drizzle-kit, esbuild via tsup, and Vitest 3/@vitest/mocker.
+The esbuild findings require its development HTTP server; this workspace invokes
+its transformation/build APIs and does not expose esbuild.serve. The two mocker
+advisories concern the public mockerPlugin/interceptorPlugin development-server
+WebSocket handlers; this workspace uses Node/jsdom vitest run without either
+standalone plugin. See
+[redirect mock scope](https://github.com/advisories/GHSA-82fw-gwwq-j7x9) and
+[manual mock scope](https://github.com/advisories/GHSA-qxg6-89mg-rqv8).
+This is source/configuration triage, not a proof that those package versions are
+patched or a broad exemption for future configurations. Do not expose either
+server or enable those plugins with these resolutions. Resolving the package
+findings requires a reviewed Vitest major/toolchain migration and legacy esbuild
+compatibility verification under EGO-109; there is no advisory ignore or accepted
+risk bypass. Rerun both audits on the final head because registry findings change.

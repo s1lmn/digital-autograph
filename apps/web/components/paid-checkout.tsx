@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from './locale-provider';
+
 import { useEffect, useRef, useState } from 'react';
 import {
   checkoutSummarySchema,
@@ -58,6 +60,8 @@ export function PaidCheckout({
   reservationId: string;
   autographId: string;
 }) {
+  const { t, locale } = useLocale();
+
   const [summary, setSummary] = useState<CheckoutSummary | null>(null);
   const [preview, setPreview] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -239,82 +243,89 @@ export function PaidCheckout({
       aria-labelledby="checkout-heading"
       aria-busy={busy}
     >
-      <p className="eyebrow">Destka</p>
+      <p className="eyebrow">{t('Destka')}</p>
       <h2 id="checkout-heading" ref={heading} tabIndex={-1}>
-        Условия вашего заказа
+        {t('Условия вашего заказа')}
       </h2>
       {anonymous ? (
         <>
-          <p>Войдите, чтобы проверить собственное бронирование.</p>
+          <p>{t('Войдите, чтобы проверить собственное бронирование.')}</p>
           <a
             href={`${apiOrigin}/auth/google/start?${new URLSearchParams({ returnTo })}`}
           >
-            Войти через Google
+            {t('Войти через Google')}
           </a>
         </>
       ) : null}
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{t(error)}</p>}
       {legalRequired && <FirstUseActionNotice returnTo={returnTo} />}
       {orderId ? (
         <>
           <p role="status">
-            {(
-              {
-                created: 'Состояние заказа уточняется.',
-                provider_pending: 'Заказ создан. Оплата ожидается.',
-                unknown:
-                  'Состояние заказа уточняется. Не оплачивайте повторно.',
-                succeeded: 'Оплата подтверждена.',
-                fulfilled: 'Оплата подтверждена. Размещение выполнено.',
-                paid_but_not_fulfilled:
-                  'Оплата получена, но размещение пока не выполнено. Требуется проверка и возврат по применимым условиям.',
-                canceled: 'Платёж отменён.',
-              } as Record<string, string>
-            )[orderStatus] ?? 'Состояние заказа уточняется.'}{' '}
-            Переход к провайдеру не подтверждает оплату или размещение.
+            {t(
+              (
+                {
+                  created: 'Состояние заказа уточняется.',
+                  provider_pending: 'Заказ создан. Оплата ожидается.',
+                  unknown:
+                    'Состояние заказа уточняется. Не оплачивайте повторно.',
+                  succeeded: 'Оплата подтверждена.',
+                  fulfilled: 'Оплата подтверждена. Размещение выполнено.',
+                  paid_but_not_fulfilled:
+                    'Оплата получена, но размещение пока не выполнено. Требуется проверка и возврат по применимым условиям.',
+                  canceled: 'Платёж отменён.',
+                } as Record<string, string>
+              )[orderStatus] ?? 'Состояние заказа уточняется.',
+            )}{' '}
+            {t('Переход к провайдеру не подтверждает оплату или размещение.')}
           </p>
           {providerUrl && (
             <a className={styles.pay} href={providerUrl} rel="noreferrer">
-              Перейти к оплате в ЮKassa
+              {t('Перейти к оплате в ЮKassa')}
             </a>
           )}
           <p>
             <a href={`/payments/return?orderId=${orderId}`}>
-              Проверить состояние заказа
+              {t('Проверить состояние заказа')}
             </a>
           </p>
         </>
       ) : summary ? (
         <>
           <dl>
-            <dt>Стенд</dt>
+            <dt>{t('Стенд')}</dt>
             <dd>
               <a href={`/walls/${summary.wallId}`}>{summary.wallTitle}</a>
             </dd>
-            <dt>Создатель</dt>
+            <dt>{t('Создатель')}</dt>
             <dd>{summary.creatorName}</dd>
-            <dt>Ячейка</dt>
+            <dt>{t('Ячейка')}</dt>
             <dd>№ {summary.slotNumber}</dd>
-            <dt>Полная стоимость</dt>
+            <dt>{t('Полная стоимость')}</dt>
             <dd>
-              {new Intl.NumberFormat('ru-RU', {
+              {new Intl.NumberFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
                 style: 'currency',
                 currency: 'RUB',
               }).format(Number(summary.amountMinor) / 100)}
             </dd>
-            <dt>Гарантированный период видимости после замещения</dt>
-            <dd>{summary.guaranteedVisibilitySeconds} секунд</dd>
-            <dt>Бронирование действует до</dt>
+            <dt>{t('Гарантированный период видимости после замещения')}</dt>
+            <dd>
+              {summary.guaranteedVisibilitySeconds}
+              {t(' секунд')}
+            </dd>
+            <dt>{t('Бронирование действует до')}</dt>
             <dd>
               <time dateTime={summary.reservationExpiresAt}>
-                {new Date(summary.reservationExpiresAt).toLocaleString('ru-RU')}
+                {new Date(summary.reservationExpiresAt).toLocaleString(
+                  locale === 'ru' ? 'ru-RU' : 'en-US',
+                )}
               </time>
             </dd>
           </dl>
           <figure>
             <img
               src={preview}
-              alt="Одобренный автограф для выбранного размещения"
+              alt={t('Одобренный автограф для выбранного размещения')}
               referrerPolicy="no-referrer"
               onLoad={() => setLoaded(true)}
               onError={() => {
@@ -323,18 +334,18 @@ export function PaidCheckout({
               }}
             />
             <figcaption>
-              Будет размещён только этот одобренный автограф.
+              {t('Будет размещён только этот одобренный автограф.')}
             </figcaption>
           </figure>
           <p>
-            После подтверждённой оплаты в пределах бронирования этот автограф
-            заменит текущее размещение в выбранной ячейке. Гарантированный
-            период начинается с успешного замещения.
+            {t(
+              'После подтверждённой оплаты в пределах бронирования этот автограф заменит текущее размещение в выбранной ячейке. Гарантированный период начинается с успешного замещения.',
+            )}
           </p>
           <p>
-            После гарантированного периода размещение может быть замещено.
-            Ячейка не становится вашей собственностью; бессрочная видимость не
-            гарантируется.
+            {t(
+              'После гарантированного периода размещение может быть замещено. Ячейка не становится вашей собственностью; бессрочная видимость не гарантируется.',
+            )}
           </p>
           <ul className={styles.docs}>
             {summary.documents.map((d) => (
@@ -344,8 +355,10 @@ export function PaidCheckout({
                   rel="noopener noreferrer"
                   href={`/legal/${documents[d.type].slug}/versions/${d.version}`}
                 >
-                  {documents[d.type].title} — редакция {d.version} (новая
-                  вкладка)
+                  {t(documents[d.type].title)}
+                  {t(' — редакция ')}
+                  {d.version}
+                  {t(' (новая вкладка)')}
                 </a>
               </li>
             ))}
@@ -357,37 +370,37 @@ export function PaidCheckout({
             }}
           >
             <fieldset disabled={busy}>
-              <legend>Подтверждение платных условий</legend>
+              <legend>{t('Подтверждение платных условий')}</legend>
               <label>
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={(e) => setChecked(e.target.checked)}
                 />
-                Я ознакомился с Публичной офертой, Правилами размещения контента
-                и Политикой возвратов и подтверждаю указанные условия этого
-                заказа.
+                {t(
+                  'Я ознакомился с Публичной офертой, Правилами размещения контента и Политикой возвратов и подтверждаю указанные условия этого заказа.',
+                )}
               </label>
             </fieldset>
             <button type="submit" disabled={!checked || !loaded || busy}>
               {busy
-                ? 'Проверяем заказ…'
-                : 'Подтвердить заказ и перейти к оплате'}
+                ? t('Проверяем заказ…')
+                : t('Подтвердить заказ и перейти к оплате')}
             </button>
           </form>
           <p>
-            Платёжные реквизиты вводятся только на защищённой странице ЮKassa.
-            Destka не запрашивает номер карты, CVV/CVC, банковские пароли или
-            SMS-коды.
+            {t(
+              'Платёжные реквизиты вводятся только на защищённой странице ЮKassa. Destka не запрашивает номер карты, CVV/CVC, банковские пароли или SMS-коды.',
+            )}
           </p>
           <p>
-            Это подтверждение не является согласием на обработку или
-            распространение персональных данных и не заменяет декларацию 18+ и
-            Пользовательское соглашение.
+            {t(
+              'Это подтверждение не является согласием на обработку или распространение персональных данных и не заменяет декларацию 18+ и Пользовательское соглашение.',
+            )}
           </p>
         </>
       ) : !error && !anonymous ? (
-        <p role="status">Проверяем условия…</p>
+        <p role="status">{t('Проверяем условия…')}</p>
       ) : null}
       {!anonymous && (
         <button
@@ -398,12 +411,12 @@ export function PaidCheckout({
             setRetry((n) => n + 1);
           }}
         >
-          Повторить проверку условий
+          {t('Повторить проверку условий')}
         </button>
       )}
       <p>
-        <a href="/legal">Опубликованные документы</a> ·{' '}
-        <a href="/me">Аккаунт и выход</a>
+        <a href="/legal">{t('Опубликованные документы')}</a> ·{' '}
+        <a href="/me">{t('Аккаунт и выход')}</a>
       </p>
     </section>
   );

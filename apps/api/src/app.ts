@@ -15,6 +15,7 @@ import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { apiLoggerOptions, registerSafeApiErrors } from './logging';
 import { registerApiMetrics } from './metrics';
+import { registerOAuthRequestLimits } from './auth/request-limits';
 import {
   registerGoogleRoutes,
   type GoogleHttpConfig,
@@ -108,6 +109,7 @@ export function buildApi(
   });
   registerSafeApiErrors(app);
   registerApiMetrics(app);
+  registerOAuthRequestLimits(app);
 
   app.addHook('onSend', async (_request, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');

@@ -1,0 +1,85 @@
+/* Product UI tokens. Kept separate from the archived brand-kit specimens. */
+@font-face {
+  font-family: 'Manrope';
+  src: url('/fonts/manrope-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+:root {
+  color-scheme: light;
+  --brand-color-ink: #20232b;
+  --brand-color-muted: #646875;
+  --brand-color-paper: #f8f9fc;
+  --brand-color-surface: #ffffff;
+  --brand-color-border: #dfe2ea;
+  --brand-color-control: #818797;
+  --brand-color-primary: #3455db;
+  --brand-color-onPrimary: #ffffff;
+  --brand-color-primarySoft: #edf0ff;
+  --brand-color-secondary: #8b5615;
+  --brand-color-secondarySoft: #fff5e5;
+  --brand-color-danger: #b5364e;
+  --brand-color-dangerSoft: #fff0f3;
+  --brand-color-focus: #3455db;
+  --brand-color-mediaPaper: #ffffff;
+  --brand-color-mediaInk: #20232b;
+  --brand-font-body: 'Manrope', 'Segoe UI', sans-serif;
+  --brand-font-display: 'Manrope', 'Segoe UI', sans-serif;
+  --brand-font-numeric: 'Manrope', 'Segoe UI', sans-serif;
+  --brand-radius-small: 0.75rem;
+  --brand-radius-card: 1.5rem;
+  --brand-shadow-raised: 0 12px 40px #1b254114;
+  --ui-surface-subtle: #f2f4f9;
+  --ui-primary-hover: #2646c4;
+  --ui-stage: #e9edff;
+  --ui-stage-ink: #314da9;
+  --ui-shadow: 0 28px 60px #26396e1c;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --brand-color-ink: #f0f1f7;
+  --brand-color-muted: #a4a8ba;
+  --brand-color-paper: #16171d;
+  --brand-color-surface: #1e2029;
+  --brand-color-border: #343744;
+  --brand-color-control: #7c8298;
+  --brand-color-primary: #b0bfff;
+  --brand-color-onPrimary: #1d2857;
+  --brand-color-primarySoft: #282f4b;
+  --brand-color-secondary: #efc18d;
+  --brand-color-secondarySoft: #352b25;
+  --brand-color-danger: #ffb0c1;
+  --brand-color-dangerSoft: #3d2530;
+  --brand-color-focus: #b0bfff;
+  --ui-surface-subtle: #252732;
+  --ui-primary-hover: #c4cfff;
+  --ui-stage: #252c47;
+  --ui-stage-ink: #c0cbff;
+  --ui-shadow: 0 28px 60px #00000030;
+}
+/* Remains correct even before JS runs or when JS is unavailable. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --brand-color-ink: #f0f1f7;
+    --brand-color-muted: #a4a8ba;
+    --brand-color-paper: #16171d;
+    --brand-color-surface: #1e2029;
+    --brand-color-border: #343744;
+    --brand-color-control: #7c8298;
+    --brand-color-primary: #b0bfff;
+    --brand-color-onPrimary: #1d2857;
+    --brand-color-primarySoft: #282f4b;
+    --brand-color-secondary: #efc18d;
+    --brand-color-secondarySoft: #352b25;
+    --brand-color-danger: #ffb0c1;
+    --brand-color-dangerSoft: #3d2530;
+    --brand-color-focus: #b0bfff;
+    --ui-surface-subtle: #252732;
+    --ui-primary-hover: #c4cfff;
+    --ui-stage: #252c47;
+    --ui-stage-ink: #c0cbff;
+    --ui-shadow: 0 28px 60px #00000030;
+  }
+}

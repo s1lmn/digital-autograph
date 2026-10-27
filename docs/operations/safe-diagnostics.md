@@ -54,3 +54,11 @@ legal policy is selected here; no domain/payment/schema mutation is introduced.
 
 References: [Pino log hooks and serializers](https://github.com/pinojs/pino/blob/main/docs/api.md)
 and [Fastify logging](https://fastify.dev/docs/latest/Reference/Logging/).
+
+API access logs retain method, server route template, request correlation and
+response status. They do not serialize the raw URL/path/query, client Host or
+remote IP address. Unknown routes use a fixed unmatched marker. This prevents
+subject IDs, caller-supplied path secrets and client addressing from entering the
+default request log. Internal runtime/PID/host and bounded job diagnostics still
+require operator access control and a retention policy; aggregate metrics and
+privacy/legal acceptance remain separate concerns.

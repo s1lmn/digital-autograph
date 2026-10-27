@@ -69,3 +69,27 @@ it('verifies a minimal Google assertion without email/name/avatar and persists n
     vi.restoreAllMocks();
   }
 });
+
+it('bounds Google token and certificate transport instead of using the unbounded default', async () => {
+  const { OAuth2Client } = await import('google-auth-library');
+  const { vi } = await import('vitest');
+  const token = vi
+    .spyOn(OAuth2Client.prototype, 'getToken')
+    .mockRejectedValue(new Error('synthetic provider outage'));
+  try {
+    const client = createGoogleOidcClient({
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret',
+      redirectUri: 'http://127.0.0.1:4000/auth/google/callback',
+    });
+    await expect(client.verifyCode('synthetic-code')).rejects.toThrow(
+      'synthetic provider outage',
+    );
+    const configured = token.mock.contexts[0] as InstanceType<
+      typeof OAuth2Client
+    >;
+    expect(configured.transporter.defaults.timeout).toBe(10_000);
+  } finally {
+    vi.restoreAllMocks();
+  }
+});

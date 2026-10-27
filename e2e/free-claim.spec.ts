@@ -45,7 +45,7 @@ test('new user uploads, reviews, claims and reads only their persistent history'
   test.setTimeout(120_000);
   await page.goto('/');
   await expect(
-    page.getByRole('heading', { name: 'Leave your mark on a creator’s Wall' }),
+    page.getByRole('heading', { name: 'Your mark. Their world.' }),
   ).toBeVisible();
   await responsive(
     page,
@@ -75,10 +75,10 @@ test('new user uploads, reviews, claims and reads only their persistent history'
     `${apiUrl}/auth/test/start?returnTo=${encodeURIComponent('/autograph/create')}`,
   );
   await expect(page).toHaveURL(`${webUrl}/autograph/create`);
-  await page.getByLabel('Мне исполнилось 18 лет.').check();
-  await page.getByLabel('Принимаю Пользовательское соглашение.').check();
-  await page.getByLabel('Принимаю Правила размещения контента.').check();
-  await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
+  await page.getByLabel('I am at least 18 years old.').check();
+  await page.getByLabel('I accept the Terms of use.').check();
+  await page.getByLabel('I accept the Content rules.').check();
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   const canvas = page.getByLabel('Autograph drawing area', { exact: true });
   await expect(
     page.getByRole('heading', { name: 'Draw your autograph' }),
@@ -199,9 +199,7 @@ test('new user uploads, reviews, claims and reads only their persistent history'
   await expect(
     page.getByRole('heading', { name: 'E2E Creator', exact: true }),
   ).toBeVisible();
-  await expect(page).toHaveTitle(
-    'E2E Creator — public Walls | Digital Autograph',
-  );
+  await expect(page).toHaveTitle('E2E Creator — public Walls | Destka');
   await responsive(page);
   await page.getByRole('link', { name: 'E2E Creator’s Wall' }).click();
   await expect(

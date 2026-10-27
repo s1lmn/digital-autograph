@@ -1,11 +1,29 @@
 # Destka.ru — фактическая готовность и критический путь
 
 Дата: 27.10.2026. Read-only audit базы main
-`5fc77c3ccb4464b880fa2b41d3c4f4036535b6c6`. Никакие DNS/cloud/IAM/runner/Release,
+`5fc77c3ccb4464b880fa2b41d3c4f4036535b6c6`. Кроме отдельно разрешённого отсоединения runner21 (ниже), DNS/cloud/IAM/Release,
 credentials, production DB, deployment, OAuth или live payments не изменялись.
 Решения владельца и operational acceptance не заменяются этим документом.
 
-## Проверенные границы
+## Отдельно разрешённое действие A01 — 17:55 UTC
+
+Владелец в этом чате явно разрешил **только отсоединение runner №21**.
+Повторная проверка перед операцией: `da-staging-app`, online/idle, busy=false,
+незавершённых workflow runs=0, соответствующих running/queued jobs=0.
+GitHub `DELETE /repos/s1lmn/digital-autograph/actions/runners/21` вернул204;
+последующий список runners пуст. Release остался `disabled_manually`.
+Staging Web и API health/live/ready отвечали200 до и после удаления.
+
+Это containment текущей регистрации, **не полный A01 acceptance**. Служба
+на VM не останавливалась и не проверялась через operator console, cloud IAM,
+metadata/network/sudo trust boundary и история возможных запусков не
+пересматривались этой операцией. Новая безопасная deployment identity и
+независимая security-проверка остаются обязательными; deployment не разрешён.
+Оставшиеся действия на хосте/в cloud требуют отдельного разрешения владельца.
+Таблица ниже сохраняет предшествующие read-only наблюдения; строка online
+не описывает регистрацию после17:55 UTC.
+
+## Проверенные границы до containment
 
 | Проверка                 | Наблюдение                                                                                                               | Что это доказывает / не доказывает                                                                            |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -32,7 +50,7 @@ credentials, production DB, deployment, OAuth или live payments не изме
 | ----------------------------------- | -------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A02 bounded upload, EGO-109         | Evgenii; независимый review MDBaryshev | Точный финальный head PR78                           | PG/S3 concurrency, chunked/10 MiB/auth/overwrite/quota/cleanup negatives, fresh checks + other approval             | Review, normal protected merge, main CI/Secret Scan; parent 109 не Done                                                                            |
 | A03 storage I/O                     | Evgenii                                | Принятый A02 и fresh green main                      | Lease/fencing, короткие transactions, unknown commit/restart, finite PG/S3 deadlines и real races                   | Отдельный PR по плану в PR78 `docs/architecture/autograph-io-next-stage.md`; не начинать stacked реализацию                                        |
-| A01 runner trust boundary           | Егор разрешает, Evgenii исполняет      | Конкретное разрешение infra/security changes         | Trusted workflow allowlist/изолированная deployment identity; отсутствие пути untrusted PR к Docker/sudo/Lockbox/DB | По runbook в PR78 `docs/operations/runner-isolation-a01.md`; Release держать выключенным                                                           |
+| A01 runner trust boundary           | Егор разрешает, Evgenii исполняет      | Конкретное разрешение infra/security changes         | Trusted workflow allowlist/изолированная deployment identity; отсутствие пути untrusted PR к Docker/sudo/Lockbox/DB | Регистрация21 удалена с разрешения; по runbook PR78 ещё нужны host/service isolation и независимый security review; Release держать выключенным    |
 | Core/security acceptance EGO-93/109 | Evgenii + Егор                         | A02/A03, legal/OAuth approvals для реальной проверки | Реальный auth→upload→worker→moderation→claim→history, failures/recovery                                             | После разрешённого безопасного staging; synthetic tests не закрывают physical gates                                                                |
 | Proxy/resource budget EGO-129/113   | Evgenii                                | Reviewed config и representative workload            | Размер/slow client limits, RSS/OOM, throughput, worker capacity                                                     | [Source-only ingress PR79](https://github.com/s1lmn/digital-autograph/pull/79) независим от A02; capacity на согласованной инфраструктуре отдельно |
 

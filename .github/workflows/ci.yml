@@ -137,6 +137,8 @@ jobs:
           docker logs autograph-minio
           exit 1
       - run: pnpm test:integration
+      - name: Verify isolated PostgreSQL and private-object backup/restore
+        run: pnpm test:recovery-drill
       - run: pnpm build
       - run: pnpm test:build-smoke
       - name: Verify built legal SSR publication and history boundaries

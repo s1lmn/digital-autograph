@@ -6,6 +6,9 @@
     "node": ">=24 <25"
   },
   "scripts": {
+    "benchmark:images": "tsx apps/worker/src/image-benchmark-cli.ts",
+    "test:recovery-drill": "vitest run --config vitest.recovery.config.ts",
+    "ops:snapshot": "pnpm --filter @digital-autograph/api exec tsx scripts/operational-snapshot.ts",
     "brand:export": "node scripts/brand-kit.mjs",
     "brand:check": "node scripts/brand-kit.mjs --check",
     "dev": "dotenv -e .env -- concurrently -k -n api,worker,web \"pnpm --filter @digital-autograph/api dev\" \"pnpm --filter @digital-autograph/worker dev\" \"pnpm --filter @digital-autograph/web dev\"",

@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Карточки механики — EGO-69</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f5f5f1;
+        color: #202320;
+        font:
+          1rem/1.55 system-ui,
+          sans-serif;
+        overflow-wrap: anywhere;
+      }
+      header,
+      main,
+      footer {
+        width: min(100% - 2rem, 62rem);
+        margin: 1.5rem auto;
+      }
+      h1 {
+        font-size: clamp(1.5rem, 4vw, 2.25rem);
+        line-height: 1.2;
+      }
+      h2 {
+        font-size: clamp(1.4rem, 3vw, 2rem);
+        line-height: 1.25;
+      }
+      h3 {
+        margin-bottom: 0.4rem;
+      }
+      .notice {
+        padding: 1rem;
+        border-left: 4px solid #315b47;
+        background: #e5ebe5;
+      }
+      .muted {
+        color: #505750;
+      }
+      .eyebrow {
+        font-size: 0.875rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .card {
+        background: #fff;
+        padding: clamp(1rem, 4vw, 2rem);
+        border: 1px solid #c7cec7;
+        min-height: 24rem;
+      }
+      .card[hidden],
+      [hidden] {
+        display: none;
+      }
+      .slots {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.5rem;
+        list-style: none;
+        padding: 0;
+      }
+      .slots li {
+        padding: 0.6rem;
+        min-height: 6rem;
+        border: 1px solid #c7cec7;
+      }
+      .mark {
+        display: grid;
+        place-items: center;
+        min-height: 8rem;
+        padding: 1rem;
+        border: 1px solid #c7cec7;
+        font-size: 2rem;
+        font-style: italic;
+      }
+      .mark.own {
+        border: 2px solid #315b47;
+      }
+      .sample {
+        max-width: 38rem;
+        margin: 1.5rem auto;
+      }
+      .status {
+        display: inline-block;
+        background: #e5ebe5;
+        padding: 0.25rem 0.7rem;
+      }
+      .facts {
+        padding-left: 1.3rem;
+      }
+      button,
+      select {
+        font: inherit;
+        min-height: 44px;
+        padding: 0.55rem 0.8rem;
+        max-width: 100%;
+        color: inherit;
+        background: #fff;
+        border: 1px solid #505750;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: default;
+        color: #656965;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      summary:focus-visible,
+      h2:focus {
+        outline: 3px solid #195dce;
+        outline-offset: 3px;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: space-between;
+        margin: 1.5rem 0;
+      }
+      nav button {
+        flex: 1 1 14rem;
+      }
+      details {
+        margin: 1rem 0;
+      }
+      summary {
+        cursor: pointer;
+        padding: 0.6rem 0;
+        min-height: 44px;
+      }
+      .price-options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem;
+      }
+      .price {
+        padding: 1rem;
+        border: 1px solid #c7cec7;
+      }
+      .price strong {
+        font-size: 1.8rem;
+      }
+      .history {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #f5f5f1;
+      }
+      footer {
+        border-top: 1px solid #c7cec7;
+        padding-top: 1rem;
+        font-size: 0.875rem;
+      }
+      @media (max-width: 40rem) {
+        .slots {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .price-options {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media print {
+        body {
+          background: #fff;
+        }
+        header,
+        main,
+        footer {
+          width: 100%;
+        }
+        nav,
+        details,
+        #step {
+          display: none;
+        }
+        .card,
+        .card[hidden] {
+          display: block;
+          break-after: page;
+          margin-bottom: 1rem;
+          min-height: auto;
+        }
+        .card:last-of-type {
+          break-after: auto;
+        }
+        #history-panel {
+          display: block;
+        }
+        #show-history {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <p class="eyebrow">Материалы для интервью · EGO-69 · версия 2026-10-16</p>
+      <h1>Стена автора: карточки механики</h1>
+      <p class="notice">
+        Учебные примеры с вымышленными участниками. Платежей, публикации и
+        записи ответов нет.
+        <strong
+          >Длительность защиты и цены в карточках — сценарные допущения, не
+          условия сервиса.</strong
+        >
+      </p>
+      <details>
+        <summary>Настройка порядка цен для ведущего</summary>
+        <label for="price-order">Порядок карточек, назначенный до сессии</label>
+        <select id="price-order">
+          <option value="A">A: 50 / 150 / 500 ₽</option>
+          <option value="B">B: 150 / 500 / 50 ₽</option>
+          <option value="C">C: 500 / 50 / 150 ₽</option>
+        </select>
+        <p>
+          Запишите порядок в отдельный шаблон. Файл не сохраняет настройки и
+          ответы.
+        </p>
+      </details>
+      <p id="step" role="status" aria-live="polite" aria-atomic="true">
+        Карточка 1 из 7
+      </p>
+    </header>
+    <main>
+      <section class="card" aria-labelledby="card-1">
+        <p class="eyebrow">Начало</p>
+        <h2 id="card-1" tabindex="-1">Стена автора А</h2>
+        <p>Отметки участников · 2 занятых места, 8 свободных</p>
+        <ol class="slots" aria-label="10 мест учебной стены">
+          <li>01<br /><strong>Отметка А</strong></li>
+          <li>02<br /><strong>Отметка Б</strong></li>
+          <li>03<br />Свободно</li>
+          <li>04<br />Свободно</li>
+          <li>05<br />Свободно</li>
+          <li>06<br />Свободно</li>
+          <li>07<br />Свободно</li>
+          <li>08<br />Свободно</li>
+          <li>09<br />Свободно</li>
+          <li>10<br />Свободно</li>
+        </ol>
+        <p class="muted">
+          Исследовательская картинка. Здесь нельзя занять реальный слот.
+        </p>
+      </section>
+      <section class="card" aria-labelledby="card-2" hidden>
+        <p class="eyebrow">Выбранное место</p>
+        <h2 id="card-2" tabindex="-1">Место 01 сейчас занято</h2>
+        <div class="sample">
+          <div class="mark">Отметка А</div>
+          <p class="status">Перехват доступен</p>
+          <p>
+            В этом сценарии вы рассматриваете платное размещение своего
+            автографа на месте 01.
+          </p>
+          <p>
+            Защита нового размещения: 10 минут. Цены сравниваются в последней
+            карточке.
+          </p>
+        </div>
+        <p class="muted">Это карточка условий, не форма оплаты.</p>
+      </section>
+      <section class="card" aria-labelledby="card-3" hidden>
+        <p class="eyebrow">Размещение состоялось</p>
+        <h2 id="card-3" tabindex="-1">Ваша отметка на месте 01</h2>
+        <div class="sample">
+          <div class="mark own">Ваша отметка</div>
+          <p class="status">Защита действует</p>
+          <p>В учебном сценарии отсчёт 10 минут только начался.</p>
+        </div>
+        <p class="muted">
+          Синтетический результат. Деньги не списывались; автограф не
+          загружался.
+        </p>
+      </section>
+      <section class="card" aria-labelledby="card-4" hidden>
+        <p class="eyebrow">Позже</p>
+        <h2 id="card-4" tabindex="-1">Место 01 занял другой участник</h2>
+        <div class="sample">
+          <p>Защита закончилась. Другой участник выполнил перехват.</p>
+          <div class="mark">Отметка В</div>
+          <p>
+            <button
+              id="show-history"
+              type="button"
+              aria-expanded="false"
+              aria-controls="history-panel"
+            >
+              История места 01
+            </button>
+          </p>
+          <div class="history" id="history-panel" hidden>
+            <h3>Предыдущие размещения</h3>
+            <ol>
+              <li>Отметка А — до вашего размещения.</li>
+              <li>Ваша отметка — завершена перехватом.</li>
+            </ol>
+            <p>Это вымышленные записи этого сценария.</p>
+          </div>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="card-5" hidden>
+        <p class="eyebrow">Завершение</p>
+        <h2 id="card-5" tabindex="-1">Стена завершилась</h2>
+        <p class="status">Новые размещения закрыты</p>
+        <p>В этом учебном сценарии история прежних размещений доступна.</p>
+        <p class="muted">
+          Карточка не задаёт реальные сроки хранения данных или будущие правила
+          сервиса.
+        </p>
+      </section>
+      <section class="card" aria-labelledby="card-6" hidden>
+        <p class="eyebrow">Публичность и возвращение</p>
+        <h2 id="card-6" tabindex="-1">Отметка и её отправка</h2>
+        <ul class="facts">
+          <li>Исходное изображение хранится приватно.</li>
+          <li>Подготовленная отметка показывается на публичной стене.</li>
+          <li>Публичный псевдоним в этом примере не указан.</li>
+          <li>Карточку со ссылкой можно отправить добровольно.</li>
+          <li>Участник рассматривает уведомление о перехвате.</li>
+        </ul>
+        <p>Пример карточки для отправки:</p>
+        <div class="mark">Моя отметка на стене автора А</div>
+        <p class="muted">
+          Ничего не отправляется. В файле нет кнопки внешней публикации и
+          реальных данных.
+        </p>
+      </section>
+      <section class="card" aria-labelledby="card-7" hidden>
+        <p class="eyebrow">Сравнение предложений</p>
+        <h2 id="card-7" tabindex="-1">Одинаковые условия, разные цены</h2>
+        <p>
+          Одна и та же стена интересного вам автора. Свой автограф, 10 минут
+          защиты, затем возможен перехват; запись доступна в истории этого
+          примера.
+        </p>
+        <div class="price-options" id="prices">
+          <article class="price">
+            <h3>Вариант 1</h3>
+            <strong data-price>50 ₽</strong>
+          </article>
+          <article class="price">
+            <h3>Вариант 2</h3>
+            <strong data-price>150 ₽</strong>
+          </article>
+          <article class="price">
+            <h3>Вариант 3</h3>
+            <strong data-price>500 ₽</strong>
+          </article>
+        </div>
+        <p>
+          <strong
+            >Можно не выбирать ни один вариант и ничего не покупать.</strong
+          >
+          Можно обсудить другой способ участия.
+        </p>
+        <p class="muted">
+          Порядок цен: <span id="order-label">A</span>. Это гипотетические
+          предложения; выбор озвучивается ведущему и здесь не записывается.
+        </p>
+      </section>
+      <nav aria-label="Переход между карточками">
+        <button id="previous" type="button" disabled>Предыдущая карточка</button
+        ><button id="next" type="button">Следующая карточка</button>
+      </nav>
+    </main>
+    <footer>
+      Офлайн-комплект EGO-159 для EGO-69. Методичка: user-interviews.md. Нет
+      сети, аналитики, хранения ответов, платежей или изменения продукта. При
+      печати видны все семь карточек.
+    </footer>
+    <script>
+      (() => {
+        const cards = Array.from(document.querySelectorAll('.card'));
+        const previous = document.getElementById('previous');
+        const next = document.getElementById('next');
+        let index = 0;
+        function show(value) {
+          index = Math.max(0, Math.min(cards.length - 1, value));
+          cards.forEach((card, position) => {
+            card.hidden = position !== index;
+          });
+          previous.disabled = index === 0;
+          next.disabled = index === cards.length - 1;
+          document.getElementById('step').textContent =
+            `Карточка ${index + 1} из ${cards.length}`;
+          cards[index].querySelector('h2').focus();
+        }
+        previous.addEventListener('click', () => show(index - 1));
+        next.addEventListener('click', () => show(index + 1));
+        const historyButton = document.getElementById('show-history');
+        historyButton.addEventListener('click', () => {
+          const panel = document.getElementById('history-panel');
+          panel.hidden = !panel.hidden;
+          historyButton.setAttribute('aria-expanded', String(!panel.hidden));
+        });
+        const priceOrder = document.getElementById('price-order');
+        priceOrder.value = 'A';
+        priceOrder.addEventListener('change', (event) => {
+          const order = event.target.value;
+          const values = {
+            A: [50, 150, 500],
+            B: [150, 500, 50],
+            C: [500, 50, 150],
+          }[order];
+          document
+            .querySelectorAll('[data-price]')
+            .forEach((element, position) => {
+              element.textContent = `${values[position]} ₽`;
+            });
+          document.getElementById('order-label').textContent = order;
+        });
+      })();
+    </script>
+  </body>
+</html>

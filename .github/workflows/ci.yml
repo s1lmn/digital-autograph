@@ -122,6 +122,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - name: Verify Caddy body, header and connection bounds
+        run: pnpm test:ingress
       - name: Start private MinIO
         run: |
           docker run -d --name autograph-minio -p 9000:9000 \

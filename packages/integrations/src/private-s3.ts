@@ -28,6 +28,7 @@ export function createPrivateS3Storage(
   config: PrivateS3Config,
 ): PrivateOriginalStorage & {
   bootstrapLocalBucket(): Promise<void>;
+  checkConnection(signal: AbortSignal): Promise<void>;
   close(): void;
 } {
   const client = new S3Client({
@@ -44,6 +45,11 @@ export function createPrivateS3Storage(
   });
 
   return {
+    async checkConnection(signal) {
+      await client.send(new HeadBucketCommand({ Bucket: config.bucket }), {
+        abortSignal: signal,
+      });
+    },
     async putOriginal(input) {
       if (input.bytes.length < 1 || input.bytes.length > maxOriginalBytes)
         throw new AutographError('UPLOAD_TOO_LARGE');

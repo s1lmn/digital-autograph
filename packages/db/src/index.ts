@@ -44,6 +44,11 @@ export type Database = ReturnType<typeof createDatabase>;
 export { createPgPaymentRepository } from './payment-repository';
 export { createPgNotificationRepository } from './notification-repository';
 export { createPgShareRepository } from './share-repository';
+export {
+  createOperationalReader,
+  type OperationalDatabaseState,
+} from './operational-snapshot';
+
 export { createPgLegalRepository } from './legal-repository';
 
 export { createPgAgeDeclarationRepository } from './age-declaration-repository';

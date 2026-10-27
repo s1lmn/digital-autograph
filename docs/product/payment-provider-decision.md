@@ -23,7 +23,7 @@ merchant terms. See [merchant checklist](merchant-review-readiness.md),
 
 | Requirement                    | Actual implementation / remaining gate                                                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Backend price/reservation      | Implemented immutable quote/config and server locking; real tariff not approved                                                                        |
+| Backend price/reservation      | Implemented immutable quote/config and server locking; owner approved89/+100/4989 RUB and900s; decay/publication/application still pending             |
 | Primary adapter                | `packages/integrations/src/yookassa.ts`, with strict test flag/identity/amount/currency verification; real provider contract evidence remains separate |
 | Order/payment/webhook/takeover | Implemented in payment repository/domain and integration tests (EGO-100); not permission for live payment                                              |
 | Accounting                     | Creator earning rows exist; full ledger, refunds/fiscal receipts/payout are separate EGO-101/102/103/104 gates                                         |

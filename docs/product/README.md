@@ -31,3 +31,7 @@ verification, merchant approval and production activation remain separate gates.
 [commercial owner decisions](commercial-owner-decisions.md) and the
 [launch critical path](../operations/destka-launch-readiness.md) record the
 27.10.2026 evidence and remaining approvals.
+
+[Owner-approved Pricing Spec v1](pricing-spec-v1.md) records the 27.10.2026
+product ladder, incomplete versioned config and offline unit-economics matrix.
+Decay/payout base/production application remain separate approvals.

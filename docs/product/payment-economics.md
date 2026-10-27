@@ -22,6 +22,21 @@ zero. Input files contain commercial/planning inputs only, **never credentials**
 Document provider, source/date, entity/tax regime and forecast owner alongside the
 file, not as extra JSON keys (unknown keys are rejected to catch typos).
 
+## Approved product ladder — 27.10.2026
+
+The owner approved 89 RUB base/minimum, +100 RUB for each successful Wall takeover,
+4989 RUB cap,900-second protection and 50% creator remuneration **rate**. See
+[Pricing Spec v1](pricing-spec-v1.md) and run `pnpm pricing:plan` for the exact
+no-decay ladder GMV matrix. The average ticket is derived from the actual sequence,
+not the final price or number of Slots. Current method fees remain unfilled.
+Creator revenue basis/refund/chargeback rules and price decay are still pending;
+no production setting or public tariff is activated. Consequently payout and
+contribution margin remain unknown, even with the approved rate.
+
+The original 100-RUB fee example below remains a deliberately synthetic arithmetic
+regression; it is not the Destka tariff. Use the approved ladder's computed
+average only with separately verified merchant/volume/mix/fiscal assumptions.
+
 ## Inputs
 
 Money is integer RUB kopecks (`10000` = 100 RUB). Basis points are integers

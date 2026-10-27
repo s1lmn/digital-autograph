@@ -52,3 +52,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+.queue,
+.review {
+  padding: 1.5rem;
+  background: var(--brand-color-surface);
+  border-radius: 1.25rem;
+}
+.queue h2,
+.review h2 {
+  margin-top: 0;
+}
+.queue button {
+  font-size: 0.85rem;
+  padding: 1rem;
+}
+.review img {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 0.75rem;
+}
+.review p {
+  color: var(--brand-color-muted);
+  font-size: 0.9rem;
+}
+.review .error {
+  color: var(--brand-color-danger);
+}

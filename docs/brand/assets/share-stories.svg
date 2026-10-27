@@ -7,34 +7,34 @@
   aria-labelledby="title"
 >
   <title id="title">Stories share-card design specimen</title>
-  <rect width="1080" height="1920" fill="#192724" />
-  <g
-    transform="translate(72 220) scale(0.875)"
-    fill="none"
-    stroke="#b2f2d6"
-    stroke-width="4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <rect x="4" y="4" width="56" height="56" rx="12" />
-    <path d="M16 40 27 24l-2 20 15-22-3 19 11-8" />
+  <rect width="1080" height="1920" fill="#16171d" />
+  <g transform="translate(72 220) scale(1.5555555555555556)">
+    <rect width="36" height="36" rx="11" fill="#b0bfff" />
+    <path
+      d="M8 24C12 19 16 9 19 9c4 0-6 20-3 18 2-1 5-12 8-11 2 1-2 6 0 6l5-4M9 28l18-3"
+      fill="none"
+      stroke="#1d2857"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
   </g>
   <text
     x="146"
     y="258"
     font-family="Arial, sans-serif"
     font-size="30"
-    fill="#b2f2d6"
+    fill="#b0bfff"
     font-weight="700"
   >
-    Digital Autograph
+    Destka
   </text>
   <text
     x="72"
     y="360"
     font-family="Arial, sans-serif"
     font-size="76"
-    fill="#f4f6ee"
+    fill="#f0f1f7"
     font-weight="900"
     letter-spacing="-2"
   >
@@ -45,37 +45,37 @@
     y="424"
     font-family="Arial, sans-serif"
     font-size="54"
-    fill="#bdc9c1"
+    fill="#a4a8ba"
   >
     A mark in its history.
   </text>
-  <rect x="72" y="620" width="936" height="480" rx="32" fill="#294b3b" />
+  <rect x="72" y="620" width="936" height="480" rx="32" fill="#282f4b" />
   <text
     x="110"
     y="684"
     font-family="Arial, sans-serif"
     font-size="24"
-    fill="#f4f6ee"
+    fill="#f0f1f7"
   >
     CREATOR / DEMO WALL
   </text>
-  <g
-    transform="translate(108 764) scale(2.5)"
-    fill="none"
-    stroke="#b2f2d6"
-    stroke-width="4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  >
-    <rect x="4" y="4" width="56" height="56" rx="12" />
-    <path d="M16 40 27 24l-2 20 15-22-3 19 11-8" />
+  <g transform="translate(108 764) scale(4.444444444444445)">
+    <rect width="36" height="36" rx="11" fill="#b0bfff" />
+    <path
+      d="M8 24C12 19 16 9 19 9c4 0-6 20-3 18 2-1 5-12 8-11 2 1-2 6 0 6l5-4M9 28l18-3"
+      fill="none"
+      stroke="#1d2857"
+      stroke-width="1.8"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
   </g>
   <text
     x="310"
     y="864"
     font-family="Arial, sans-serif"
     font-size="46"
-    fill="#f4f6ee"
+    fill="#f0f1f7"
   >
     Your public mark
   </text>
@@ -84,7 +84,7 @@
     y="1610"
     font-family="Arial, sans-serif"
     font-size="30"
-    fill="#b2f2d6"
+    fill="#b0bfff"
   >
     Open the creator’s Wall
   </text>
@@ -93,7 +93,7 @@
     y="1668"
     font-family="Arial, sans-serif"
     font-size="20"
-    fill="#bdc9c1"
+    fill="#a4a8ba"
   >
     Design specimen · no live ownership claim
   </text>

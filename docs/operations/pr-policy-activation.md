@@ -1,3 +1,29 @@
+# Current verified state — 23 October 2026
+
+Main protection is active, not awaiting activation. Readback of ruleset 24111688
+confirms refs/heads/main only, seven strict required checks (the five CI jobs,
+policy and secrets), one approval, stale-review dismissal, resolved conversations,
+no force push/deletion and no bypass. Do not overwrite it with the historical
+six-check proposal in .github/security/main-ruleset.json.
+
+Actions policy 7644 (hbfhbf) is active. Its only workflow include is
+.github/workflows/pr-policy.yml, excludes are empty, and its only event rule
+allows pull_request_target. No global Actions permissions were changed. Current
+metadata-only PR Policy runs pass; the trusted workflow executes no PR source.
+
+The activation matrix and API configuration were exercised on test PR63 in
+October, with positive/negative, Draft/Ready and synchronize events. Current
+proof and retained historical activation details are recorded in EGO-88. This
+does not establish behavior after GitHub's 2 November 2026 enforcement change:
+a fresh safe event, required-check association and Policy insights must be
+verified then. Runner isolation remains a separate unresolved owner decision;
+the deployment runner stays offline.
+
+Everything below is the original pre-activation review record. Its NOT RUN and
+BLOCKED labels describe that historical point, not current repository settings.
+
+---
+
 # PR Policy activation gate (EGO-88 / PR #60 review)
 
 **BLOCKED: do not require `policy` or apply `main-ruleset.json` yet.**

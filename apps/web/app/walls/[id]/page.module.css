@@ -1,207 +1,276 @@
 .page {
-  width: min(100% - 2rem, 78rem);
-  max-width: none;
-  margin: 2rem auto 5rem;
-  padding: 0;
+  width: 100%;
+  max-width: 90rem;
+  margin: 3rem auto 5rem;
+  padding: 0 var(--space-page);
 }
-
 .header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 21rem;
+  align-items: center;
+  gap: 4rem;
   border-bottom: 1px solid var(--brand-color-border);
-  padding-bottom: 1.5rem;
-  margin-bottom: 1.5rem;
+  padding-bottom: 2.5rem;
+  margin-bottom: 2.5rem;
 }
-
+.wallIdentity {
+  min-width: 0;
+}
+.wallIdentity > a {
+  margin-right: 1rem;
+}
 .header h1 {
-  margin: 0.4rem 0 1rem;
+  margin: 0 0 1.25rem;
+  font-size: clamp(2.75rem, 5vw, 4.5rem);
+  max-width: 18ch;
   overflow-wrap: anywhere;
 }
-
 .header p {
-  line-height: 1.5;
+  line-height: 1.7;
+  color: var(--brand-color-muted);
+  font-size: 0.85rem;
 }
-
+.header a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 0.85rem;
+}
+.header p:has(a) {
+  margin-block: 0.25rem;
+}
 .state {
   text-transform: capitalize;
 }
-
+.state strong {
+  background: var(--brand-color-primarySoft);
+  color: var(--brand-color-primary);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  margin-left: 0.25rem;
+  font-size: 0.75rem;
+}
+.wallSummary {
+  padding: 1.5rem;
+  border-radius: 1.5rem;
+  background: var(--ui-stage);
+  color: var(--ui-stage-ink);
+  text-align: center;
+}
+.wallSummary > svg {
+  width: 9rem;
+  height: 7rem;
+}
+.wallSummary > p {
+  color: inherit;
+  font-size: 0.85rem;
+}
+.wallSummary > div {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-around;
+  border-top: 1px solid currentColor;
+  padding-top: 1.25rem;
+}
+.wallSummary strong {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.wallSummary span {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
   gap: 1rem;
   padding: 0;
   list-style: none;
 }
-
 .slot {
-  min-height: 12rem;
+  min-height: 15rem;
   border: 1px solid var(--brand-color-border);
-  border-radius: 0.8rem;
+  border-radius: 1rem;
   background: var(--brand-color-surface);
-  padding: 0.9rem;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
 }
-
 .slotNumber {
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 650;
   color: var(--brand-color-muted);
 }
-
 .slotContent {
   flex: 1;
-  min-height: 8rem;
+  min-height: 10rem;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.5rem;
   text-align: center;
-  background: var(--brand-color-paper);
-  border-radius: 0.5rem;
   padding: 0.5rem;
 }
-
+.slotContent > p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--brand-color-muted);
+}
+.slotContent > div > p {
+  color: var(--brand-color-muted);
+  font-size: 0.7rem;
+  max-width: 22ch;
+  line-height: 1.5;
+  margin: 0.5rem 0 0;
+}
+.slotContent:has(.emptyMark) {
+  border: 1px dashed var(--brand-color-border);
+  border-radius: 0.65rem;
+  background: var(--ui-surface-subtle);
+}
+.emptyMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  color: var(--brand-color-primary);
+  font-size: 1.5rem;
+  font-weight: 300;
+}
 .autograph {
   background: var(--brand-color-mediaPaper);
   width: 100%;
-  max-height: 8rem;
+  height: 7rem;
   object-fit: contain;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
 }
-
 .panel,
 .picker {
   margin-top: 1.5rem;
-  padding: 1.3rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
   border: 1px solid var(--brand-color-border);
-  border-radius: 0.8rem;
+  border-radius: 1.25rem;
   background: var(--brand-color-surface);
 }
-
 .panel h2,
 .picker h2 {
   margin-top: 0;
+  font-size: 1.4rem;
 }
-
+.panel p,
+.picker p {
+  max-width: 70ch;
+  font-size: 0.9rem;
+}
 .choices {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
-
 .choice {
   display: flex;
-  gap: 0.7rem;
+  gap: 0.75rem;
   align-items: center;
-  padding: 0.7rem;
-  border: 1px solid var(--brand-color-border);
-  border-radius: 0.45rem;
+  padding: 1rem;
+  border: 1px solid var(--brand-color-control);
+  border-radius: 0.75rem;
   cursor: pointer;
+  font-size: 0.85rem;
 }
-
 .choice:has(input:checked) {
   border-color: var(--brand-color-primary);
   background: var(--brand-color-primarySoft);
 }
-
 .privatePreview {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
   display: grid;
   justify-items: start;
-  gap: 0.6rem;
+  gap: 0.75rem;
 }
-
 .privatePreview img {
   background: var(--brand-color-mediaPaper);
   max-width: min(100%, 22rem);
   max-height: 10rem;
   object-fit: contain;
   border: 1px solid var(--brand-color-border);
-  border-radius: 0.4rem;
-  padding: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
 }
-
 .actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.8rem;
-}
-
-.message {
-  margin-top: 1rem;
-  padding: 0.9rem;
-  border-radius: 0.5rem;
-  background: var(--brand-color-primarySoft);
-}
-
-.page button,
-.page a {
-  font: inherit;
-}
-
-.page button {
-  cursor: pointer;
-  border: 1px solid var(--brand-color-control);
-  border-radius: 0.4rem;
-  color: var(--brand-color-primary);
-  background: var(--brand-color-primarySoft);
-  padding: 0.55rem 0.8rem;
-}
-
-.page button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.page button:focus-visible,
-.page a:focus-visible,
-.page input:focus-visible {
-  outline: 3px solid var(--brand-color-focus);
-  outline-offset: 2px;
-}
-
-@media (max-width: 40rem) {
-  .page {
-    width: min(100% - 1rem, 78rem);
-  }
-  .grid {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
-  }
-}
-
-.slot,
-.panel,
-.picker,
-.choice {
-  min-width: 0;
-}
-.slotContent p {
-  margin: 0;
-}
-.slotContent {
-  overflow-wrap: anywhere;
 }
 .actions a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--brand-color-control);
+  border-radius: 0.65rem;
+  text-decoration: none;
+  font-size: 0.85rem;
 }
-@media (max-width: 30rem) {
-  .actions {
-    flex-direction: column;
-    align-items: stretch;
+.message {
+  margin-top: 1rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: var(--brand-color-primarySoft);
+}
+.page button {
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  border: 1px solid var(--brand-color-control);
+  border-radius: 0.65rem;
+  color: var(--brand-color-primary);
+  background: var(--brand-color-primarySoft);
+  padding: 0.65rem 0.9rem;
+}
+.page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+@media (max-width: 55rem) {
+  .header {
+    grid-template-columns: 1fr;
+    gap: 2rem;
   }
-  .actions button {
-    width: 100%;
+  .wallSummary {
+    display: none;
   }
 }
-
-.header a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
+@media (max-width: 40rem) {
+  .page {
+    margin-top: 2rem;
+  }
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+  .slot {
+    padding: 0.6rem;
+    min-height: 14rem;
+  }
+  .slotContent {
+    padding: 0.5rem 0.25rem;
+  }
+  .slotContent button {
+    font-size: 0.7rem;
+    padding-inline: 0.5rem;
+  }
+  .autograph {
+    height: 6rem;
+  }
 }
-.header > button {
-  display: block;
-  margin-top: 0.75rem;
+@media (max-width: 23rem) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }

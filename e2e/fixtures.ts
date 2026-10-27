@@ -33,9 +33,20 @@ type Scenario = {
   ownerId: string;
 };
 
-export const test = base.extend<{ scenario: Scenario }>({
+export const test = base.extend<{ scenario: Scenario; uiLocale: 'en' | 'ru' }>({
+  uiLocale: ['en', { option: true }],
+  context: async ({ context, uiLocale }, use) => {
+    await context.addCookies([
+      {
+        name: 'destka-locale',
+        value: uiLocale,
+        url: process.env.E2E_WEB_URL ?? 'http://127.0.0.1:3000',
+      },
+    ]);
+    await use(context);
+  },
   scenario: [
-    async ({ browser }, use) => {
+    async ({ browser, uiLocale }, use) => {
       const config = isolatedE2EEnvironment();
       const database = createDatabase(config.databaseUrl);
       const storage = createPrivateS3Storage(config.storage);
@@ -79,6 +90,11 @@ export const test = base.extend<{ scenario: Scenario }>({
             const context = await browser.newContext();
             contexts.push(context);
             await context.addCookies([
+              {
+                name: 'destka-locale',
+                value: uiLocale,
+                url: process.env.E2E_WEB_URL ?? 'http://127.0.0.1:3000',
+              },
               {
                 name: 'da_session',
                 value: issued.token,

@@ -77,3 +77,7 @@ it('has an empty state, retry for network failure and a safe 404 for invalid or 
   ).rejects.toThrow('NOT_FOUND');
   expect(fetchMock).toHaveBeenCalledTimes(2);
 });
+
+vi.mock('next/headers', () => ({
+  cookies: async () => ({ get: () => ({ value: 'en' }) }),
+}));

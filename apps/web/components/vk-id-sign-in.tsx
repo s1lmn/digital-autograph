@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useEffect, useState } from 'react';
 
@@ -10,6 +11,8 @@ export function VkIdSignIn({
   apiOrigin: string;
   returnTo: string;
 }) {
+  const { t } = useLocale();
+
   const [available, setAvailable] = useState(false);
   useEffect(() => {
     setAvailable(false);
@@ -41,7 +44,7 @@ export function VkIdSignIn({
     <a
       href={`${apiOrigin}/auth/vk-id/start?returnTo=${encodeURIComponent(returnTo)}`}
     >
-      Продолжить через VK ID
+      {t('Продолжить через VK ID')}
     </a>
   );
 }

@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from './locale-provider';
+
 import { useState } from 'react';
 import { notificationRequest as request } from '../lib/notification-api';
 import styles from './notification-panel.module.css';
@@ -11,6 +13,8 @@ export function ShareControls({
   wallId: string;
   slots: Array<{ id: string; position: number }>;
 }) {
+  const { t } = useLocale();
+
   const [slotId, setSlotId] = useState('');
   const [alias, setAlias] = useState('');
   const [consent, setConsent] = useState(false);
@@ -39,12 +43,13 @@ export function ShareControls({
   return (
     <section
       className={styles.panel}
-      aria-label="Sharing and Wall notifications"
+      aria-label={t('Sharing and Wall notifications')}
     >
-      <h2>Share your place</h2>
+      <h2>{t('Share your place')}</h2>
       <p>
-        Create a card for your own placement. After the Wall ends, leave the
-        slot blank to share the final Wall. Sign in first.
+        {t(
+          'Create a card for your own placement. After the Wall ends, leave the slot blank to share the final Wall. Sign in first.',
+        )}
       </p>
       <form
         onSubmit={(e) => {
@@ -66,20 +71,21 @@ export function ShareControls({
         }}
       >
         <fieldset disabled={busy}>
-          <legend>Public card</legend>
+          <legend>{t('Public card')}</legend>
           <label>
-            Your slot
+            {t('Your slot')}
             <select value={slotId} onChange={(e) => setSlotId(e.target.value)}>
-              <option value="">Final Wall</option>
+              <option value="">{t('Final Wall')}</option>
               {slots.map((slot) => (
                 <option key={slot.id} value={slot.id}>
-                  Slot {slot.position + 1}
+                  {t('Slot ')}
+                  {slot.position + 1}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Public username (optional)
+            {t('Public username (optional)')}
             <input
               maxLength={40}
               value={alias}
@@ -92,17 +98,17 @@ export function ShareControls({
               checked={consent}
               onChange={(e) => setConsent(e.target.checked)}
             />{' '}
-            Publish this username on a public card
+            {t('Publish this username on a public card')}
           </label>
           <button type="submit" disabled={!!alias && !consent}>
-            Create share card
+            {t('Create share card')}
           </button>
         </fieldset>
       </form>
       {shareId && (
         <div>
           <p>
-            <a href={`/s/${shareId}`}>Open share card</a>
+            <a href={`/s/${shareId}`}>{t('Open share card')}</a>
           </p>
           <button
             type="button"
@@ -117,7 +123,7 @@ export function ShareControls({
                 ).catch(() => {});
                 if (navigator.share) {
                   try {
-                    await navigator.share({ title: 'Digital Autograph', url });
+                    await navigator.share({ title: 'Destka', url });
                     return;
                   } catch (e) {
                     if (e instanceof Error && e.name === 'AbortError') return;
@@ -132,9 +138,9 @@ export function ShareControls({
               })
             }
           >
-            Share or copy link
+            {t('Share or copy link')}
           </button>
-          {copied && <p role="status">Link copied.</p>}
+          {copied && <p role="status">{t('Link copied.')}</p>}
           <p>
             <a href={url}>{url}</a>
           </p>
@@ -148,7 +154,7 @@ export function ShareControls({
               })
             }
           >
-            Revoke public link
+            {t('Revoke public link')}
           </button>
         </div>
       )}
@@ -169,7 +175,7 @@ export function ShareControls({
           })
         }
       >
-        Notify me before this Wall starts or ends
+        {t('Notify me before this Wall starts or ends')}
       </button>
       <button
         type="button"
@@ -186,10 +192,10 @@ export function ShareControls({
           })
         }
       >
-        Unsubscribe from this Wall
+        {t('Unsubscribe from this Wall')}
       </button>
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
+      {error && <p role="alert">{t(error)}</p>}
+      {notice && <p role="status">{t(notice)}</p>}
     </section>
   );
 }

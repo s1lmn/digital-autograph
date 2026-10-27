@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from './locale-provider';
+
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   firstUseStateSchema,
@@ -22,6 +24,8 @@ export function FirstUseGate({
   onReady?: () => void;
   loginReturnTo?: string;
 }) {
+  const { t } = useLocale();
+
   const [state, setState] = useState<FirstUseState | null>(null);
   const [error, setError] = useState('');
   const [anonymous, setAnonymous] = useState(false);
@@ -131,43 +135,43 @@ export function FirstUseGate({
     state.documents.every((d) => d.accepted || checks[d.type]);
   return (
     <section
-      lang="ru"
       className={styles.gate}
       aria-labelledby="first-use-heading"
       aria-busy={busy}
     >
-      <p className="eyebrow">Destka</p>
+      <p className="eyebrow">{t('Destka')}</p>
       <h2 id="first-use-heading" ref={heading} tabIndex={-1}>
-        Перед первым действием
+        {t('Перед первым действием')}
       </h2>
       <p>
-        Для создания автографа и размещения на Wall подтвердите возраст и
-        ознакомьтесь с условиями сервиса. Вход через Google или Telegram не
-        означает принятия условий.
+        {t(
+          'Для создания автографа и размещения на Wall подтвердите возраст и ознакомьтесь с условиями сервиса. Вход через Google или Telegram не означает принятия условий.',
+        )}
       </p>
       <p>
-        Автограф — декоративный контент, а не юридическая подпись. Не загружайте
-        банковскую, официальную или другую чувствительную подпись.
+        {t(
+          'Автограф — декоративный контент, а не юридическая подпись. Не загружайте банковскую, официальную или другую чувствительную подпись.',
+        )}
       </p>
-      {error && <p role="alert">{error}</p>}
+      {error && <p role="alert">{t(error)}</p>}
       {anonymous ? (
         <div className={styles.actions}>
-          <p>Войдите, чтобы подтвердить условия.</p>
+          <p>{t('Войдите, чтобы подтвердить условия.')}</p>
           <a
             href={`${apiOrigin}/auth/google/start?returnTo=${encodeURIComponent(loginReturnTo)}`}
           >
-            Войти через Google
+            {t('Войти через Google')}
           </a>
           <a
             href={`${apiOrigin}/auth/telegram/start?returnTo=${encodeURIComponent(loginReturnTo)}`}
           >
-            Войти через Telegram
+            {t('Войти через Telegram')}
           </a>
         </div>
       ) : !state ? (
         <>
           <p role="status">
-            {error ? 'Проверка недоступна.' : 'Проверяем подтверждения…'}
+            {error ? t('Проверка недоступна.') : t('Проверяем подтверждения…')}
           </p>
           {error && (
             <button
@@ -176,14 +180,15 @@ export function FirstUseGate({
                 setRetry((n) => n + 1);
               }}
             >
-              Повторить проверку
+              {t('Повторить проверку')}
             </button>
           )}
         </>
       ) : !state.available ? (
         <p role="status">
-          Интерактивные функции пока недоступны: действующие документы ещё не
-          опубликованы. Подтверждение сейчас не требуется.
+          {t(
+            'Интерактивные функции пока недоступны: действующие документы ещё не опубликованы. Подтверждение сейчас не требуется.',
+          )}
         </p>
       ) : (
         <form
@@ -193,9 +198,9 @@ export function FirstUseGate({
           }}
         >
           <fieldset disabled={busy}>
-            <legend>Отдельные подтверждения</legend>
+            <legend>{t('Отдельные подтверждения')}</legend>
             {state.adultDeclared ? (
-              <p>Декларация 18+ уже сохранена.</p>
+              <p>{t('Декларация 18+ уже сохранена.')}</p>
             ) : (
               <label>
                 <input
@@ -205,7 +210,7 @@ export function FirstUseGate({
                     setChecks((c) => ({ ...c, adult: e.target.checked }))
                   }
                 />
-                Мне исполнилось 18 лет.
+                {t('Мне исполнилось 18 лет.')}
               </label>
             )}
             {state.documents.map((d) => (
@@ -215,11 +220,13 @@ export function FirstUseGate({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {title[d.type]} — редакция {d.version} (откроется в новой
-                  вкладке)
+                  {t(title[d.type])}
+                  {t(' — редакция ')}
+                  {d.version}
+                  {t(' (откроется в новой вкладке)')}
                 </a>
                 {d.accepted ? (
-                  <p>Эта редакция уже принята.</p>
+                  <p>{t('Эта редакция уже принята.')}</p>
                 ) : (
                   <label>
                     <input
@@ -230,27 +237,26 @@ export function FirstUseGate({
                       }
                     />
                     {d.type === 'terms_of_use'
-                      ? 'Принимаю Пользовательское соглашение.'
-                      : 'Принимаю Правила размещения контента.'}
+                      ? t('Принимаю Пользовательское соглашение.')
+                      : t('Принимаю Правила размещения контента.')}
                   </label>
                 )}
               </div>
             ))}
           </fieldset>
           <button type="submit" disabled={!allowed || busy}>
-            {busy ? 'Сохраняем подтверждения…' : 'Продолжить'}
+            {busy ? t('Сохраняем подтверждения…') : t('Продолжить')}
           </button>
         </form>
       )}
       <div className={styles.actions}>
-        <a href="/legal">Опубликованные документы</a>
-        <a href="/me">Аккаунт и выход</a>
+        <a href="/legal">{t('Опубликованные документы')}</a>
+        <a href="/me">{t('Аккаунт и выход')}</a>
       </div>
       <p className={styles.note}>
-        Подтверждения не разрешают публикацию профиля и не являются согласием на
-        дополнительные цели обработки данных. Вы можете отказаться и выйти из
-        аккаунта. Законные обращения по персональным данным остаются доступны
-        независимо от принятия условий.
+        {t(
+          'Подтверждения не разрешают публикацию профиля и не являются согласием на дополнительные цели обработки данных. Вы можете отказаться и выйти из аккаунта. Законные обращения по персональным данным остаются доступны независимо от принятия условий.',
+        )}
       </p>
     </section>
   );

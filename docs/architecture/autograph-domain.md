@@ -70,7 +70,9 @@ not consume a second reservation or renew its lifetime.
 
 Each reservation allows five byte-upload attempts. An atomic UPDATE charges the
 attempt before external I/O; cancellation, failure and missing acknowledgement do
-not refund it. Initiation does not reset it. Four shared PostgreSQL transaction
+not refund it. Shared-capacity/lock refusals after this admission charge also consume
+an attempt; clients must honor Retry-After rather than immediately loop. The
+per-process pre-parser refusal happens before that charge. Initiation does not reset it. Four shared PostgreSQL transaction
 advisory permits cap original byte upload/completion I/O across API processes;
 four incoming byte bodies per process are admitted before parsing. Excess requests
 receive 429; retry with backoff. The handler has a 30-second abort deadline and

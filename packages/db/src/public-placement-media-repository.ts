@@ -26,8 +26,12 @@ export function createPgPublicPlacementMediaRepository(
       try {
         await client.query('BEGIN');
         const placement = await client.query<PlacementRow>(
-          `SELECT user_id, autograph_id FROM placements
-           WHERE id = $1::uuid AND ended_at IS NULL FOR SHARE`,
+          `SELECT p.user_id, p.autograph_id FROM placements p
+           JOIN slots s ON s.id = p.slot_id
+           JOIN walls w ON w.id = s.wall_id
+           WHERE p.id = $1::uuid AND p.ended_at IS NULL
+             AND w.status IN ('scheduled', 'live', 'paused', 'ended')
+           FOR SHARE OF p, w`,
           [placementId],
         );
         const row = placement.rows[0];

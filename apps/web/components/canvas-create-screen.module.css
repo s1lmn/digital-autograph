@@ -1,18 +1,25 @@
 .flow {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--brand-color-border);
+  border-radius: 1.5rem;
+  background: var(--brand-color-surface);
   display: grid;
-  gap: 1.25rem;
+  gap: 1.75rem;
 }
 .modeTabs {
   display: flex;
   gap: 0.5rem;
-  border-bottom: 1px solid var(--brand-color-border);
-  padding-bottom: 0.5rem;
+  width: max-content;
+  max-width: 100%;
+  padding: 0.3rem;
+  background: var(--ui-surface-subtle);
+  border-radius: 0.85rem;
 }
 .tab,
 .activeTab {
   border: 0;
-  border-radius: 0.5rem;
-  padding: 0.65rem 1rem;
+  border-radius: 0.6rem;
+  padding: 0.65rem 1.5rem;
   font: inherit;
   font-weight: 650;
   cursor: pointer;
@@ -39,7 +46,8 @@
   border-radius: 0.6rem;
   background: var(--brand-color-primary);
   color: var(--brand-color-onPrimary);
-  padding: 0.85rem 1.2rem;
+  padding: 0.9rem 1.4rem;
+  min-height: 50px;
   font: inherit;
   font-weight: 650;
   cursor: pointer;
@@ -91,7 +99,7 @@
 .preview {
   padding: 1.25rem;
   border: 1px solid var(--brand-color-border);
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   background: var(--brand-color-surface);
 }
 .preview h2 {

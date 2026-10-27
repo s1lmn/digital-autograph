@@ -46,3 +46,16 @@
   border-radius: 0.5rem;
   background: var(--color-surface);
 }
+
+.panel fieldset {
+  padding: 1.5rem;
+  border-radius: 1rem;
+}
+.panel li {
+  padding: 1.5rem;
+  border-radius: 1rem;
+}
+.panel label,
+.panel li p {
+  font-size: 0.9rem;
+}

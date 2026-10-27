@@ -1,4 +1,14 @@
 import { expect, test } from '@playwright/test';
+
+test.beforeEach(async ({ context }) => {
+  await context.addCookies([
+    {
+      name: 'destka-locale',
+      value: 'en',
+      url: process.env.E2E_WEB_URL ?? 'http://127.0.0.1:3000',
+    },
+  ]);
+});
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -70,13 +80,13 @@ for (const sameOrigin of [true, false]) {
       );
       await expect(
         page.frameLocator('iframe').getByRole('heading', {
-          name: 'Leave your mark on a creator’s Wall',
+          name: 'Your mark. Their world.',
         }),
       ).toHaveCount(0);
       await page.goto(webUrl);
       await expect(
         page.getByRole('heading', {
-          name: 'Leave your mark on a creator’s Wall',
+          name: 'Your mark. Their world.',
         }),
       ).toBeVisible();
     } finally {

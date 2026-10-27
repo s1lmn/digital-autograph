@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useEffect, useState } from 'react';
 import { autographApi } from '../lib/autograph-api';
@@ -18,6 +19,8 @@ export function ReadyAutographPicker({
   onSelect: (id: string) => void;
   apiOrigin: string;
 }) {
+  const { t } = useLocale();
+
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewError, setPreviewError] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -51,7 +54,7 @@ export function ReadyAutographPicker({
 
   return (
     <section className={styles.picker} aria-labelledby="ready-heading">
-      <h2 id="ready-heading">Choose your ready autograph</h2>
+      <h2 id="ready-heading">{t('Choose your ready autograph')}</h2>
       <div className={styles.choices}>
         {choices.map((choice) => (
           <label key={choice.id} className={styles.choice}>
@@ -67,21 +70,22 @@ export function ReadyAutographPicker({
               }}
             />
             <span>
-              {choice.source === 'canvas' ? 'Drawn' : 'Photo'} autograph ·
-              moderated{' '}
-              {new Date(choice.moderatedAt).toISOString().slice(0, 10)} UTC
+              {choice.source === 'canvas' ? t('Drawn') : t('Photo')}
+              {t(' autograph · moderated')}{' '}
+              {new Date(choice.moderatedAt).toISOString().slice(0, 10)}
+              {t(' UTC')}
             </span>
           </label>
         ))}
       </div>
       {selectedId && (
         <div className={styles.privatePreview}>
-          <p>Your private preview</p>
+          <p>{t('Your private preview')}</p>
           {preview && !previewError ? (
             <img
               key={`${selectedId}:${preview.url}`}
               src={preview.url}
-              alt="Private preview of your selected digital autograph"
+              alt={t('Private preview of your selected digital autograph')}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onError={() => setPreviewError(true)}
@@ -89,15 +93,15 @@ export function ReadyAutographPicker({
           ) : (
             <p role="status">
               {previewError
-                ? 'Preview unavailable. Refresh it to try again.'
-                : 'Loading preview…'}
+                ? t('Preview unavailable. Refresh it to try again.')
+                : t('Loading preview…')}
             </p>
           )}
           <button
             type="button"
             onClick={() => setRefresh((count) => count + 1)}
           >
-            Refresh private preview
+            {t('Refresh private preview')}
           </button>
         </div>
       )}

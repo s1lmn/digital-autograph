@@ -129,3 +129,16 @@
     width: 100%;
   }
 }
+
+.canvas {
+  border-radius: 1rem;
+  max-width: none;
+}
+.preview {
+  border-radius: 1rem;
+  max-width: none;
+  padding: 1.5rem;
+}
+.controls {
+  max-width: none;
+}

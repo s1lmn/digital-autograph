@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { YandexSignIn } from './yandex-sign-in';
 import { VkIdSignIn } from './vk-id-sign-in';
@@ -14,14 +15,16 @@ import {
 import styles from './placement-history.module.css';
 
 function HistoryTime({ value }: { value: string }) {
+  const { t, locale } = useLocale();
+
   return (
     <time dateTime={value}>
-      {new Date(value).toLocaleString(undefined, {
+      {new Date(value).toLocaleString(locale === 'ru' ? 'ru-RU' : 'en-US', {
         dateStyle: 'medium',
         timeStyle: 'short',
         timeZone: 'UTC',
       })}{' '}
-      UTC
+      {t('UTC')}
     </time>
   );
 }
@@ -35,6 +38,8 @@ export function WallPlacementHistory({
   wallId: string;
   apiOrigin: string;
 }) {
+  const { t } = useLocale();
+
   const [items, setItems] = useState<Array<
     Pick<
       PlacementHistoryItem,
@@ -71,11 +76,13 @@ export function WallPlacementHistory({
       aria-labelledby="wall-history-heading"
       aria-busy={loading}
     >
-      <h2 id="wall-history-heading">Placement history</h2>
-      {loading && <p role="status">Loading Wall history…</p>}
+      <h2 id="wall-history-heading">{t('Placement history')}</h2>
+      {loading && <p role="status">{t('Loading Wall history…')}</p>}
       {error && (
         <div>
-          <p role="alert">Wall placement history is temporarily unavailable.</p>
+          <p role="alert">
+            {t('Wall placement history is temporarily unavailable.')}
+          </p>
           <button
             type="button"
             disabled={loading}
@@ -84,13 +91,15 @@ export function WallPlacementHistory({
               setRetry((count) => count + 1);
             }}
           >
-            Retry Wall history
+            {t('Retry Wall history')}
           </button>
         </div>
       )}
-      {items?.length === 0 && <p>No placements have been recorded yet.</p>}
+      {items?.length === 0 && (
+        <p>{t('No placements have been recorded yet.')}</p>
+      )}
       {items && items.length >= 100 && (
-        <p>Showing the 100 most recent placements.</p>
+        <p>{t('Showing the 100 most recent placements.')}</p>
       )}
       {items && items.length > 0 && (
         <ol className={styles.historyList}>
@@ -99,20 +108,25 @@ export function WallPlacementHistory({
               key={`${item.slotPosition}:${item.startedAt}`}
               className={styles.item}
             >
-              <h3>Slot {item.slotPosition + 1}</h3>
-              <p>{placementSourceLabel(item.source)}</p>
+              <h3>
+                {t('Slot ')}
+                {item.slotPosition + 1}
+              </h3>
+              <p>{t(placementSourceLabel(item.source))}</p>
               <p>
-                Started: <HistoryTime value={item.startedAt} />
+                {t('Started: ')}
+                <HistoryTime value={item.startedAt} />
               </p>
               {item.endedAt ? (
                 <p>
-                  Ended: <HistoryTime value={item.endedAt} />
+                  {t('Ended: ')}
+                  <HistoryTime value={item.endedAt} />
                 </p>
               ) : (
-                <p>Current placement</p>
+                <p>{t('Current placement')}</p>
               )}
               {item.endReason && (
-                <p>{placementEndReasonLabel(item.endReason)}</p>
+                <p>{t(placementEndReasonLabel(item.endReason) ?? '')}</p>
               )}
             </li>
           ))}
@@ -123,6 +137,8 @@ export function WallPlacementHistory({
 }
 
 export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
+  const { t } = useLocale();
+
   const [auth, setAuth] = useState<
     'checking' | 'authenticated' | 'anonymous' | 'unavailable'
   >('checking');
@@ -162,19 +178,19 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
   }, [apiOrigin, retry]);
 
   if (auth === 'checking') {
-    return <p role="status">Checking sign-in…</p>;
+    return <p role="status">{t('Checking sign-in…')}</p>;
   }
   if (auth === 'anonymous') {
     const returnTo = encodeURIComponent('/me/placements');
     return (
       <section className={styles.history}>
-        <p>Sign in to view your placement history.</p>
+        <p>{t('Sign in to view your placement history.')}</p>
         <p className={styles.actions}>
           <a href={`${apiOrigin}/auth/google/start?returnTo=${returnTo}`}>
-            Continue with Google
+            {t('Continue with Google')}
           </a>
           <a href={`${apiOrigin}/auth/telegram/start?returnTo=${returnTo}`}>
-            Continue with Telegram
+            {t('Continue with Telegram')}
           </a>
           <YandexSignIn apiOrigin={apiOrigin} returnTo="/me/placements" />
           <VkIdSignIn apiOrigin={apiOrigin} returnTo="/me/placements" />
@@ -185,7 +201,9 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
   if (error) {
     return (
       <section>
-        <p role="alert">Your placement history is temporarily unavailable.</p>
+        <p role="alert">
+          {t('Your placement history is temporarily unavailable.')}
+        </p>
         <button
           type="button"
           onClick={() => {
@@ -195,20 +213,22 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
             setRetry((count) => count + 1);
           }}
         >
-          Retry your history
+          {t('Retry your history')}
         </button>
       </section>
     );
   }
   if (items === null) {
-    return <p role="status">Loading your placement history…</p>;
+    return <p role="status">{t('Loading your placement history…')}</p>;
   }
   if (!items.length) {
-    return <p>You have no Wall placements yet.</p>;
+    return <p>{t('You have no Wall placements yet.')}</p>;
   }
   return (
     <>
-      {items.length >= 100 && <p>Showing your 100 most recent placements.</p>}
+      {items.length >= 100 && (
+        <p>{t('Showing your 100 most recent placements.')}</p>
+      )}
       <ol className={styles.historyList}>
         {items.map((item) => (
           <li
@@ -218,25 +238,32 @@ export function UserPlacementHistory({ apiOrigin }: { apiOrigin: string }) {
             <h2>
               {item.wallIsPublic ? (
                 <a href={`/walls/${item.wallId}`}>
-                  {item.wallDisplayName}&apos;s Wall
+                  {t("{name}'s Wall", { name: item.wallDisplayName })}
                 </a>
               ) : (
-                <>{item.wallDisplayName}&apos;s Wall</>
+                <>{t("{name}'s Wall", { name: item.wallDisplayName })}</>
               )}
             </h2>
-            <p>Slot {item.slotPosition + 1}</p>
-            <p>{placementSourceLabel(item.source)}</p>
             <p>
-              Started: <HistoryTime value={item.startedAt} />
+              {t('Slot ')}
+              {item.slotPosition + 1}
+            </p>
+            <p>{t(placementSourceLabel(item.source))}</p>
+            <p>
+              {t('Started: ')}
+              <HistoryTime value={item.startedAt} />
             </p>
             {item.endedAt ? (
               <p>
-                Ended: <HistoryTime value={item.endedAt} />
+                {t('Ended: ')}
+                <HistoryTime value={item.endedAt} />
               </p>
             ) : (
-              <p>Current placement</p>
+              <p>{t('Current placement')}</p>
             )}
-            {item.endReason && <p>{placementEndReasonLabel(item.endReason)}</p>}
+            {item.endReason && (
+              <p>{t(placementEndReasonLabel(item.endReason) ?? '')}</p>
+            )}
           </li>
         ))}
       </ol>

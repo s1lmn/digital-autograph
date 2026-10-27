@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { YandexSignIn } from './yandex-sign-in';
 import { VkIdSignIn } from './vk-id-sign-in';
@@ -26,6 +27,8 @@ const reasonLabels: Record<RejectionReason, string> = {
 };
 
 export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
+  const { t, locale } = useLocale();
+
   const api = useRef(moderationApi(apiOrigin));
   const [access, setAccess] = useState<
     'loading' | 'allowed' | 'signin' | 'forbidden' | 'error'
@@ -179,30 +182,30 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
   };
 
   if (access === 'loading')
-    return <p role="status">Checking moderation access…</p>;
+    return <p role="status">{t('Checking moderation access…')}</p>;
   if (access === 'forbidden')
     return (
       <p role="alert">
-        Forbidden: a platform moderator or admin role is required.
+        {t('Forbidden: a platform moderator or admin role is required.')}
       </p>
     );
   if (access === 'error')
     return (
       <p role="alert">
-        Moderation is temporarily unavailable. Refresh the page.
+        {t('Moderation is temporarily unavailable. Refresh the page.')}
       </p>
     );
   if (access === 'signin') {
     const returnTo = encodeURIComponent('/moderation');
     return (
       <section>
-        <p>Sign in with a platform moderator account.</p>
+        <p>{t('Sign in with a platform moderator account.')}</p>
         <a href={`${apiOrigin}/auth/google/start?returnTo=${returnTo}`}>
-          Sign in with Google
+          {t('Sign in with Google')}
         </a>
         {' · '}
         <a href={`${apiOrigin}/auth/telegram/start?returnTo=${returnTo}`}>
-          Sign in with Telegram
+          {t('Sign in with Telegram')}
         </a>
         <YandexSignIn apiOrigin={apiOrigin} returnTo="/moderation" />
         <VkIdSignIn apiOrigin={apiOrigin} returnTo="/moderation" />
@@ -212,9 +215,9 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
 
   return (
     <div className={styles.layout}>
-      <section className={styles.queue} aria-label="Pending autographs">
-        <h2>Pending</h2>
-        {items.length === 0 && <p>No submissions in this page.</p>}
+      <section className={styles.queue} aria-label={t('Pending autographs')}>
+        <h2>{t('Pending')}</h2>
+        {items.length === 0 && <p>{t('No submissions in this page.')}</p>}
         <ul>
           {items.map((item) => (
             <li key={item.id}>
@@ -223,32 +226,39 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
                 disabled={busy}
                 onClick={() => void loadPreview(item.id)}
               >
-                {item.source} · {new Date(item.approvedAt).toLocaleString()}
+                {t(item.source)} ·{' '}
+                {new Date(item.approvedAt).toLocaleString(
+                  locale === 'ru' ? 'ru-RU' : 'en-US',
+                )}
               </button>
             </li>
           ))}
         </ul>
         {cursor && (
           <button type="button" disabled={busy} onClick={() => void loadMore()}>
-            Load more
+            {t('Load more')}
           </button>
         )}
       </section>
-      <section className={styles.review} aria-label="Review selected autograph">
-        {message && <p role="status">{message}</p>}
-        {!selected && <p>Select a pending autograph to review.</p>}
+      <section
+        className={styles.review}
+        aria-label={t('Review selected autograph')}
+      >
+        {message && <p role="status">{t(message)}</p>}
+        {!selected && <p>{t('Select a pending autograph to review.')}</p>}
         {selected && (
           <>
-            <h2>Cleaned autograph</h2>
+            <h2>{t('Cleaned autograph')}</h2>
             <p>
-              Review this owner-approved image for content suitability only.
-              This is not identity or signature verification.
+              {t(
+                'Review this owner-approved image for content suitability only. This is not identity or signature verification.',
+              )}
             </p>
             {preview && (
               <img
                 key={preview.url}
                 src={preview.url}
-                alt="Private cleaned autograph for moderation"
+                alt={t('Private cleaned autograph for moderation')}
                 referrerPolicy="no-referrer"
                 onLoad={() => {
                   if (Date.now() < new Date(preview.expiresAt).getTime())
@@ -262,7 +272,7 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
             )}
             {previewError && (
               <p className={styles.error} role="alert">
-                {previewError}
+                {t(previewError)}
               </p>
             )}
             <div className={styles.actions}>
@@ -271,29 +281,29 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
                 disabled={busy}
                 onClick={() => void loadPreview(selected)}
               >
-                Refresh private preview
+                {t('Refresh private preview')}
               </button>
               <button
                 type="button"
                 disabled={busy || !previewLoaded}
                 onClick={() => void decide('approved')}
               >
-                Approve
+                {t('Approve')}
               </button>
               <label>
-                Rejection reason{' '}
+                {t('Rejection reason')}{' '}
                 <select
-                  aria-label="Rejection reason"
+                  aria-label={t('Rejection reason')}
                   disabled={busy}
                   value={reason}
                   onChange={(event) =>
                     setReason(event.target.value as RejectionReason | '')
                   }
                 >
-                  <option value="">Choose a reason</option>
+                  <option value="">{t('Choose a reason')}</option>
                   {rejectionReasons.map((code) => (
                     <option key={code} value={code}>
-                      {reasonLabels[code]}
+                      {t(reasonLabels[code])}
                     </option>
                   ))}
                 </select>
@@ -303,7 +313,7 @@ export function ModerationWorkspace({ apiOrigin }: { apiOrigin: string }) {
                 disabled={busy || !previewLoaded || !reason}
                 onClick={() => void decide('rejected')}
               >
-                Reject
+                {t('Reject')}
               </button>
             </div>
           </>

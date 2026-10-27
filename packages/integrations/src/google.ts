@@ -18,6 +18,7 @@ export function createGoogleOidcClient(
     clientId: config.clientId,
     clientSecret: config.clientSecret,
     redirectUri: config.redirectUri,
+    transporterOptions: { timeout: 10_000 },
     issuers: ['accounts.google.com', 'https://accounts.google.com'],
   });
 

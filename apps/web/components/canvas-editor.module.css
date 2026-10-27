@@ -1,34 +1,39 @@
 .editor {
   display: grid;
-  gap: 0.75rem;
+  gap: 1.25rem;
+  min-width: 0;
 }
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: end;
-  gap: 1rem;
+  align-items: center;
+  gap: 1.5rem;
   flex-wrap: wrap;
 }
 .header h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.2rem;
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
 }
 .header p,
 .help {
   color: var(--brand-color-muted);
   margin: 0;
+  font-size: 0.8rem;
+  max-width: 60ch;
+  line-height: 1.7;
 }
 .actions {
   display: flex;
   gap: 0.5rem;
 }
 .actions button {
-  padding: 0.55rem 0.85rem;
+  padding: 0.55rem 1rem;
   border: 1px solid var(--brand-color-control);
-  border-radius: 0.5rem;
+  border-radius: 0.65rem;
   background: var(--brand-color-surface);
   color: var(--brand-color-ink);
   cursor: pointer;
+  font-size: 0.8rem;
 }
 .actions button:disabled {
   opacity: 0.45;
@@ -39,14 +44,17 @@
   box-sizing: border-box;
   width: 100%;
   aspect-ratio: 2 / 1;
-  background: var(--brand-color-mediaPaper);
-  border: 2px solid var(--brand-color-control);
-  border-radius: 0.75rem;
+  background-color: var(--brand-color-mediaPaper);
+  background-image: radial-gradient(#ccd1df 0.6px, transparent 0.6px);
+  background-size: 20px 20px;
+  border: 1px solid var(--brand-color-control);
+  border-radius: 1rem;
   touch-action: none;
   cursor: crosshair;
 }
 .help {
-  font-size: 0.875rem;
+  max-width: 100%;
+  font-size: 0.75rem;
 }
 .srOnly {
   position: absolute;

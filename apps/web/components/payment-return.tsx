@@ -1,4 +1,6 @@
 'use client';
+import { useLocale } from './locale-provider';
+
 import { useCallback, useEffect, useState } from 'react';
 const messages: Record<string, string> = {
   created: 'Payment is being prepared.',
@@ -16,6 +18,8 @@ export function PaymentReturn({
   apiOrigin: string;
   orderId: string;
 }) {
+  const { t } = useLocale();
+
   const [message, setMessage] = useState('Checking payment…');
   const [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
@@ -58,12 +62,12 @@ export function PaymentReturn({
   }, [refresh]);
   return (
     <section>
-      <p role="status">{message}</p>
+      <p role="status">{t(message)}</p>
       <button type="button" disabled={busy} onClick={() => void refresh()}>
-        Refresh payment status
+        {t('Refresh payment status')}
       </button>
       <p>
-        <a href="/me/placements">View your placement history</a>
+        <a href="/me/placements">{t('View your placement history')}</a>
       </p>
     </section>
   );

@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import sharp from 'sharp';
 import {
   buildAcceptedApi as buildApi,
@@ -304,6 +312,72 @@ describe('public Placement media and ready selection with PostgreSQL and MinIO',
         'signed',
       ])
         expect(body).not.toContain(secret);
+    }
+  });
+
+  it.each(['draft', 'archived'])(
+    'does not expose placement media from a %s Wall',
+    async (status) => {
+      const owner = await person();
+      const wall = await wallFixture(owner.id);
+      const autograph = await autographFixture(owner.id);
+      const placementId = await placementFixture(
+        wall.slotId,
+        owner.id,
+        autograph.id,
+      );
+      expect((await media(placementId)).statusCode).toBe(200);
+      await database.pool.query(
+        'UPDATE walls SET status = $2::wall_status WHERE id = $1::uuid',
+        [wall.wallId, status],
+      );
+      expect((await app.inject(`/walls/${wall.wallId}`)).statusCode).toBe(404);
+      const response = await media(placementId);
+      expect(response.statusCode).toBe(404);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.body).not.toContain(autograph.cleanedKey);
+    },
+  );
+
+  it('rechecks Wall visibility after waiting for a concurrent archive transaction', async () => {
+    const owner = await person();
+    const wall = await wallFixture(owner.id);
+    const autograph = await autographFixture(owner.id);
+    const placementId = await placementFixture(
+      wall.slotId,
+      owner.id,
+      autograph.id,
+    );
+    const archiver = await database.pool.connect();
+    let pending: ReturnType<typeof media> | undefined;
+    try {
+      await archiver.query('BEGIN');
+      const pid = (
+        await archiver.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')
+      ).rows[0]!.pid;
+      await archiver.query(
+        "UPDATE walls SET status = 'archived' WHERE id = $1::uuid",
+        [wall.wallId],
+      );
+      pending = media(placementId).then((response) => response);
+      await vi.waitFor(
+        async () => {
+          const blocked = await database.pool.query<{ blocked: boolean }>(
+            'SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1::int = ANY(pg_blocking_pids(pid))) AS blocked',
+            [pid],
+          );
+          expect(blocked.rows[0]!.blocked).toBe(true);
+        },
+        { timeout: 3000, interval: 10 },
+      );
+      await archiver.query('COMMIT');
+      const response = await pending;
+      expect(response.statusCode).toBe(404);
+      expect(response.headers['cache-control']).toBe('no-store');
+    } finally {
+      await archiver.query('ROLLBACK');
+      archiver.release();
+      await pending;
     }
   });
 

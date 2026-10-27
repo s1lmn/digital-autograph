@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { autographApi, AutographApiError } from '../lib/autograph-api';
@@ -49,6 +50,8 @@ function errorMessage(error: unknown): string {
 }
 
 export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
+  const { t } = useLocale();
+
   const api = useRef(autographApi(apiOrigin));
   const strokes = useRef<readonly Stroke[]>([]);
   const image = useRef<Blob | null>(null);
@@ -183,7 +186,7 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
         <div
           className={styles.modeTabs}
           role="group"
-          aria-label="Creation method"
+          aria-label={t('Creation method')}
         >
           <button
             className={mode === 'draw' ? styles.activeTab : styles.tab}
@@ -192,7 +195,7 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
             disabled={state.kind === 'working' || Boolean(autographId.current)}
             onClick={() => selectMode('draw')}
           >
-            Draw
+            {t('Draw')}
           </button>
           <button
             className={mode === 'photo' ? styles.activeTab : styles.tab}
@@ -201,7 +204,7 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
             disabled={state.kind === 'working' || Boolean(autographId.current)}
             onClick={() => selectMode('photo')}
           >
-            Photo
+            {t('Photo')}
           </button>
         </div>
       )}
@@ -233,15 +236,15 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
           onClick={run}
           disabled={mode === 'draw' ? !hasMarks : !hasPhoto}
         >
-          Create private preview
+          {t('Create private preview')}
         </button>
       )}
       {state.kind === 'working' && (
         <div role="status" aria-live="polite" className={styles.status}>
-          <p>{stageLabels[state.stage]}</p>
+          <p>{t(stageLabels[state.stage])}</p>
           {state.stage === 'uploading' && (
             <progress
-              aria-label="Upload progress"
+              aria-label={t('Upload progress')}
               max={1}
               value={state.progress ?? 0}
             />
@@ -253,23 +256,23 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
           {state.legalRequired ? (
             <FirstUseActionNotice returnTo="/autograph/create" />
           ) : (
-            <p>{state.message}</p>
+            <p>{t(state.message)}</p>
           )}
           <div className={styles.actions}>
             {image.current && (
               <button type="button" onClick={run}>
-                Retry
+                {t('Retry')}
               </button>
             )}
             <button type="button" onClick={startOver}>
-              Start a new autograph
+              {t('Start a new autograph')}
             </button>
             <button
               type="button"
               onClick={refreshPreview}
               disabled={!autographId.current}
             >
-              Refresh preview
+              {t('Refresh preview')}
             </button>
           </div>
         </div>

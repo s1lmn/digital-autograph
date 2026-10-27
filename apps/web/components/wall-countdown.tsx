@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from './locale-provider';
 
 import { useEffect, useState } from 'react';
 
@@ -22,6 +23,8 @@ export function WallCountdown({
   endAt: string | null;
   status: string;
 }) {
+  const { t } = useLocale();
+
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
@@ -45,14 +48,14 @@ export function WallCountdown({
           'Loading remaining time…'
         ) : deadline ? (
           <>
-            {waiting ? 'Starts in' : 'Ends in'}:{' '}
-            <span>{countdownLabel(deadline, now)}</span>
+            {waiting ? t('Starts in') : t('Ends in')}:{' '}
+            <span>{t(countdownLabel(deadline, now))}</span>
           </>
         ) : (
           'No end time has been set.'
         )}
       </span>
-      Times are approximate; availability is checked when you confirm.
+      {t('Times are approximate; availability is checked when you confirm.')}
     </p>
   );
 }

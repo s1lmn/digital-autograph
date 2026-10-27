@@ -38,7 +38,7 @@ test('real draft identities stay unavailable alongside synthetic published E2E d
     expect(html).not.toContain('[[URL');
     expect(html).not.toContain('loshkarv00');
   }
-  await expect(page.locator('footer a')).toHaveAttribute('href', '/legal');
+  await expect(page.locator('footer nav a')).toHaveAttribute('href', '/legal');
   await expect(
     page.getByRole('link', {
       name: 'Пользовательское соглашение',

@@ -1,3 +1,4 @@
+import { getTranslator } from '../../../lib/i18n-server';
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import { loadWebConfig } from '@digital-autograph/config';
@@ -21,20 +22,24 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  const t = await getTranslator();
   const parsed = wallIdParams.safeParse(await params);
   if (!parsed.success)
-    return { title: 'Wall not found', robots: { index: false } };
+    return { title: t('Wall not found'), robots: { index: false } };
   try {
     const wall = await loadWall(parsed.data.id);
-    const title = `${wall.creator.displayName}'s Wall`;
-    const description = `View ${wall.creator.displayName}’s digital autograph Wall and its public placement history.`;
+    const title = t("{name}'s Wall", { name: wall.creator.displayName });
+    const description = t(
+      'View {name}’s digital autograph Wall and its public placement history.',
+      { name: wall.creator.displayName },
+    );
     return {
       title,
       description,
       openGraph: { title, description, type: 'website' },
     };
   } catch {
-    return { title: 'Wall unavailable', robots: { index: false } };
+    return { title: t('Wall unavailable'), robots: { index: false } };
   }
 }
 
@@ -43,6 +48,8 @@ export default async function WallPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getTranslator();
+
   const parsed = wallIdParams.safeParse(await params);
   if (!parsed.success) notFound();
   const { API_PUBLIC_ORIGIN } = loadWebConfig();
@@ -57,10 +64,10 @@ export default async function WallPage({
     }
     return (
       <main>
-        <h1>Wall temporarily unavailable</h1>
-        <p role="alert">Check your connection and try again.</p>
+        <h1>{t('Wall temporarily unavailable')}</h1>
+        <p role="alert">{t('Check your connection and try again.')}</p>
         <a className="actionLink" href={`/walls/${parsed.data.id}`}>
-          Retry loading Wall
+          {t('Retry loading Wall')}
         </a>
       </main>
     );

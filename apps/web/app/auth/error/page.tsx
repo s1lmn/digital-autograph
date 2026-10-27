@@ -1,16 +1,24 @@
+import { localizeMetadata } from '../../../lib/i18n-server';
+
+import { getTranslator } from '../../../lib/i18n-server';
 import type { Metadata } from 'next';
 type AuthErrorPageProps = {
   searchParams: Promise<{ code?: string | string[] }>;
 };
 
-export const metadata: Metadata = {
+const pageMetadata: Metadata = {
   title: 'Sign-in',
   robots: { index: false, follow: false },
 };
+export async function generateMetadata() {
+  return localizeMetadata(pageMetadata);
+}
 
 export default async function AuthErrorPage({
   searchParams,
 }: AuthErrorPageProps) {
+  const t = await getTranslator();
+
   const { code } = await searchParams;
   const messages: Record<string, string> = {
     GOOGLE_AUTH_CANCELLED: 'Google sign-in was cancelled.',
@@ -30,10 +38,10 @@ export default async function AuthErrorPage({
 
   return (
     <main>
-      <p className="eyebrow">Digital Autograph Platform</p>
-      <h1>Sign-in</h1>
-      <p>{message}</p>
-      <a href="/">Return home</a>
+      <p className="eyebrow">{t('Destka')}</p>
+      <h1>{t('Sign-in')}</h1>
+      <p>{t(message)}</p>
+      <a href="/">{t('Return home')}</a>
     </main>
   );
 }

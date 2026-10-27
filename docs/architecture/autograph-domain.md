@@ -68,6 +68,10 @@ occurs under that quota lock. Counts come from persisted rows, with DB-clock rol
 creation windows; API restarts cannot reset quotas. Matching initiation retry does
 not consume a second reservation or renew its lifetime.
 
+A real two-pool race test admits 12 simultaneous attempts against one reservation,
+verifies the persisted counter stops at five, rejects all further attempts, and
+checks a foreign owner cannot consume the attempt budget.
+
 Each reservation allows five byte-upload attempts. An atomic UPDATE charges the
 attempt before external I/O; cancellation, failure and missing acknowledgement do
 not refund it. Shared-capacity/lock refusals after this admission charge also consume
@@ -75,7 +79,10 @@ an attempt; clients must honor Retry-After rather than immediately loop. The
 per-process pre-parser refusal happens before that charge. Initiation does not reset it. Four shared PostgreSQL transaction
 advisory permits cap original byte upload/completion I/O across API processes;
 four incoming byte bodies per process are admitted before parsing. Excess requests
-receive 429; retry with backoff. The handler has a 30-second abort deadline and
+receive 429; retry with backoff. The handler starts a 30-second abort deadline
+after authentication/first-use guards and parameter parsing; it does not bound
+prior PostgreSQL connection/query waits. A03 must add those finite DB budgets.
+
 S3 PUT/HEAD/delete have actual SDK abort deadlines of 10 seconds. Chunk accumulation
 plus final concatenation uses at most approximately 80 MiB for four bodies, besides
 runtime/SDK overhead. This is an engineering bound, not a staging capacity result.

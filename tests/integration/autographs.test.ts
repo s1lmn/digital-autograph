@@ -404,6 +404,74 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
     );
   });
 
+  it('charges at most five attempts atomically across concurrent pools, without charging a foreign owner', async () => {
+    const { owner, other } = await usersAndTokens();
+    const draft = await autographs.create(owner.id, 'photo');
+    const upload = await autographs.initiateUpload(owner.id, draft.id, {
+      contentType: 'image/png',
+      sizeBytes: 4,
+    });
+    const key = await originalKey(upload.assetId);
+    const otherDatabase = createDatabase(dbUrl!);
+    const repositories = [
+      createPgAutographRepository(database.pool),
+      createPgAutographRepository(otherDatabase.pool),
+    ];
+    let writes = 0;
+    const rejectBody = async () => {
+      writes++;
+      throw new Error('Synthetic rejected upload');
+    };
+    try {
+      await expect(
+        repositories[1]!.uploadOriginal(
+          other.id,
+          draft.id,
+          upload.assetId,
+          rejectBody,
+        ),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const results = await Promise.allSettled(
+        Array.from({ length: 12 }, (_, i) =>
+          repositories[i % 2]!.uploadOriginal(
+            owner.id,
+            draft.id,
+            upload.assetId,
+            rejectBody,
+          ),
+        ),
+      );
+      expect(results.every((result) => result.status === 'rejected')).toBe(
+        true,
+      );
+      expect(
+        results.filter(
+          (result) =>
+            result.status === 'rejected' &&
+            result.reason.code === 'UPLOAD_EXPIRED',
+        ).length,
+      ).toBe(7);
+      const stored = await database.pool.query(
+        'SELECT upload_attempts FROM autograph_assets WHERE id = $1',
+        [upload.assetId],
+      );
+      expect(stored.rows[0].upload_attempts).toBe(5);
+      expect(writes).toBeGreaterThan(0);
+      expect(writes).toBeLessThanOrEqual(5);
+      await expect(
+        repositories[0]!.uploadOriginal(
+          owner.id,
+          draft.id,
+          upload.assetId,
+          rejectBody,
+        ),
+      ).rejects.toMatchObject({ code: 'UPLOAD_EXPIRED' });
+      expect(await storage.statObject(key)).toBeNull();
+    } finally {
+      await otherDatabase.close();
+    }
+  });
+
   it('enforces concurrent account draft and pending quotas in PostgreSQL across repository instances', async () => {
     const { owner } = await usersAndTokens();
     const repo = createPgAutographRepository(database.pool);

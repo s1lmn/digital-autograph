@@ -1,3 +1,7 @@
+# Product palette update — 27 October 2026
+
+The user explicitly rejected green/mint for the current interface. `tokens.json` now uses graphite/periwinkle, and generated brand assets use that neutral palette. The application adds light/dark semantic themes in `apps/web/app/interface-tokens.css`. The current UI direction, source review and theme behavior are documented in [interface-refresh.md](../design/interface-refresh.md). The historic rationale below describes the earlier proposal, not the current color choice. The user confirmed the product name **Destka**; current interface, metadata and generated brand exports use Destka. Historic naming notes below are superseded.
+
 # Brand Kit v1.1 — EGO-82
 
 **Preview proposal, 2026-10-07.** This is the permitted preliminary design before

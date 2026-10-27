@@ -1,7 +1,11 @@
 'use client';
+import { useLocale } from './locale-provider';
+
 import { useState } from 'react';
 
 export function CopyDocumentUrl({ path }: { path: string }) {
+  const { t } = useLocale();
+
   const [status, setStatus] = useState('');
   return (
     <div>
@@ -18,10 +22,10 @@ export function CopyDocumentUrl({ path }: { path: string }) {
           }
         }}
       >
-        Копировать ссылку на редакцию
+        {t('Копировать ссылку на редакцию')}
       </button>
-      <p aria-live="polite">{status}</p>
-      <a href={path}>Постоянная ссылка на эту редакцию</a>
+      <p aria-live="polite">{t(status)}</p>
+      <a href={path}>{t('Постоянная ссылка на эту редакцию')}</a>
     </div>
   );
 }

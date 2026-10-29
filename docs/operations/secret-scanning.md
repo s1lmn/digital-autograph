@@ -18,6 +18,22 @@ Pattern matching cannot establish absence of all secrets, especially arbitrary
 passwords, binaries, runtime logs or client bundles. EGO-109's wider review remains
 required.
 
+## Deterministic smoke canaries (EGO-171)
+
+The smoke uses fixed synthetic provider and generic canaries, never random
+credential values. The generic positive includes digits and has a verified
+high-entropy profile. A separate alphabetic-only negative demonstrates the
+pinned built-in allowlist which made random base64url positives unreliable.
+The scanner configuration, entropy thresholds, stopwords, reviewed exceptions,
+workflow and required gate are unchanged.
+
+Positive generic findings are checked in each narrowly excepted path, in
+ordinary/deleted Git history, and independently in merge-only/deleted merge
+history. Provider-pattern fixtures exercise the same merge guarantees
+separately, so one rule cannot mask a broken canary for another. Captured output
+is checked against all synthetic values and never printed on failure. These
+known test values are not credentials and must not be used by application code.
+
 ## Local check
 
 On Linux x64:

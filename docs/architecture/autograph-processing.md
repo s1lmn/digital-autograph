@@ -16,6 +16,28 @@ Stable failure codes include `INVALID_IMAGE`, `UNSUPPORTED_IMAGE_FORMAT`, `IMAGE
 
 The worker reads private objects as a stream and enforces 10 MiB while consuming chunks, independently of HEAD and client metadata. It accepts only JPEG and PNG signatures, verifies Sharp's decoded format and declared MIME agreement, decodes one static page with warning failure, disables unlimited mode, and limits input to 20 million pixels, 10,000 pixels per side, and four channels. The dedicated worker blocks other libvips foreign loaders and unblocks JPEG, PNG, and trusted raw pixel input used internally.
 
+Private S3 GET uses one 30-second deadline covering the entire SDK request
+(including credential resolution/retries/headers) and consumption of its Node
+response stream. Partial/trickling bytes do not extend it. Timeout aborts the
+request, destroys the response body and rejects without waiting for a stalled
+provider or stream cleanup; a response arriving after cancellation is destroyed
+too. Actual received bytes still enforce the caller's finite byte limit. No
+partial buffer is returned on timeout, overflow or truncated transport. The same
+adapter also bounds cleaned-media reads for public Wall images; authorization
+and PNG/verified-size checks remain in the existing service.
+
+The fixed `TimeoutError` is a transient `STORAGE_FAILURE` for worker processing,
+using existing lease/retry rules; public media uses its existing unavailable
+response. This is an engineering resource ceiling, not a measured network SLO.
+It does not bound image decoding, PUT/HEAD/delete or PostgreSQL waits, nor move
+storage I/O outside transactions or complete the broader A03 work. Deployment
+and target-provider/mobile performance acceptance remain separate. Portable
+tests include real AWS SDK requests to isolated loopback HTTP servers, stalled
+headers/body, single-socket recovery, exact 10 MiB and +1-byte rejection. Clock
+tests cover the complete 30-second budget, delayed headers, trickle, a provider
+ignoring abort and cleanup that never settles; these are synthetic failure
+fixtures, not a live cloud-provider test.
+
 EXIF orientation is applied before geometry work; decoded pixels are converted to sRGB. The photo path computes luminance, maps dark ink to alpha and white/light paper to transparent pixels, finds an ink bounding box, adds 16 transparent pixels of padding, and resizes down to at most 2048 pixels per side. The canvas path preserves RGB and alpha, crops by nontransparent pixels, pads, and resizes without the paper threshold. A minimum of eight foreground pixels or 0.001% of input pixels, whichever is larger, rejects blank input. These deterministic MVP thresholds live in `apps/worker/src/image-processing.ts`; faint pencil and uneven paper may need user review in a later editor.
 
 Output is an 8-bit PNG, at most 2048 pixels per side and 10 MiB. Sharp's default output strips source EXIF, GPS, XMP, IPTC, and ICC metadata; no metadata-preservation call is made. The cleaned object stays in the private bucket under `autographs/<autograph-id>/cleaned/<job-id>.png`. The original has a separate immutable key and is never copied into a public bucket.

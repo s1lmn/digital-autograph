@@ -30,6 +30,135 @@ afterAll(async () => {
 });
 
 describe('real operator aggregates and private storage probe', () => {
+  it('observes committed upload reservations and retired-key backlog without disclosing or changing evidence', async () => {
+    await storage.bootstrapLocalBucket();
+    const user = randomUUID();
+    const autographs = [randomUUID(), randomUUID(), randomUUID()];
+    const assets = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+    const keys = assets.map(() => `private-upload-ops/${randomUUID()}`);
+    const retiredKeys = [randomUUID(), randomUUID()].map(
+      (id) => `private-retired-ops/${id}`,
+    );
+    const baseline = await reader.read();
+    const client = await database.pool.connect();
+    let committed = false;
+    try {
+      await client.query('BEGIN');
+      await client.query('INSERT INTO users (id) VALUES ($1)', [user]);
+      await client.query(
+        `INSERT INTO autographs (id,user_id,source,status) VALUES
+        ($1,$4,'canvas','upload_pending'), ($2,$4,'photo','upload_pending'),
+        ($3,$4,'canvas','uploaded_unverified')`,
+        [...autographs, user],
+      );
+      for (let i = 0; i < 3; i++) {
+        await client.query(
+          `INSERT INTO autograph_assets (id,autograph_id,role,status,storage_key,
+            expected_content_type,expected_size_bytes,verified_size_bytes,uploaded_at,upload_expires_at,created_at)
+          VALUES ($1,$2,'original',$3::autograph_asset_status,$4,'image/png',1,
+            CASE WHEN $3::autograph_asset_status='uploaded' THEN 1 ELSE NULL END,
+            CASE WHEN $3::autograph_asset_status='uploaded' THEN now() ELSE NULL END,
+            now() + $5::integer * interval '1 second',now()-interval '20 minutes')`,
+          [
+            assets[i],
+            autographs[i],
+            i === 2 ? 'uploaded' : 'reserved',
+            keys[i],
+            i === 0 ? 600 : -600,
+          ],
+        );
+      }
+      await client.query(
+        `INSERT INTO autograph_assets (id,autograph_id,role,status,storage_key,
+          actual_content_type,verified_size_bytes,width,height,uploaded_at)
+        VALUES ($1,$2,'cleaned','uploaded',$3,'image/png',1,1,1,now())`,
+        [assets[3], autographs[2], keys[3]],
+      );
+      await client.query(
+        `INSERT INTO original_upload_tombstones (storage_key,next_check_at)
+        VALUES ($1,now()-interval '15 minutes'), ($2,now()+interval '15 minutes')`,
+        retiredKeys,
+      );
+      const uncommitted = await reader.read();
+      expect(uncommitted.originalUploadsReserved).toBe(
+        baseline.originalUploadsReserved,
+      );
+      expect(uncommitted.retiredUploadKeys).toBe(baseline.retiredUploadKeys);
+      await client.query('COMMIT');
+      committed = true;
+      const rows = async () => ({
+        assets: (
+          await database.pool.query(
+            'SELECT * FROM autograph_assets WHERE id = ANY($1::uuid[]) ORDER BY id',
+            [assets],
+          )
+        ).rows,
+        tombstones: (
+          await database.pool.query(
+            'SELECT * FROM original_upload_tombstones WHERE storage_key = ANY($1::text[]) ORDER BY storage_key',
+            [retiredKeys],
+          )
+        ).rows,
+      });
+      const before = await rows();
+      const snapshot = await collectOperationalSnapshot({
+        readDatabase: () => reader.read(),
+        checkStorage: () => storage.checkConnection(AbortSignal.timeout(5000)),
+      });
+      expect(snapshot.database).toMatchObject({
+        originalUploadsReserved: baseline.originalUploadsReserved + 2,
+        originalUploadsExpired: baseline.originalUploadsExpired + 1,
+        retiredUploadKeys: baseline.retiredUploadKeys + 2,
+        retiredUploadKeysDue: baseline.retiredUploadKeysDue + 1,
+      });
+      expect(
+        snapshot.database!.originalUploadsOldestExpiredSeconds,
+      ).toBeGreaterThanOrEqual(600);
+      expect(
+        snapshot.database!.retiredUploadOldestDueSeconds,
+      ).toBeGreaterThanOrEqual(900);
+      expect(snapshot.storageReachable).toBe(true);
+      expect(await rows()).toEqual(before);
+      const serialized = JSON.stringify(snapshot);
+      for (const value of [
+        user,
+        ...autographs,
+        ...assets,
+        ...keys,
+        ...retiredKeys,
+        url,
+        endpoint,
+        bucket,
+        accessKeyId,
+        secretAccessKey,
+      ])
+        expect(serialized).not.toContain(value);
+      expect(
+        Object.values(snapshot.database!).every(
+          (value) => Number.isSafeInteger(value) && value >= 0,
+        ),
+      ).toBe(true);
+    } finally {
+      if (!committed) await client.query('ROLLBACK');
+      client.release();
+      if (committed) {
+        await database.pool.query(
+          'DELETE FROM original_upload_tombstones WHERE storage_key = ANY($1::text[])',
+          [retiredKeys],
+        );
+        await database.pool.query(
+          'DELETE FROM autograph_assets WHERE id = ANY($1::uuid[])',
+          [assets],
+        );
+        await database.pool.query(
+          'DELETE FROM autographs WHERE id = ANY($1::uuid[])',
+          [autographs],
+        );
+        await database.pool.query('DELETE FROM users WHERE id=$1', [user]);
+      }
+    }
+  });
+
   it('observes actual pending jobs without mutating them or exposing source data', async () => {
     await storage.bootstrapLocalBucket();
     const user = randomUUID(),

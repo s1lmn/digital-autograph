@@ -54,6 +54,19 @@ certify the complete application or any unobserved dependency.
   appeals or post-publication case SLA is inferred from this pre-publication queue.
 - Storage: one bounded HeadBucket with an abort signal. Success means permission
   and reachability for that operation, not successful uploads/image processing.
+- Original uploads (EGO-172): all reserved original Assets, including expired
+  reservations still charged by admission; expired count and oldest expiry age.
+  Completed originals and cleaned derivatives do not consume the pending count.
+- Retired uploads: durable tombstone count, due count and oldest overdue age,
+  using PostgreSQL time and each row's `next_check_at`. Future reservations or
+  tombstone checks have zero overdue age. Counts/ages contain no keys or users.
+  Read these against the deployed worker grace, reconciliation cadence and actual
+  failures; age alone does not prove that a deletion is permitted or has failed.
+
+The upload fields require the accepted A02 schema (migrations 0020/0021). An
+older/missing schema or failed aggregate query reports the database observation
+as unavailable, never zero usage. Grant the operator SELECT on the tombstone
+table through the normal reviewed credential procedure; the tool grants nothing.
 
 The pool has one connection, a three-second connection/statement timeout and
 five-second client query timeout. PostgreSQL sessions default to read-only;
@@ -65,6 +78,16 @@ or business-path dependency is introduced.
 ## Proposed alert policy, not accepted SLOs
 
 Any unavailable DB/storage observation or paid-not-fulfilled order is critical.
+`ORIGINAL_UPLOAD_CAPACITY_EXHAUSTED` is critical when persisted reserved originals
+reach the existing backend global pending cap (currently 300).
+`ORIGINAL_UPLOAD_KEY_BUDGET_EXHAUSTED` is critical when pending originals plus
+retired tombstones reach the backend key budget (currently 10000). These signals
+reuse `autographResourceLimits`; they detect refused new-upload admission, not
+payment failure. Expired reservations stay charged until successful cleanup.
+No new upload/cleanup/retention policy or age-based SLO is introduced. Investigate
+worker health and provider failures; do not delete tombstones, reset attempts,
+raise caps or retry financial operations to silence an alert. Reconciliation and
+any retention change follow the existing reviewed upload/privacy procedures.
 Warnings: connection count at 80% of server limit, any same-role query over 30s,
 ready processing age at 300s, any processing failure in 15m, overdue payment
 reconciliation, or moderation age at 3600s. These are conservative starting

@@ -18,6 +18,12 @@ const healthy = {
   reconciliationOverdue5Minutes: 0,
   awaitingModeration: 0,
   moderationOldestSeconds: 0,
+  originalUploadsReserved: 0,
+  originalUploadsExpired: 0,
+  originalUploadsOldestExpiredSeconds: 0,
+  retiredUploadKeys: 0,
+  retiredUploadKeysDue: 0,
+  retiredUploadOldestDueSeconds: 0,
 };
 
 describe('operator snapshot and alert privacy', () => {
@@ -176,6 +182,54 @@ describe('operator snapshot and alert privacy', () => {
     ]);
   });
 
+  it.each<[number, number, string[]]>([
+    [299, 0, []],
+    [300, 0, ['ORIGINAL_UPLOAD_CAPACITY_EXHAUSTED']],
+    [299, 9700, []],
+    [299, 9701, ['ORIGINAL_UPLOAD_KEY_BUDGET_EXHAUSTED']],
+    [
+      300,
+      9700,
+      [
+        'ORIGINAL_UPLOAD_CAPACITY_EXHAUSTED',
+        'ORIGINAL_UPLOAD_KEY_BUDGET_EXHAUSTED',
+      ],
+    ],
+    [0, 10000, ['ORIGINAL_UPLOAD_KEY_BUDGET_EXHAUSTED']],
+    [0, 10001, ['ORIGINAL_UPLOAD_KEY_BUDGET_EXHAUSTED']],
+  ])(
+    'signals persisted admission caps at %i reservations and %i retired keys',
+    (reserved, retired, codes) => {
+      expect(
+        evaluateOperationalAlerts(
+          {
+            ...healthy,
+            originalUploadsReserved: reserved,
+            retiredUploadKeys: retired,
+          },
+          true,
+        ),
+      ).toEqual(codes.map((code) => ({ code, severity: 'critical' })));
+    },
+  );
+
+  it('observes cleanup ages without inventing a grace, retention or SLA policy', () => {
+    expect(
+      evaluateOperationalAlerts(
+        {
+          ...healthy,
+          originalUploadsReserved: 2,
+          originalUploadsExpired: 1,
+          originalUploadsOldestExpiredSeconds: 86401,
+          retiredUploadKeys: 3,
+          retiredUploadKeysDue: 1,
+          retiredUploadOldestDueSeconds: 3601,
+        },
+        true,
+      ),
+    ).toEqual([]);
+  });
+
   it('projects only numeric fields and rejects corrupt/overflow/noninteger aggregates', () => {
     const row = Object.fromEntries(
       Object.entries(healthy).map(([k, v]) => [k, String(v)]),
@@ -199,5 +253,20 @@ describe('operator snapshot and alert privacy', () => {
     expect(() =>
       decodeOperationalState({ ...row, connectionLimit: '0' }),
     ).toThrow();
+    for (const field of [
+      'originalUploadsReserved',
+      'originalUploadsExpired',
+      'originalUploadsOldestExpiredSeconds',
+      'retiredUploadKeys',
+      'retiredUploadKeysDue',
+      'retiredUploadOldestDueSeconds',
+    ]) {
+      expect(() =>
+        decodeOperationalState({ ...row, [field]: undefined }),
+      ).toThrow('Invalid operational aggregate');
+      expect(() =>
+        decodeOperationalState({ ...row, [field]: '9007199254740992' }),
+      ).toThrow('Invalid operational aggregate');
+    }
   });
 });

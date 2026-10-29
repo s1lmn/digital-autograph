@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import console from 'node:console';
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import process from 'node:process';
@@ -10,8 +10,20 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const temporary = mkdtempSync(resolve(tmpdir(), 'autograph-scanner-smoke-'));
-const canary = ['gh', 'p_'].join('') + randomBytes(18).toString('hex');
-const genericCanary = randomBytes(24).toString('base64url');
+// Deliberately synthetic and deterministic. Assemble provider prefixes so the
+// smoke source is not itself a credential fixture. Never use these in an app.
+const canary =
+  ['gh', 'p_'].join('') +
+  createHash('sha256')
+    .update('scanner-smoke-provider-canary-v1')
+    .digest('hex')
+    .slice(0, 36);
+// Digits avoid the pinned generic rule's alphabetic-only secret allowlist.
+// Fixed high-entropy input also avoids randomly matching built-in stopwords.
+const genericCanary = ['QmZrXnA9VtPsYkL2', 'HwBuCjE7NgRvTxS4'].join('');
+const alphabeticGenericCanary = ['QmZrXnAaVtPsYkLd', 'HwBuCjEfNgRvTxSi'].join(
+  '',
+);
 const repository = resolve(temporary, 'repository');
 mkdirSync(repository);
 function git(...args) {
@@ -47,7 +59,7 @@ function scan(expected, target = repository, extraEnv = {}) {
   // Never include captured output or canary in an assertion failure message.
   assert.equal(result.status, expected, 'Unexpected scanner exit status');
   assert.ok(
-    ![canary, genericCanary].some((value) =>
+    ![canary, genericCanary, alphabeticGenericCanary].some((value) =>
       `${result.stdout}${result.stderr}`.includes(value),
     ),
     'Scanner exposed the synthetic credential',
@@ -108,6 +120,20 @@ try {
     scan(1); // Other generic-api-key values in every exact path still fail.
     git('reset', '--hard', 'HEAD~1');
   }
+  // Regression for the old randomized generic canary: high-entropy letters
+  // are explicitly allowed by the pinned built-in rule, so not every random
+  // base64url value is a positive fixture. No scanner exceptions are changed.
+  const genericHistory = resolve(repository, 'generic-history.ts');
+  writeFileSync(genericHistory, `api_key = '${alphabeticGenericCanary}';\n`);
+  commit();
+  scan(0);
+  writeFileSync(genericHistory, `api_key = '${genericCanary}';\n`);
+  commit();
+  scan(1);
+  git('rm', '-q', 'generic-history.ts');
+  commit();
+  scan(1); // Generic findings survive deletion, independently of provider rules.
+  git('reset', '--hard', 'HEAD~3');
   writeFileSync(
     resolve(repository, 'other.ts'),
     `token = '${['same', 'key', 'two', 'quotes', '01'].join('-')}';`,
@@ -165,6 +191,21 @@ try {
   git('rm', '-q', 'merge-only.ts');
   commit();
   scan(1); // Later deletion must not hide the merge-only historical finding.
+  // Repeat the merge-only/deleted-history checks with ONLY the generic rule.
+  // A provider-pattern finding must not mask a broken generic canary.
+  git('reset', '--hard', cleanHead.stdout.trim());
+  writeFileSync(resolve(repository, 'main.txt'), 'Clean main\n');
+  commit();
+  git('merge', '--no-ff', '--no-commit', 'side');
+  writeFileSync(
+    resolve(repository, 'merge-only.ts'),
+    `api_key = '${genericCanary}';\n`,
+  );
+  commit();
+  scan(1);
+  git('rm', '-q', 'merge-only.ts');
+  commit();
+  scan(1);
   console.log(
     'Secret scanner smoke passed: detection, merge history, exceptions, safe output and failure guards.',
   );

@@ -49,6 +49,13 @@ async function withTransaction<T>(
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === '55P03'
+    )
+      throw new AutographError('UPLOAD_BUSY');
     throw error;
   } finally {
     client.release();
@@ -134,6 +141,35 @@ async function view(
   };
 }
 
+// Fixed engineering resource caps, shared by every API process through PostgreSQL.
+export const autographResourceLimits = {
+  owned: 100,
+  createsPerHour: 20,
+  globalCreatesPerHour: 2000,
+  pending: 3,
+  globalPending: 300,
+  retiredKeyBudget: 10000,
+  parallelIo: 4,
+  uploadAttempts: 5,
+} as const;
+
+async function quotaGate(client: PoolClient): Promise<void> {
+  // A short, bounded-wait global admission lock; never held during storage I/O.
+  await client.query("SET LOCAL lock_timeout = '2s'");
+  await client.query('SELECT pg_advisory_xact_lock(764210, 0)');
+}
+
+async function ioPermit(client: PoolClient): Promise<void> {
+  for (let slot = 1; slot <= autographResourceLimits.parallelIo; slot++) {
+    const result = await client.query<{ acquired: boolean }>(
+      'SELECT pg_try_advisory_xact_lock(764211, $1) AS acquired',
+      [slot],
+    );
+    if (result.rows[0]?.acquired) return;
+  }
+  throw new AutographError('UPLOAD_BUSY');
+}
+
 export function createPgAutographRepository(pool: Pool): AutographRepository {
   return {
     async listReadyOwned(userId) {
@@ -166,14 +202,34 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
       return choices;
     },
     async create(userId, source) {
-      const result = await pool.query<AutographRow>(
-        `INSERT INTO autographs (user_id, source) VALUES ($1::uuid, $2::autograph_source)
-         RETURNING id, user_id, source, status, created_at, updated_at`,
-        [userId, source],
-      );
-      const row = result.rows[0];
-      if (!row) throw new Error('Autograph insertion returned no row');
-      return view(pool, row);
+      return withTransaction(pool, async (client) => {
+        await quotaGate(client);
+        const counts = await client.query<{
+          owned: string;
+          recent: string;
+          global_recent: string;
+        }>(
+          `SELECT (SELECT count(*) FROM autographs WHERE user_id = $1::uuid) AS owned,
+             (SELECT count(*) FROM autographs WHERE user_id = $1::uuid AND created_at > now() - interval '1 hour') AS recent,
+             (SELECT count(*) FROM autographs WHERE created_at > now() - interval '1 hour') AS global_recent`,
+          [userId],
+        );
+        const count = counts.rows[0]!;
+        if (
+          +count.owned >= autographResourceLimits.owned ||
+          +count.recent >= autographResourceLimits.createsPerHour ||
+          +count.global_recent >= autographResourceLimits.globalCreatesPerHour
+        )
+          throw new AutographError('UPLOAD_QUOTA_EXCEEDED');
+        const result = await client.query<AutographRow>(
+          `INSERT INTO autographs (user_id, source) VALUES ($1::uuid, $2::autograph_source)
+           RETURNING id, user_id, source, status, created_at, updated_at`,
+          [userId, source],
+        );
+        const row = result.rows[0];
+        if (!row) throw new Error('Autograph insertion returned no row');
+        return view(client, row);
+      });
     },
 
     async findOwned(userId, autographId) {
@@ -184,6 +240,7 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
 
     async reserveOriginal(userId, autographId, input) {
       return withTransaction(pool, async (client) => {
+        await quotaGate(client);
         const autograph = await ownedAutograph(
           client,
           userId,
@@ -200,20 +257,36 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
           ) {
             throw new AutographError('INVALID_AUTOGRAPH_STATE');
           }
-          const refreshed = await client.query<AssetRow>(
-            `UPDATE autograph_assets SET upload_expires_at = $2::timestamptz
-             WHERE id = $1::uuid
-             RETURNING id, autograph_id, storage_key, status, expected_content_type,
-                       expected_size_bytes, verified_size_bytes, upload_expires_at, uploaded_at`,
-            [existing.id, input.expiresAt],
-          );
-          const row = refreshed.rows[0];
-          if (!row) throw new Error('Asset refresh returned no row');
-          return toReserved(row);
+          if (existing.upload_expires_at <= new Date())
+            throw new AutographError('UPLOAD_EXPIRED');
+          // Retry returns the same reservation; never extends its expiry.
+          return toReserved(existing);
         }
         if (autograph.status !== 'draft') {
           throw new AutographError('INVALID_AUTOGRAPH_STATE');
         }
+        const counts = await client.query<{
+          owned: string;
+          total: string;
+          retired: string;
+          owned_originals: string;
+        }>(
+          `SELECT count(*) FILTER (WHERE a.user_id = $1::uuid) AS owned, count(*) AS total,
+             (SELECT count(*) FROM original_upload_tombstones) AS retired,
+             (SELECT count(*) FROM autograph_assets original JOIN autographs owned ON owned.id = original.autograph_id
+              WHERE original.role = 'original' AND owned.user_id = $1::uuid) AS owned_originals
+           FROM autograph_assets aa JOIN autographs a ON a.id = aa.autograph_id
+           WHERE aa.role = 'original' AND aa.status = 'reserved'`,
+          [userId],
+        );
+        if (
+          +counts.rows[0]!.owned >= autographResourceLimits.pending ||
+          +counts.rows[0]!.owned_originals >= autographResourceLimits.owned ||
+          +counts.rows[0]!.total >= autographResourceLimits.globalPending ||
+          +counts.rows[0]!.total + +counts.rows[0]!.retired >=
+            autographResourceLimits.retiredKeyBudget
+        )
+          throw new AutographError('UPLOAD_QUOTA_EXCEEDED');
         const inserted = await client.query<AssetRow>(
           `INSERT INTO autograph_assets
              (id, autograph_id, role, status, storage_key, expected_content_type,
@@ -237,6 +310,41 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
         const row = inserted.rows[0];
         if (!row) throw new Error('Asset insertion returned no row');
         return toReserved(row);
+      });
+    },
+
+    async uploadOriginal(userId, autographId, assetId, write) {
+      // Attempts survive rejected/aborted uploads. Ownership is checked before charging.
+      await ownedAutograph(pool, userId, autographId);
+      const attempt = await pool.query(
+        `UPDATE autograph_assets SET upload_attempts = upload_attempts + 1
+         WHERE id = $1::uuid AND autograph_id = $2::uuid AND role = 'original'
+           AND status = 'reserved' AND upload_expires_at > now() AND upload_attempts < $3`,
+        [assetId, autographId, autographResourceLimits.uploadAttempts],
+      );
+      if (!attempt.rowCount) throw new AutographError('UPLOAD_EXPIRED');
+      return withTransaction(pool, async (client) => {
+        await ioPermit(client);
+        await client.query("SET LOCAL lock_timeout = '2s'");
+        // Same lock as completion/cleanup. A02 deliberately retains the existing
+        // storage-under-lock protocol; separate A03 replaces it with fencing.
+        const autograph = await ownedAutograph(
+          client,
+          userId,
+          autographId,
+          true,
+        );
+        const asset = await originalAsset(client, autographId);
+        if (
+          !asset ||
+          asset.id !== assetId ||
+          asset.status !== 'reserved' ||
+          autograph.status !== 'upload_pending'
+        )
+          throw new AutographError('INVALID_AUTOGRAPH_STATE');
+        if (asset.upload_expires_at <= new Date())
+          throw new AutographError('UPLOAD_EXPIRED');
+        await write(toReserved(asset));
       });
     },
 
@@ -279,6 +387,7 @@ export function createPgAutographRepository(pool: Pool): AutographRepository {
         ) {
           throw new AutographError('INVALID_AUTOGRAPH_STATE');
         }
+        await ioPermit(client);
         const actualSizeBytes = await verify(toReserved(asset));
         await client.query(
           `UPDATE autograph_assets SET status = 'uploaded',

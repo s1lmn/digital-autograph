@@ -558,6 +558,7 @@ export const autographs = pgTable(
   },
   (table) => [
     index('autographs_user_created_idx').on(table.userId, table.createdAt),
+    index('autographs_created_idx').on(table.createdAt),
   ],
 );
 
@@ -575,6 +576,7 @@ export const autographAssets = pgTable(
       length: 64,
     }),
     expectedSizeBytes: integer('expected_size_bytes'),
+    uploadAttempts: integer('upload_attempts').notNull().default(0),
     verifiedSizeBytes: integer('verified_size_bytes'),
     uploadExpiresAt: timestamp('upload_expires_at', {
       withTimezone: true,
@@ -587,6 +589,10 @@ export const autographAssets = pgTable(
     updatedAt: updatedAt(),
   },
   (table) => [
+    check(
+      'autograph_assets_attempts_check',
+      sql`${table.uploadAttempts} BETWEEN 0 AND 5`,
+    ),
     uniqueIndex('autograph_assets_one_original_uidx')
       .on(table.autographId)
       .where(sql`${table.role} = 'original'`),
@@ -1177,5 +1183,21 @@ export const ageDeclarations = pgTable(
       'age_declaration_semantics',
       sql`${t.minimumAge} = 18 AND ${t.source} = 'web' AND ${t.context} = 'first_use'`,
     ),
+  ],
+);
+
+// Private tombstones survive reservation removal and unknown S3 write outcomes.
+// Keys are never reused. Reconciliation keeps deleting them on a bounded cadence.
+export const originalUploadTombstones = pgTable(
+  'original_upload_tombstones',
+  {
+    storageKey: text('storage_key').primaryKey(),
+    nextCheckAt: timestamp('next_check_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('original_upload_tombstones_next_idx').on(table.nextCheckAt),
   ],
 );

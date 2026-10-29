@@ -22,8 +22,8 @@ function mockApi(): SubmissionApi {
     get: vi.fn(async () => ready),
     initiateUpload: vi.fn(async () => ({
       method: 'PUT' as const,
-      url: 'https://storage.test/private',
-      headers: { 'If-None-Match': '*', 'Content-Type': 'image/png' },
+      url: '/autographs/autograph-1/upload/asset',
+      headers: { 'Content-Type': 'image/png' },
     })),
     upload: vi.fn(async () => {}),
     complete: vi.fn(async () => processing),

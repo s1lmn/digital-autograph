@@ -1,5 +1,12 @@
 # Yandex Cloud deployment and rollback
 
+## Ingress bounds
+
+The reviewed [HTTP ingress policy](http-ingress.md) bounds body/header sizes and
+connection lifetimes, with an isolated pinned-Caddy smoke in hosted CI. These
+source defaults need physical mobile/capacity acceptance before deployment; they
+do not replace API validation or the A01 runner trust gate.
+
 ## MVP topology
 
 ### Staging: budget single VM

@@ -114,12 +114,17 @@ async function fixture(
   });
   const originalKey = `autographs/${draft.id}/original/${upload.assetId}`;
   keys.push(originalKey);
-  const response = await fetch(upload.url, {
+  const response = await app.inject({
     method: 'PUT',
-    headers: upload.headers,
-    body: new Uint8Array(input),
+    url: upload.url,
+    headers: {
+      ...upload.headers,
+      cookie: `da_session=${token}`,
+      origin: 'http://127.0.0.1:3000',
+    },
+    payload: input,
   });
-  expect(response.status).toBe(200);
+  expect(response.statusCode).toBe(204);
   return { userId, token, draft, upload, originalKey, input };
 }
 
@@ -129,7 +134,9 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     await storage.bootstrapLocalBucket();
   });
   beforeEach(async () => {
-    await database.pool.query('TRUNCATE TABLE users CASCADE');
+    await database.pool.query(
+      'TRUNCATE TABLE users, original_upload_tombstones CASCADE',
+    );
   });
   afterAll(async () => {
     await Promise.all(keys.map((key) => storage.deleteObject(key)));
@@ -488,15 +495,8 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     });
     const key = `autographs/${draft.id}/original/${upload.assetId}`;
     keys.push(key);
-    expect(
-      (
-        await fetch(upload.url, {
-          method: 'PUT',
-          headers: upload.headers,
-          body: 'five!',
-        })
-      ).status,
-    ).toBe(200);
+    // Legacy/corrupt object created through trusted fixture credentials, never the HTTP upload path.
+    await storage.putPrivateObject(key, Buffer.from('five!'));
     const failingStorage = {
       ...storage,
       deleteObject: async () => {

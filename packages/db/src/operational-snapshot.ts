@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { workerLeaseLimits } from '@digital-autograph/config';
 
 export type OperationalDatabaseState = {
   connections: number;
@@ -7,6 +8,9 @@ export type OperationalDatabaseState = {
   processingReady: number;
   processingOldestReadySeconds: number;
   processingFailedLast15Minutes: number;
+  processingInFlight: number;
+  processingClaimsPastMaxLease: number;
+  processingOldestClaimSeconds: number;
   paidNotFulfilled: number;
   reconciliationOverdue5Minutes: number;
   awaitingModeration: number;
@@ -19,7 +23,18 @@ export type OperationalDatabaseState = {
   retiredUploadOldestDueSeconds: number;
 };
 
-const query = `WITH original_uploads AS (
+const query = `WITH processing AS (
+  SELECT count(*) FILTER (WHERE status = 'queued' AND available_at <= now()) AS ready,
+    coalesce(greatest(0, floor(extract(epoch FROM now() - min(available_at)
+      FILTER (WHERE status = 'queued' AND available_at <= now())))), 0) AS oldest_ready_seconds,
+    count(*) FILTER (WHERE status = 'failed' AND finished_at >= now() - interval '15 minutes') AS failed_recently,
+    count(*) FILTER (WHERE status = 'processing') AS in_flight,
+    count(*) FILTER (WHERE status = 'processing'
+      AND claimed_at < now() - $1::integer * interval '1 second') AS past_max_lease,
+    coalesce(greatest(0, floor(extract(epoch FROM now() - min(claimed_at)
+      FILTER (WHERE status = 'processing')))), 0) AS oldest_claim_seconds
+  FROM autograph_processing_jobs
+), original_uploads AS (
   SELECT count(*) AS reserved,
     count(*) FILTER (WHERE upload_expires_at <= now()) AS expired,
     coalesce(greatest(0, floor(extract(epoch FROM now() - min(upload_expires_at)))), 0) AS oldest_expired_seconds
@@ -37,12 +52,12 @@ const query = `WITH original_uploads AS (
     WHERE datname = current_database() AND usename = current_user
       AND pid <> pg_backend_pid() AND state = 'active'
       AND query_start < now() - interval '30 seconds') AS "sameRoleQueriesOver30Seconds",
-  (SELECT count(*) FROM autograph_processing_jobs
-    WHERE status = 'queued' AND available_at <= now()) AS "processingReady",
-  (SELECT coalesce(greatest(0, floor(extract(epoch FROM now() - min(available_at)))), 0)
-    FROM autograph_processing_jobs WHERE status = 'queued' AND available_at <= now()) AS "processingOldestReadySeconds",
-  (SELECT count(*) FROM autograph_processing_jobs
-    WHERE status = 'failed' AND finished_at >= now() - interval '15 minutes') AS "processingFailedLast15Minutes",
+  processing.ready AS "processingReady",
+  processing.oldest_ready_seconds AS "processingOldestReadySeconds",
+  processing.failed_recently AS "processingFailedLast15Minutes",
+  processing.in_flight AS "processingInFlight",
+  processing.past_max_lease AS "processingClaimsPastMaxLease",
+  processing.oldest_claim_seconds AS "processingOldestClaimSeconds",
   (SELECT count(*) FROM payment_orders o LEFT JOIN payments p ON p.order_id = o.id
     WHERE o.status = 'paid_but_not_fulfilled' OR
       (p.status IN ('succeeded', 'paid_but_not_fulfilled', 'fulfilled') AND o.status <> 'fulfilled')) AS "paidNotFulfilled",
@@ -57,7 +72,7 @@ const query = `WITH original_uploads AS (
   retired_uploads.total AS "retiredUploadKeys",
   retired_uploads.due AS "retiredUploadKeysDue",
   retired_uploads.oldest_due_seconds AS "retiredUploadOldestDueSeconds"
-  FROM original_uploads CROSS JOIN retired_uploads`;
+  FROM processing CROSS JOIN original_uploads CROSS JOIN retired_uploads`;
 
 const fields: readonly (keyof OperationalDatabaseState)[] = [
   'connections',
@@ -66,6 +81,9 @@ const fields: readonly (keyof OperationalDatabaseState)[] = [
   'processingReady',
   'processingOldestReadySeconds',
   'processingFailedLast15Minutes',
+  'processingInFlight',
+  'processingClaimsPastMaxLease',
+  'processingOldestClaimSeconds',
   'paidNotFulfilled',
   'reconciliationOverdue5Minutes',
   'awaitingModeration',
@@ -123,7 +141,7 @@ export function createOperationalReader(databaseUrl: string) {
   pool.on('error', () => {});
   return {
     async read(): Promise<OperationalDatabaseState> {
-      const result = await pool.query(query);
+      const result = await pool.query(query, [workerLeaseLimits.maxSeconds]);
       if (result.rows[0]?.readOnly !== 'on')
         throw new Error('Read-only observation required');
       return decodeOperationalState(result.rows[0] as Record<string, unknown>);

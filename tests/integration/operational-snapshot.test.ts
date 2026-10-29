@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDatabase } from '../../packages/db/src/index';
+import { workerLeaseLimits } from '../../packages/config/src/index';
 import { createOperationalReader } from '../../packages/db/src/operational-snapshot';
 import { createPrivateS3Storage } from '../../packages/integrations/src/private-s3';
 import { collectOperationalSnapshot } from '../../apps/api/scripts/operational-snapshot';
@@ -30,6 +31,151 @@ afterAll(async () => {
 });
 
 describe('real operator aggregates and private storage probe', () => {
+  it('observes only committed processing claims past the maximum lease without reclaiming or disclosing jobs', async () => {
+    const user = randomUUID();
+    // Future, fresh, over maximum, delayed retry, succeeded, recent failure,
+    // old failure. Each job uses a distinct Autograph as required by the schema.
+    const autographs = Array.from({ length: 7 }, () => randomUUID());
+    const assets = autographs.map(() => randomUUID());
+    const jobs = autographs.map(() => randomUUID());
+    const tokens = autographs.map(() => randomUUID());
+    const keys = autographs.map(() => `private-lease-ops/${randomUUID()}`);
+    const baseline = await reader.read();
+    const client = await database.pool.connect();
+    let committed = false;
+    try {
+      await client.query('BEGIN');
+      await client.query('INSERT INTO users (id) VALUES ($1)', [user]);
+      for (let i = 0; i < jobs.length; i++) {
+        await client.query(
+          `INSERT INTO autographs (id,user_id,source,status)
+          VALUES ($1,$2,'canvas','uploaded_unverified')`,
+          [autographs[i], user],
+        );
+        await client.query(
+          `INSERT INTO autograph_assets (id,autograph_id,role,status,storage_key,
+            expected_content_type,expected_size_bytes,verified_size_bytes,upload_expires_at,uploaded_at)
+          VALUES ($1,$2,'original','uploaded',$3,'image/png',1,1,now()+interval '1 hour',now())`,
+          [assets[i], autographs[i], keys[i]],
+        );
+        if (i < 3) {
+          await client.query(
+            `INSERT INTO autograph_processing_jobs
+              (id,autograph_id,original_asset_id,status,attempts,claimed_at,lease_token)
+            VALUES ($1,$2,$3,'processing',1,now()+$4::integer*interval '1 second',$5)`,
+            [
+              jobs[i],
+              autographs[i],
+              assets[i],
+              [600, -30, -workerLeaseLimits.maxSeconds - 60][i],
+              tokens[i],
+            ],
+          );
+          if (i === 0) {
+            // This transaction sees its future claim as zero age; a separate
+            // reader must not see uncommitted work even with no row locks.
+            const visible = await reader.read();
+            expect(visible.processingInFlight).toBe(
+              baseline.processingInFlight,
+            );
+          }
+        } else {
+          await client.query(
+            `INSERT INTO autograph_processing_jobs
+              (id,autograph_id,original_asset_id,status,attempts,available_at,finished_at)
+            VALUES ($1,$2,$3,$4::autograph_processing_job_status,1,
+              now()+interval '1 hour',
+              CASE WHEN $4::autograph_processing_job_status='queued' THEN NULL
+                ELSE now()+$5::integer*interval '1 second' END)`,
+            [
+              jobs[i],
+              autographs[i],
+              assets[i],
+              i === 3 ? 'queued' : i === 4 ? 'succeeded' : 'failed',
+              i === 6 ? -1200 : -60,
+            ],
+          );
+        }
+      }
+      const uncommitted = await reader.read();
+      expect(uncommitted.processingInFlight).toBe(baseline.processingInFlight);
+      expect(uncommitted.processingClaimsPastMaxLease).toBe(
+        baseline.processingClaimsPastMaxLease,
+      );
+      await client.query('COMMIT');
+      committed = true;
+      const rows = async () =>
+        (
+          await database.pool.query(
+            'SELECT * FROM autograph_processing_jobs WHERE id=ANY($1::uuid[]) ORDER BY id',
+            [jobs],
+          )
+        ).rows;
+      const before = await rows();
+      const snapshot = await collectOperationalSnapshot({
+        readDatabase: () => reader.read(),
+        checkStorage: async () => {},
+      });
+      expect(snapshot.database).toMatchObject({
+        processingInFlight: baseline.processingInFlight + 3,
+        processingClaimsPastMaxLease: baseline.processingClaimsPastMaxLease + 1,
+        processingReady: baseline.processingReady,
+        processingFailedLast15Minutes:
+          baseline.processingFailedLast15Minutes + 1,
+      });
+      expect(
+        snapshot.database!.processingOldestClaimSeconds,
+      ).toBeGreaterThanOrEqual(workerLeaseLimits.maxSeconds + 60);
+      expect(snapshot.alerts).toContainEqual({
+        code: 'PROCESSING_CLAIMS_PAST_MAX_LEASE',
+        severity: 'warning',
+      });
+      expect(await rows()).toEqual(before);
+      for (const value of [
+        user,
+        ...autographs,
+        ...assets,
+        ...jobs,
+        ...tokens,
+        ...keys,
+        url,
+      ])
+        expect(JSON.stringify(snapshot)).not.toContain(value);
+      // Keep only a future processing claim: ages clamp to zero and no warning
+      // is synthesized from delayed queued or terminal jobs.
+      await database.pool.query(
+        'DELETE FROM autograph_processing_jobs WHERE id=ANY($1::uuid[])',
+        [jobs.slice(1)],
+      );
+      const future = await reader.read();
+      expect(future.processingInFlight).toBe(baseline.processingInFlight + 1);
+      expect(future.processingClaimsPastMaxLease).toBe(
+        baseline.processingClaimsPastMaxLease,
+      );
+      expect(future.processingOldestClaimSeconds).toBe(
+        baseline.processingOldestClaimSeconds,
+      );
+    } finally {
+      if (!committed) await client.query('ROLLBACK');
+      client.release();
+      if (committed) {
+        await database.pool.query(
+          'DELETE FROM autograph_processing_jobs WHERE id=ANY($1::uuid[])',
+          [jobs],
+        );
+        await database.pool.query(
+          'DELETE FROM autograph_assets WHERE id=ANY($1::uuid[])',
+          [assets],
+        );
+        await database.pool.query(
+          'DELETE FROM autographs WHERE id=ANY($1::uuid[])',
+          [autographs],
+        );
+        await database.pool.query('DELETE FROM users WHERE id=$1', [user]);
+      }
+    }
+  });
+
   it('observes committed upload reservations and retired-key backlog without disclosing or changing evidence', async () => {
     await storage.bootstrapLocalBucket();
     const user = randomUUID();

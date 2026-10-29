@@ -319,7 +319,21 @@ it('applies all migrations to a clean database and repeats idempotently', async 
           "SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",
         )
       ).rows[0].count,
-    ).toBe(34);
+    ).toBe(35);
+    expect(
+      (
+        await db.pool.query(
+          "SELECT column_default, is_nullable FROM information_schema.columns WHERE table_name = 'autograph_assets' AND column_name = 'upload_attempts'",
+        )
+      ).rows[0],
+    ).toEqual({ column_default: '0', is_nullable: 'NO' });
+    expect(
+      (
+        await db.pool.query(
+          "SELECT indexname FROM pg_indexes WHERE indexname = 'original_upload_tombstones_next_idx'",
+        )
+      ).rowCount,
+    ).toBe(1);
   } finally {
     await db.close();
     await admin.pool.query(`DROP DATABASE "${name}"`);

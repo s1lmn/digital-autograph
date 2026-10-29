@@ -5,6 +5,73 @@
 credentials, production DB, deployment, OAuth или live payments не изменялись.
 Решения владельца и operational acceptance не заменяются этим документом.
 
+## Актуализация 29.10.2026
+
+Приняты PR81 (safe PostgreSQL diagnostics, reviewed head
+`ccc38db85b1770e3aedc4d4549e9aeb3cf5e0f25`) и PR82 (private GET/body deadline,
+reviewed head `3cbd5c6450c402e42e0242ddf2322355539dc3c9`). Approval выполнен
+аккаунтом s1lmn с явной пометкой Codex-assisted; автор обоих PR — MDBaryshev.
+Это review другим GitHub-аккаунтом, не заявление о ручной проверке человеком.
+Main `90341e404aa87e10fc18626322bd5a30d7d743f5`: CI40855711719 и
+Secret Scan40855711733 SUCCESS. Миграций в этих двух PR нет.
+
+PR78–80 остаются отдельными открытыми работами и синхронизированы с этим main.
+Объединение PR78/82 сохраняет bounded PUT/HEAD/delete и новый единый GET/body
+budget; локально 339 real PostgreSQL/MinIO integration tests PASS.
+В изолированной связке compiled API PR78 → pinned Caddy PR79 → private MinIO
+проверены exact10MiB fixed/chunked, 400KiB/s (~26s), +1byte413 без объекта,
+conditional412 без перезаписи, anonymous403, complete, stalled-body408 около30s,
+unauthenticated401/foreign-Origin403 и ready200 после отказов.
+Это локальная synthetic приёмка, не deployed staging/OAuth/physical mobile.
+
+EGO-171 воспроизведён на pinned Gitleaks8.24.3: letters-only generic fixture
+может попасть под встроенный allowlist. Отдельное исправление детерминированных
+canaries не меняет правила/entropy/ignores/workflows. До protected merge и green
+main задача не Done. A03 начинать только после принятия PR78 и нового green main.
+
+Read-only повтор 29.10: repository runners=[]; Release disabled_manually.
+Trusted host/operator context не установлен: service/Docker/sudo/metadata и
+полные effective IAM не подтверждены. В текущем cloud folder staging VM RUNNING,
+Managed PostgreSQL clusters отсутствуют; это не inventory всего cloud.
+Destka.ru всё ещё Reg.ru parking (A95.163.244.138); HTTPS www302 ведёт на HTTP.
+Staging Web/API ready200 не подтверждают core flow или production topology.
+Все14 legal entries ready:false;16 placeholders в4документах остаются.
+Approved pricing JSON и pending financial decisions не менялись.
+
+## Контрольная последовательность deployment и внешней приёмки
+
+1. Принять PR78/79/80 через обычный review; после PR78 выполнить A03 от green
+   main. После каждого merge повторять required checks оставшихся веток.
+2. Закрыть A01 trusted-операторской проверкой и отдельными разрешёнными
+   исправлениями. Зафиксировать новую deployment identity, границы Docker/sudo,
+   metadata/IAM/network и историю jobs. Release до sign-off выключен.
+3. Согласовать отдельную production VM/private Managed PostgreSQL, приватный
+   bucket, environment-specific secret references и ожидаемую нагрузку.
+   Записать inventory, бюджеты, monitoring/alert delivery, backup/PITR и результат
+   восстановления в изолированную БД. Ничего не provision этим документом.
+4. Подготовить конкретный release SHA и immutable image digests. Проверить
+   миграции на clean DB и копии разрешённого snapshot; снять проверяемый backup.
+   Для additive migrations0020/21 не удалять tombstones/attempt evidence при
+   rollback. Откат приложения только к проверенному совместимому image digest;
+   destructive schema rollback не выполнять, использовать reviewed forward fix.
+5. После утверждённых контактов, юридических версий и финансовой конфигурации
+   подготовить точный change set DNS/canonical HTTPS/Caddy/OAuth. Запросить
+   отдельное разрешение владельца на этот change set и deployment; не включать
+   реальные платежи как часть публикации сайта.
+6. До изменения записать старые DNS/TTL/image digests/config references и
+   критерии stop/rollback: privacy leak, broken auth/core, queue/DB saturation,
+   migration error, health/alert failure. Сохранить финансовое UNKNOWN/evidence,
+   остановить новые операции штатными incident controls; проверить совместимость
+   предыдущего образа перед rollback. Отрепетировать и зафиксировать восстановление.
+7. После разрешённого release независимый проверяющий фиксирует release SHA,
+   DNS/TLS/canonical HTTPS/headers, анонимную недоступность originals и реальный
+   auth→upload→worker→moderation→FreeClaim→history. Проверить RU/EN/themes,
+   keyboard, mobile widths, реальные Telegram/VK in-app browsers, slow network,
+   retry/conflict/expiry и sandbox paid path без списаний. При failed gate сайт
+   не Website Ready; HTTP200 и synthetic CI не заменяют эту приёмку.
+8. Только после Website Ready предоставить владельцу merchant dossier; реальный
+   checkout/receipt/refund/payout и live pilot требуют отдельных согласований.
+
 ## Отдельно разрешённое действие A01 — 17:55 UTC
 
 Владелец в этом чате явно разрешил **только отсоединение runner №21**.

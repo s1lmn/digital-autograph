@@ -155,6 +155,13 @@
       "when": 1793114024929,
       "tag": "0021_retired_upload_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793293192401,
+      "tag": "0022_storage_io_fencing",
+      "breakpoints": true
     }
   ]
 }

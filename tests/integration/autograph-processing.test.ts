@@ -403,7 +403,7 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     expect(await processOneAutographJob(operations)).toBe(false);
   });
 
-  it('removes a partial cleaned object while holding its active lease', async () => {
+  it('retires and removes a partial attempt key before the next generation runs', async () => {
     const f = await fixture();
     await service.completeUpload(f.userId, f.draft.id);
     const partialStorage = {
@@ -420,7 +420,11 @@ describe('PostgreSQL autograph jobs and real private MinIO', () => {
     );
     const job = row.rows[0];
     if (!job) throw new Error('Expected job');
-    const key = `autographs/${f.draft.id}/cleaned/${job.id}.png`;
+    const artifact = await database.pool.query<{ storage_key: string }>(
+      'SELECT storage_key FROM autograph_processing_artifacts WHERE job_id = $1::uuid',
+      [job.id],
+    );
+    const key = artifact.rows[0]!.storage_key;
     keys.push(key);
     expect(job.status).toBe('queued');
     expect(await storage.statObject(key)).toBeNull();

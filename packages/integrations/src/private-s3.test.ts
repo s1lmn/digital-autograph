@@ -1,10 +1,17 @@
 import { Agent, createServer, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
 import { afterEach, describe, expect, it } from 'vitest';
-import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { PrivateObjectTooLargeError } from '@digital-autograph/autographs';
 import { createPrivateS3Storage } from './private-s3';
 import { readPrivateObject } from './private-object-read';
+import { privateObjectOperation } from './private-object-operation';
 
 const cleanups: (() => Promise<void>)[] = [];
 
@@ -52,6 +59,7 @@ async function fixture(
   });
   return {
     storage,
+    client,
     read(key: string, maxBytes: number, timeoutMs = 2000) {
       return readPrivateObject(
         (signal) =>
@@ -67,6 +75,73 @@ async function fixture(
 }
 
 describe('private S3 reads through the real HTTP SDK transport', () => {
+  it('aborts a stalled mutation error body and recovers the same single socket', async () => {
+    let close!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      close = resolve;
+    });
+    const { client, read } = await fixture((path, response) => {
+      if (path.endsWith('/stall')) {
+        response.once('close', close);
+        response.writeHead(500, { 'content-type': 'application/xml' });
+        response.write('<Error><Code>InternalError</Code><Message>');
+      } else response.end('ok');
+    });
+    await expect(
+      privateObjectOperation(
+        (signal) =>
+          client.send(
+            new PutObjectCommand({
+              Bucket: 'private-test-bucket',
+              Key: 'stall',
+              Body: Buffer.from('test'),
+              IfNoneMatch: '*',
+            }),
+            { abortSignal: signal },
+          ),
+        undefined,
+        500,
+      ),
+    ).rejects.toMatchObject({ name: 'TimeoutError' });
+    await closed;
+    expect(await read('ok', 2)).toEqual(Buffer.from('ok'));
+  });
+  it.each(['put', 'head', 'delete'] as const)(
+    'aborts stalled %s transport and frees the single socket',
+    async (kind) => {
+      let close!: () => void;
+      const closed = new Promise<void>((resolve) => {
+        close = resolve;
+      });
+      const { client, read } = await fixture((path, response) => {
+        if (path.endsWith('/stall')) response.once('close', close);
+        else response.end('ok');
+      });
+      const input = { Bucket: 'private-test-bucket', Key: 'stall' };
+      const pending = privateObjectOperation(
+        (signal) => {
+          const options = { abortSignal: signal };
+          if (kind === 'put')
+            return client.send(
+              new PutObjectCommand({
+                ...input,
+                Body: Buffer.from('test'),
+                IfNoneMatch: '*',
+              }),
+              options,
+            );
+          if (kind === 'head')
+            return client.send(new HeadObjectCommand(input), options);
+          return client.send(new DeleteObjectCommand(input), options);
+        },
+        undefined,
+        500,
+      );
+      await expect(pending).rejects.toMatchObject({ name: 'TimeoutError' });
+      await closed;
+      expect(await read('ok', 2)).toEqual(Buffer.from('ok'));
+    },
+  );
   it.each(['headers', 'body'])(
     'aborts stalled %s and frees the only socket for the next read',
     async (phase) => {

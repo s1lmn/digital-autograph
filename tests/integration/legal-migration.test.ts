@@ -16,6 +16,7 @@ import {
   createDatabase,
   createPgPricingRepository,
   createPgTakeoverReservationRepository,
+  createPgAutographProcessingRepository,
 } from '../../packages/db/src/index';
 import {
   TakeoverQuoteService,
@@ -78,6 +79,113 @@ async function migrate(name: string, directory: string) {
     expect(result.status, result.stdout + result.stderr).toBe(0);
   }
 }
+
+it('upgrades populated A02 processing jobs while preserving adopted and unknown legacy keys', async () => {
+  const name = `autograph_test_a03_${randomUUID().replaceAll('-', '')}`;
+  const u = new URL(value!);
+  u.pathname = `/${name}`;
+  const temp = mkdtempSync(join(tmpdir(), 'da-storage-upgrade-'));
+  await admin.pool.query(`CREATE DATABASE "${name}"`);
+  const db = createDatabase(u.href);
+  try {
+    mkdirSync(join(temp, 'meta'));
+    const before = {
+      ...journal,
+      entries: journal.entries.filter((e: { idx: number }) => e.idx < 22),
+    };
+    writeFileSync(join(temp, 'meta/_journal.json'), JSON.stringify(before));
+    for (const entry of before.entries)
+      copyFileSync(
+        join(folder, `${entry.tag}.sql`),
+        join(temp, `${entry.tag}.sql`),
+      );
+    await migrate(name, temp);
+    const user = randomUUID(),
+      ids = [randomUUID(), randomUUID()],
+      jobs = [randomUUID(), randomUUID()];
+    await db.pool.query('INSERT INTO users(id) VALUES ($1)', [user]);
+    for (let i = 0; i < 2; i++) {
+      const original = randomUUID();
+      await db.pool.query(
+        "INSERT INTO autographs(id,user_id,source,status) VALUES ($1,$2,'canvas',$3::autograph_status)",
+        [ids[i], user, i === 0 ? 'awaiting_approval' : 'processing'],
+      );
+      await db.pool.query(
+        `INSERT INTO autograph_assets(id,autograph_id,role,status,storage_key,expected_content_type,expected_size_bytes,verified_size_bytes,uploaded_at,upload_expires_at)
+        VALUES ($1,$2,'original','uploaded',$3,'image/png',4,4,now(),now()+interval '5 minutes')`,
+        [original, ids[i], `private-legacy-original/${original}`],
+      );
+      await db.pool.query(
+        `INSERT INTO autograph_processing_jobs(id,autograph_id,original_asset_id,status,attempts,lease_token,claimed_at,finished_at)
+        VALUES ($1,$2,$3,$4::autograph_processing_job_status,1,$5,CASE WHEN $5::uuid IS NULL THEN NULL ELSE now()-interval '1 hour' END,CASE WHEN $5::uuid IS NULL THEN now() ELSE NULL END)`,
+        [
+          jobs[i],
+          ids[i],
+          original,
+          i === 0 ? 'succeeded' : 'processing',
+          i === 0 ? null : randomUUID(),
+        ],
+      );
+    }
+    const legacyKeys = ids.map(
+      (id, i) => `autographs/${id}/cleaned/${jobs[i]}.png`,
+    );
+    await db.pool.query(
+      `INSERT INTO autograph_assets(autograph_id,role,status,storage_key,actual_content_type,verified_size_bytes,width,height,uploaded_at)
+      VALUES ($1,'cleaned','uploaded',$2,'image/png',4,1,1,now())`,
+      [ids[0], legacyKeys[0]],
+    );
+    const history = (
+      await db.pool.query(
+        'SELECT to_jsonb(j) AS snapshot FROM autograph_processing_jobs j ORDER BY id',
+      )
+    ).rows;
+    await migrate(name, folder);
+    await migrate(name, folder);
+    expect(
+      (
+        await db.pool.query(
+          'SELECT to_jsonb(j) AS snapshot FROM autograph_processing_jobs j ORDER BY id',
+        )
+      ).rows,
+    ).toEqual(history);
+    const artifacts = (
+      await db.pool.query<{
+        storage_key: string;
+        adopted: boolean;
+        retired: boolean;
+      }>(
+        'SELECT storage_key, adopted_at IS NOT NULL AS adopted, retired_at IS NOT NULL AS retired FROM autograph_processing_artifacts',
+      )
+    ).rows;
+    expect(artifacts).toHaveLength(2);
+    expect(artifacts).toContainEqual({
+      storage_key: legacyKeys[0],
+      adopted: true,
+      retired: false,
+    });
+    expect(artifacts).toContainEqual({
+      storage_key: legacyKeys[1],
+      adopted: false,
+      retired: true,
+    });
+    const claimed = await createPgAutographProcessingRepository(db.pool).claim(
+      300,
+    );
+    expect(claimed!.autographId).toBe(ids[1]);
+    expect(
+      (
+        await db.pool.query(
+          'SELECT count(*) FROM autograph_processing_artifacts',
+        )
+      ).rows[0].count,
+    ).toBe('3');
+  } finally {
+    await db.close();
+    await admin.pool.query(`DROP DATABASE "${name}"`);
+    rmSync(temp, { recursive: true, force: true });
+  }
+}, 60000);
 it.each([17, 19])(
   'migrates clean DB twice and upgrades populated pre-00%s without fabricated checkout confirmation',
   async (beforeIndex) => {
@@ -319,7 +427,7 @@ it('applies all migrations to a clean database and repeats idempotently', async 
           "SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",
         )
       ).rows[0].count,
-    ).toBe(35);
+    ).toBe(37);
     expect(
       (
         await db.pool.query(

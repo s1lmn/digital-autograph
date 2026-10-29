@@ -577,6 +577,8 @@ export const autographAssets = pgTable(
     }),
     expectedSizeBytes: integer('expected_size_bytes'),
     uploadAttempts: integer('upload_attempts').notNull().default(0),
+    retiredAt: timestamp('retired_at', { withTimezone: true }),
+    lastIoToken: uuid('last_io_token'),
     verifiedSizeBytes: integer('verified_size_bytes'),
     uploadExpiresAt: timestamp('upload_expires_at', {
       withTimezone: true,
@@ -1199,5 +1201,55 @@ export const originalUploadTombstones = pgTable(
   },
   (table) => [
     index('original_upload_tombstones_next_idx').on(table.nextCheckAt),
+  ],
+);
+
+// Fixed-size global permits; the immutable key is also an exclusive resource fence.
+export const autographStorageLeases = pgTable(
+  'autograph_storage_leases',
+  {
+    slot: integer('slot').primaryKey(),
+    operationId: uuid('operation_id').notNull().unique(),
+    storageKey: text('storage_key').notNull().unique(),
+    kind: text('kind').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    check(
+      'autograph_storage_leases_slot',
+      sql`(${table.kind} IN ('upload', 'complete') AND ${table.slot} BETWEEN 1 AND 4) OR (${table.kind} = 'cleanup' AND ${table.slot} = 5)`,
+    ),
+    check(
+      'autograph_storage_leases_key',
+      sql`length(btrim(${table.storageKey})) > 0`,
+    ),
+  ],
+);
+
+// At most one immutable output per processing attempt (existing maximum: three).
+// Retain unadopted keys for late/unknown writes instead of deleting their evidence.
+export const autographProcessingArtifacts = pgTable(
+  'autograph_processing_artifacts',
+  {
+    leaseToken: uuid('lease_token').primaryKey(),
+    jobId: uuid('job_id')
+      .notNull()
+      .references(() => autographProcessingJobs.id, { onDelete: 'restrict' }),
+    storageKey: text('storage_key').notNull().unique(),
+    leaseExpiresAt: timestamp('lease_expires_at', {
+      withTimezone: true,
+    }).notNull(),
+    nextCheckAt: timestamp('next_check_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    retiredAt: timestamp('retired_at', { withTimezone: true }),
+    adoptedAt: timestamp('adopted_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('autograph_processing_artifacts_due_idx').on(table.nextCheckAt),
+    check(
+      'autograph_processing_artifacts_state',
+      sql`${table.retiredAt} IS NULL OR ${table.adoptedAt} IS NULL`,
+    ),
   ],
 );

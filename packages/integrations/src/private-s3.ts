@@ -15,6 +15,7 @@ import {
   type PrivateOriginalStorage,
 } from '@digital-autograph/autographs';
 import { readPrivateObject } from './private-object-read';
+import { privateObjectOperation } from './private-object-operation';
 
 export type PrivateS3Config = {
   endpoint?: string;
@@ -54,21 +55,20 @@ export function createPrivateS3Storage(
       if (input.bytes.length < 1 || input.bytes.length > maxOriginalBytes)
         throw new AutographError('UPLOAD_TOO_LARGE');
       try {
-        await client.send(
-          new PutObjectCommand({
-            Bucket: config.bucket,
-            Key: input.key,
-            Body: input.bytes,
-            ContentType: input.contentType,
-            ContentLength: input.bytes.length,
-            IfNoneMatch: '*',
-          }),
-          {
-            abortSignal: AbortSignal.any([
-              input.signal,
-              AbortSignal.timeout(10_000),
-            ]),
-          },
+        await privateObjectOperation(
+          (signal) =>
+            client.send(
+              new PutObjectCommand({
+                Bucket: config.bucket,
+                Key: input.key,
+                Body: input.bytes,
+                ContentType: input.contentType,
+                ContentLength: input.bytes.length,
+                IfNoneMatch: '*',
+              }),
+              { abortSignal: signal },
+            ),
+          input.signal,
         );
       } catch (error) {
         if (
@@ -84,9 +84,11 @@ export function createPrivateS3Storage(
 
     async statObject(key) {
       try {
-        const result = await client.send(
-          new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
-          { abortSignal: AbortSignal.timeout(10_000) },
+        const result = await privateObjectOperation((signal) =>
+          client.send(
+            new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
+            { abortSignal: signal },
+          ),
         );
         return {
           sizeBytes: result.ContentLength ?? -1,
@@ -105,9 +107,11 @@ export function createPrivateS3Storage(
     },
 
     async deleteObject(key) {
-      await client.send(
-        new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
-        { abortSignal: AbortSignal.timeout(10_000) },
+      await privateObjectOperation((signal) =>
+        client.send(
+          new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
+          { abortSignal: signal },
+        ),
       );
     },
 
@@ -123,13 +127,18 @@ export function createPrivateS3Storage(
     },
 
     async putPrivateObject(key, bytes) {
-      await client.send(
-        new PutObjectCommand({
-          Bucket: config.bucket,
-          Key: key,
-          Body: bytes,
-          ContentType: 'image/png',
-        }),
+      await privateObjectOperation((signal) =>
+        client.send(
+          new PutObjectCommand({
+            Bucket: config.bucket,
+            Key: key,
+            Body: bytes,
+            ContentType: 'image/png',
+            ContentLength: bytes.length,
+            IfNoneMatch: '*',
+          }),
+          { abortSignal: signal },
+        ),
       );
     },
 

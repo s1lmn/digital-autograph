@@ -59,6 +59,24 @@ It does not cover public TLS/HTTP2/HTTP3, the actual API/S3 integration, distrib
 DoS, realistic upload throughput or production monitoring. Rehearse these on
 approved isolated infrastructure after A01/A02/A03 and explicit deploy permission.
 
+## Combined API check — 29.10.2026
+
+A separate local harness combined the actual compiled API from PR78 head
+`994e711c130029fe628adc56273dc8004c3e0443` (including accepted PR81/82), this
+Caddyfile at `ace348ac8cf9336d6a99136e83b31f1ceb2689b1`, real isolated PostgreSQL
+and private MinIO. The normal session service authenticated a seeded synthetic
+session; no test-auth HTTP seam or provider credentials were used.
+
+Passed: fixed exact10MiB204; conditional second PUT412 preserves original bytes;
+unsigned original403; authenticated completion200; exact10MiB chunked at400KiB/s
+(~26seconds)204 and completion; fixed/chunked +1byte413 without a stored object;
+stalled body408 around30seconds without an object; unauthenticated401 and
+foreign-Origin403; subsequent ready200. Temporary API/proxy, synthetic data and
+owned bucket were removed. API ran natively on macOS; pinned Caddy and MinIO ran
+in Docker. This is not a Linux release-image or real mobile/OAuth acceptance.
+The checked-in smoke above remains the repeatable CI proxy test; retain the
+combined harness/evidence with the audit checkpoint when repeating full API checks.
+
 Official references, checked 27.10.2026:
 [request_body](https://caddyserver.com/docs/caddyfile/directives/request_body),
 [server options](https://caddyserver.com/docs/caddyfile/options),

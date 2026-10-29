@@ -52,8 +52,14 @@ certify the complete application or any unobserved dependency.
   provider requests, state updates, refunds or notification sends.
 - Moderation: awaiting_moderation count/oldest updated age. No report urgency,
   appeals or post-publication case SLA is inferred from this pre-publication queue.
-- Storage: one bounded HeadBucket with an abort signal. Success means permission
-  and reachability for that operation, not successful uploads/image processing.
+- Storage: one HeadBucket through the same total-deadline wrapper as private
+  storage operations. The collector's five-second signal settles the probe even
+  if SDK credentials/middleware ignore cancellation; the helper also retains its
+  ten-second ceiling for callers without a deadline. Already cancelled probes do
+  not start a request. Late SDK results are ignored; a timeout is unavailable,
+  never success or permission to retry a mutation. No bucket/policy writes occur.
+  Success means permission and reachability for that operation, not successful
+  uploads/image processing.
 - Original uploads (EGO-172): all reserved original Assets, including expired
   reservations still charged by admission; expired count and oldest expiry age.
   Completed originals and cleaned derivatives do not consume the pending count.

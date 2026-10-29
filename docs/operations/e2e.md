@@ -125,11 +125,11 @@ same SHA. Existing deployment tests execute rejected/accepted requests; the
 critical test-gate regression also protects mandatory CI commands. A failing
 E2E/integration/migration check therefore blocks normal trusted deployment.
 
-**Merge enforcement limitation:** this private GitHub Free repository currently
-returns HTTP 403 for branch protection/rulesets. CI and PR Policy report failures,
-but GitHub does not server-enforce required checks before a maintainer merge.
-The operational merge gate is fresh exact-head checks + review + explicit merge
-authorization. To meet a strictly automatic merge-blocking DoD, enable protected
-main / required checks on a supporting GitHub plan, including `checks`, `e2e`, `windows-integration-runner`, `macos-integration-runner`, `windows-unit`,
-`policy`, and review requirements. Do not claim that protection already exists;
-this PR does not alter repository billing, visibility, IAM or authorization.
+**Current merge enforcement, verified 29 October 2026:** the repository is public
+and active main ruleset24111688 requires one independent approval, dismisses stale
+approvals, requires resolved review threads and strict up-to-date checks:
+`checks`, `e2e`, `windows-integration-runner`, `macos-integration-runner`,
+`windows-unit`, `policy`, `secrets`. Bypass actors are empty. The legacy branch
+protection endpoint's404 does not mean rulesets are absent. Earlier private-plan
+403 observations are historical. This document changes no repository settings.
+Release remains disabled pending A01 and separate owner authorization.

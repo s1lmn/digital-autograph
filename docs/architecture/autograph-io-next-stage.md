@@ -1,7 +1,78 @@
 # A03: Short transactions around private storage I/O
 
-Prepared after A02 (EGO-109 / EGO-113); implementation is a separate dependent PR
-from accepted A02 main. This document is a design checkpoint, not implemented code.
+Implementation candidate under EGO-109, based on accepted A02 and green main
+`375ab3a4d321a164bb58545129282cef486138a2`. Independent review, exact-head CI,
+protected merge and green main are required before A03 acceptance. Not deployed.
+
+## Candidate protocol
+
+Original upload/completion commit a short authorized claim, release the connection,
+perform bounded I/O, then re-lock the Autograph and verify the exact Asset/key and
+unexpired operation token. Four durable `autograph_storage_leases` slots replace
+transaction-held original permits; a fifth retains single-cleaner admission.
+The immutable key is exclusive across upload/completion/cleanup. Same-key
+contention waits at most two seconds without a connection; global refusal stays 429. Attempts, quotas, reservation expiry and conditional original PUT are unchanged.
+
+Leases last60s using PostgreSQL time. Original callback work has a40s ceiling,
+cleanup15s; actual S3 PUT/HEAD/delete and cleaned PUT have a total10s adapter
+budget, including ignored middleware/credential cancellation. Private GET/body
+retains the accepted30s helper unchanged. A reclaimed lease cannot cancel an
+already accepted remote write; late keys stay tracked. These are engineering
+budgets, not target-provider/capacity/mobile acceptance.
+
+Cleanup permanently retires an expired generation before external DELETE. It
+releases quota only when a fenced final transaction moves the key to the existing
+tombstone table, removes the reservation and restores draft. Failure/restart keeps
+the retired row charged. Fresh reservations use new UUIDs/keys. Tombstones retain
+the one-hour backoff and are never discarded after DELETE. Metadata rejection
+no longer deletes immediately: an old HEAD cannot authorize a stale DELETE.
+Invalid private bytes remain charged until expiry cleanup and cannot authorize
+processing/placement.
+
+Cleanup admission fairly rotates expired originals, original tombstones and
+processing artifacts using a singleton PostgreSQL cursor (migration0023). The
+cursor advances atomically with a claim, before external I/O, and survives
+failures/restarts. Empty sources are skipped; each continuously eligible source
+gets a turn within three committed claims. A failing old original or10,000 due
+tombstones cannot starve artifact reconciliation. Single-cleaner/key fencing,
+original retry cadence, one-hour retired-key backoff and all retention evidence
+remain unchanged. No new wall-clock SLA or automatic evidence deletion.
+
+Processing output keys include job ID and claim token. Claim records
+`autograph_processing_artifacts` before PUT; adoption is atomic with cleaned
+Asset/job success. Conditional PUT prevents overwrite. Partial cleanup retires
+only its attempt before DELETE; stale workers cannot delete a successor's output.
+Unadopted keys survive failures/restarts and are repeatedly reconciled; adopted
+keys are excluded. At most three records per new job use its existing attempt
+bound. Migration0022 preserves one legacy deterministic key per existing job,
+marking referenced outputs adopted and unknown outputs retired. It changes no
+original tombstone cap, TTL/retention policy or financial writer.
+
+Lost COMMIT responses discard the connection. Claims proceed only after a fresh
+read proves their durable token; finalization checks an Asset receipt, adopted
+artifact or tombstone. Unproven outcomes raise fixed `StorageCommitUnknownError`.
+No mutation replay or inferred rollback/deletion. Ordinary read/retry/reconciliation
+resolves remaining state. PR81 safe diagnostics and its allowlist are unchanged.
+
+The shared runtime pool uses acquisition3s, lock5s, statement10s, query12s and
+idle-in-transaction15s. Explicit server startup settings prevent DSN/PGOPTIONS
+timeout overrides; other URL/SSL fields remain. The lock budget accommodates the
+existing real three-second financial contention tests; quota admission retains
+SET LOCAL2s. Server cancellation precedes client timeout. Storage transactions
+discard failed/ambiguous clients; financial state machines keep their UNKNOWN rules.
+
+## Rollout and rollback gates
+
+Migrations0022/0023 are additive. Verify clean/repeated and populated A02 upgrades,
+including legacy processing artifacts. Drain **every old API/worker writer**
+before enabling this protocol: old code does not understand durable fences.
+Keep originals, backup/evidence and tombstones. Do not mix old writer versions or
+blindly roll back to A02. Use a separately reviewed compatible image, or stop
+writers and forward-fix/reconcile. Never drop receipts, retired flags or artifact
+evidence. A01/owner deployment authorization and independent operational acceptance
+remain separate; no staging migration/deployment is authorized by this PR.
+
+## Original design checkpoint (historical)
 
 ## Confirmed remaining problem
 

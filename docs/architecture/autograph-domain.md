@@ -76,12 +76,13 @@ Each reservation allows five byte-upload attempts. An atomic UPDATE charges the
 attempt before external I/O; cancellation, failure and missing acknowledgement do
 not refund it. Shared-capacity/lock refusals after this admission charge also consume
 an attempt; clients must honor Retry-After rather than immediately loop. The
-per-process pre-parser refusal happens before that charge. Initiation does not reset it. Four shared PostgreSQL transaction
-advisory permits cap original byte upload/completion I/O across API processes;
+per-process pre-parser refusal happens before that charge. Initiation does not reset it. Four durable PostgreSQL lease slots
+admit original byte upload/completion I/O across API processes;
 four incoming byte bodies per process are admitted before parsing. Excess requests
 receive 429; retry with backoff. The handler starts a 30-second abort deadline
 after authentication/first-use guards and parameter parsing; it does not bound
-prior PostgreSQL connection/query waits. A03 must add those finite DB budgets.
+prior PostgreSQL waits by itself. The A03 candidate adds finite shared pool,
+statement/query/lock deadlines; see its protocol and rollout gates below.
 
 S3 PUT/HEAD/delete have actual SDK abort deadlines of 10 seconds. Chunk accumulation
 plus final concatenation uses at most approximately 80 MiB for four bodies, besides
@@ -92,10 +93,10 @@ runtime/SDK overhead. This is an engineering bound, not a staging capacity resul
 A rejected or cancelled body is not forwarded to storage. The reservation remains
 charged and can be retried within its expiry/attempt budget. On unknown PUT outcome,
 never delete a possibly valid object or issue a replacement key immediately: retry
-is conditional and completion can recover it. The Autograph row lock serializes
-upload, completion and abandoned cleanup. A02 retains bounded storage I/O under
-this existing lock; [A03](../architecture/autograph-io-next-stage.md) is the separate
-plan to remove it safely.
+is conditional and completion can recover it. The A03 candidate uses short claim
+and finalization transactions, exclusive key leases and generation/token fences;
+external body/storage work holds no SQL connection or row lock. See
+[A03](autograph-io-next-stage.md) for commit ambiguity and rollout/acceptance gates.
 
 The worker removes abandoned reserved objects after expiry plus cleanup grace,
 then atomically retires the key in `original_upload_tombstones`, removes the Asset
@@ -107,7 +108,7 @@ When there is no expired reservation to clean, the worker reconciles due tombsto
 with a one-hour backoff on success or failure. They are not discarded after one
 successful DELETE: an aborted request can have a late, unknown provider outcome.
 Thus a later object at a retired key stays tracked and is deleted again. Cleanup
-uses a single non-waiting PostgreSQL permit across workers. New reservation admission also caps pending reservations plus durable tombstones
+uses one durable cleanup lease across workers. New reservation admission also caps pending reservations plus durable tombstones
 at 10,000 keys globally. Reconciliation does not automatically discard this evidence;
 reaching the cap fails closed for new reservations and requires an operator-reviewed
 retention/reconciliation decision. Existing completion and payment recovery continue.

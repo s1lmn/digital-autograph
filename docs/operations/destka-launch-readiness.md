@@ -1,5 +1,22 @@
 # Destka.ru — фактическая готовность и критический путь
 
+## Последующий инженерный checkpoint — 29.10.2026
+
+PR78/79/80/83/84 теперь MERGED. Main375ab3a4d321a164bb58545129282cef486138a2:
+CI40915883171/Secret Scan40915883110 SUCCESS. EGO-171/172 узкие DoD завершены;
+parent security/operations/Website/Merchant Ready остаются открытыми. A03 —
+отдельный implementation candidate под EGO-109: short transactions, durable
+leases/receipts, immutable processing attempts, cleanup/recovery и finite deadlines.
+До независимого review/merge/green main он не принят. См.
+[протокол A03](../architecture/autograph-io-next-stage.md) и обязательный drain
+старых API/worker перед любым будущим разрешённым rollout.
+
+Внешний read-only повтор: staging Web/ready200, TLS valid; destka.ruparking200,
+www302→HTTP. Recovery snapshot READY, сохраняется и тарифицируется. A01 containment
+не откатывался; Release disabled, runners0. Не выполнялись VM/IAM/DNS/network/
+credentials/deployment/legal/pricing/live changes. Ниже сохранена история прежних
+checkpoints; старые OPEN/awaiting A02 записи не описывают текущее состояние PR.
+
 Дата: 27.10.2026. Read-only audit базы main
 `5fc77c3ccb4464b880fa2b41d3c4f4036535b6c6`. Кроме отдельно разрешённого отсоединения runner21 (ниже), DNS/cloud/IAM/Release,
 credentials, production DB, deployment, OAuth или live payments не изменялись.

@@ -135,6 +135,7 @@ describe('bounded OAuth attempt cleanup with PostgreSQL', () => {
   });
 
   it('times out a table lock, rolls back and recovers on the next cleanup', async () => {
+    const prior = await database.pool.query('SHOW lock_timeout');
     await insertAttempts(1);
     const client = await database.pool.connect();
     try {
@@ -149,6 +150,6 @@ describe('bounded OAuth attempt cleanup with PostgreSQL', () => {
     }
     expect(await cleanup()).toBe(1);
     const settings = await database.pool.query('SHOW lock_timeout');
-    expect(settings.rows[0]?.lock_timeout).toBe('0');
+    expect(settings.rows[0]?.lock_timeout).toBe(prior.rows[0]?.lock_timeout);
   });
 });

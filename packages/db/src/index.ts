@@ -1,5 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import { safeErrorDetails } from '@digital-autograph/observability';
 
 export { eq, sql } from 'drizzle-orm';
 export { createPgSessionRepository } from './session-repository';
@@ -22,8 +23,16 @@ export {
 
 export function createDatabase(databaseUrl: string) {
   const pool = new Pool({ connectionString: databaseUrl });
-  pool.on('error', (error: Error) => {
-    console.error('PostgreSQL idle connection error:', error.message);
+  pool.on('error', (error: unknown) => {
+    console.error(
+      JSON.stringify({
+        level: 50,
+        time: new Date().toISOString(),
+        event: 'POSTGRES_IDLE_CONNECTION_FAILED',
+        err: safeErrorDetails(error),
+        msg: 'PostgreSQL idle connection failed',
+      }),
+    );
   });
   const db = drizzle({ client: pool });
 

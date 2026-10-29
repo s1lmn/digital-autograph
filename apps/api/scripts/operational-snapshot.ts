@@ -67,6 +67,11 @@ export function evaluateOperationalAlerts(
     'warning',
   );
   add(
+    database.processingClaimsPastMaxLease > 0,
+    'PROCESSING_CLAIMS_PAST_MAX_LEASE',
+    'warning',
+  );
+  add(
     database.reconciliationOverdue5Minutes > 0,
     'RECONCILIATION_OVERDUE',
     'warning',

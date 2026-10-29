@@ -45,8 +45,17 @@ certify the complete application or any unobserved dependency.
   SQL text is never selected. Other roles and cumulative slow-query analysis are
   outside this metric; it is not pg_stat_statements.
 - Processing: ready queue count/oldest available age and failures in 15 minutes.
-  Future retry delays are excluded from ready backlog. Reclaimed/stuck processing
-  leases and worker heartbeat require separate telemetry.
+  Future retry delays are excluded from ready backlog. In-flight count, oldest
+  claim age and claims older than the maximum supported worker lease are also
+  observed (EGO-173). The maximum comes from the same `workerLeaseLimits` used by
+  runtime configuration validation (currently 900 seconds); min/default/max are
+  unchanged. A claim must be strictly older than that maximum to be counted.
+  Future claim timestamps have zero age. Queued and terminal jobs are excluded
+  from claim counts, and delayed retries remain outside the ready backlog.
+  The actual per-process lease is not persisted: a configured 60-second lease can
+  expire earlier than this conservative signal. Mixed releases/configurations
+  require operator interpretation. This does not detect all expired leases,
+  record lease reclamations, prove a worker heartbeat or authorize a retry.
 - Payment: paid-not-fulfilled orders and pending/unknown reconciliation more
   than five minutes overdue. This is detection only: no payment retries,
   provider requests, state updates, refunds or notification sends.
@@ -100,6 +109,13 @@ deduplication by code/environment and recovery/stale-sample handling. Route exit
 JSON as recovery. Preserve each critical signal even if warning suppression is
 enabled. Run once per environment and monitor the scheduler independently.
 Store output privately with agreed retention; aggregates are not public analytics.
+
+`PROCESSING_CLAIMS_PAST_MAX_LEASE` is a warning when at least one persisted
+processing claim is older than the supported maximum lease. It uses the worker's
+existing reclaim boundary, not a new processing SLA. Investigate worker failures
+and storage/database latency using private diagnostics; do not reset job state,
+attempts or lease tokens to silence it. Normal fenced worker recovery remains
+responsible for processing. No claims or retries are performed by this reader.
 
 The portable CLI regression uses refused loopback connections and asserts real
 critical output/exit status with zero credential leakage. PostgreSQL/MinIO

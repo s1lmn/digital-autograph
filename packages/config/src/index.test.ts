@@ -1,7 +1,37 @@
 import { describe, expect, it } from 'vitest';
-import { loadApiConfig, loadDatabaseConfig, loadWebConfig } from './index';
+import {
+  loadApiConfig,
+  loadDatabaseConfig,
+  loadWebConfig,
+  loadWorkerConfig,
+  workerLeaseLimits,
+} from './index';
 
 describe('typed configuration', () => {
+  it('preserves worker lease bounds and default used by operator observation', () => {
+    const env = {
+      APP_ENV: 'test',
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/autograph_test',
+      S3_REGION: 'us-east-1',
+      S3_BUCKET: 'autographs-test',
+    };
+    expect(workerLeaseLimits).toEqual({
+      minSeconds: 60,
+      maxSeconds: 900,
+      defaultSeconds: 300,
+    });
+    expect(loadWorkerConfig(env).WORKER_LEASE_SECONDS).toBe(300);
+    for (const seconds of ['60', '300', '900'])
+      expect(
+        loadWorkerConfig({ ...env, WORKER_LEASE_SECONDS: seconds })
+          .WORKER_LEASE_SECONDS,
+      ).toBe(Number(seconds));
+    for (const seconds of ['59', '901', '60.5'])
+      expect(() =>
+        loadWorkerConfig({ ...env, WORKER_LEASE_SECONDS: seconds }),
+      ).toThrow(/WORKER_LEASE_SECONDS/);
+  });
+
   it('accepts a valid API environment and coerces the port', () => {
     expect(
       loadApiConfig({

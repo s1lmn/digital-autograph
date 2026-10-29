@@ -133,6 +133,22 @@ async function fresh(f: Awaited<ReturnType<typeof fixture>>) {
   return { upload, key };
 }
 
+async function orphanArtifact() {
+  const f = await fixture();
+  await f.write();
+  await service.completeUpload(f.user, f.draft.id);
+  const job = (await jobs.claim(300))!;
+  const key = processingArtifactKey(job);
+  keys.add(key);
+  await storage.putPrivateObject(key, Buffer.from('late'));
+  await jobs.fail(job, 'STORAGE_FAILURE', true, 300);
+  await db.pool.query(
+    "UPDATE autograph_processing_artifacts SET lease_expires_at = now() - interval '2 hours', next_check_at = now() - interval '2 hours' WHERE lease_token = $1::uuid",
+    [job.leaseToken],
+  );
+  return key;
+}
+
 beforeAll(async () => {
   await db.checkConnection();
   await storage.bootstrapLocalBucket();
@@ -140,6 +156,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.pool.query(
     'TRUNCATE users, original_upload_tombstones, autograph_storage_leases CASCADE',
+  );
+  await db.pool.query(
+    'UPDATE autograph_cleanup_schedule SET next_source = 0 WHERE id = 1',
   );
 });
 afterEach(async () => {
@@ -156,6 +175,92 @@ afterAll(async () => {
 });
 
 describe('durable private storage fencing with real PostgreSQL and MinIO', () => {
+  it('serves an older artifact within three claims despite 10000 continuously due original tombstones', async () => {
+    const key = await orphanArtifact();
+    await db.pool.query(
+      "INSERT INTO original_upload_tombstones(storage_key,next_check_at) SELECT 'fairness-original/' || n, now()-interval '1 hour' FROM generate_series(1,10000) n",
+    );
+    const selected: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      // New repository objects must continue the persisted schedule, not reset it.
+      await createPgAutographProcessingRepository(db.pool).cleanupAbandoned(
+        60,
+        async (value) => {
+          selected.push(value);
+          await storage.deleteObject(value);
+        },
+      );
+    }
+    expect(selected).toContain(key);
+    expect(await storage.statObject(key)).toBeNull();
+    expect(
+      (await db.pool.query('SELECT count(*) FROM original_upload_tombstones'))
+        .rows[0].count,
+    ).toBe('10000');
+    expect(
+      Number(
+        (
+          await db.pool.query(
+            'SELECT count(*) FROM original_upload_tombstones WHERE next_check_at <= now()',
+          )
+        ).rows[0].count,
+      ),
+    ).toBeGreaterThan(9990);
+  });
+
+  it('interleaves all nonempty queues across pools even when the same expired original always fails', async () => {
+    const artifacts = new Set<string>();
+    for (let i = 0; i < 12; i++) artifacts.add(await orphanArtifact());
+    const f = await fixture();
+    await f.write();
+    await expire(f);
+    await db.pool.query(
+      "INSERT INTO original_upload_tombstones(storage_key,next_check_at) SELECT 'fairness-original/' || n, now()-interval '1 hour' FROM generate_series(1,30) n",
+    );
+    const other = createDatabase(url);
+    const counts = { original: 0, tombstone: 0, artifact: 0 };
+    try {
+      for (let i = 0; i < 18; i++) {
+        const operation = createPgAutographProcessingRepository(
+          i % 2 ? other.pool : db.pool,
+        ).cleanupAbandoned(60, async (key) => {
+          if (key === f.key) {
+            counts.original++;
+            throw new Error('Synthetic original deletion outage');
+          }
+          if (artifacts.has(key)) counts.artifact++;
+          else counts.tombstone++;
+          await storage.deleteObject(key);
+        });
+        if (i % 3 === 0)
+          await expect(operation).rejects.toThrow(
+            'Synthetic original deletion outage',
+          );
+        else expect(await operation).toBe(true);
+      }
+      expect(counts).toEqual({ original: 6, tombstone: 6, artifact: 6 });
+      expect(
+        (
+          await db.pool.query(
+            'SELECT count(*) FROM original_upload_tombstones WHERE next_check_at <= now()',
+          )
+        ).rows[0].count,
+      ).toBe('24');
+      expect(
+        (
+          await db.pool.query(
+            'SELECT count(*) FROM autograph_processing_artifacts WHERE next_check_at <= now()',
+          )
+        ).rows[0].count,
+      ).toBe('6');
+      expect((await service.get(f.user, f.draft.id)).status).toBe(
+        'upload_pending',
+      );
+      expect(await storage.getPrivateObject(f.key, 4)).toEqual(f.bytes);
+    } finally {
+      await other.close();
+    }
+  });
   it('reuses a healthy single connection across bounded same-key contention', async () => {
     const f = await fixture();
     const single = createDatabase(url);

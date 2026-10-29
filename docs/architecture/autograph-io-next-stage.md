@@ -29,6 +29,15 @@ no longer deletes immediately: an old HEAD cannot authorize a stale DELETE.
 Invalid private bytes remain charged until expiry cleanup and cannot authorize
 processing/placement.
 
+Cleanup admission fairly rotates expired originals, original tombstones and
+processing artifacts using a singleton PostgreSQL cursor (migration0023). The
+cursor advances atomically with a claim, before external I/O, and survives
+failures/restarts. Empty sources are skipped; each continuously eligible source
+gets a turn within three committed claims. A failing old original or10,000 due
+tombstones cannot starve artifact reconciliation. Single-cleaner/key fencing,
+original retry cadence, one-hour retired-key backoff and all retention evidence
+remain unchanged. No new wall-clock SLA or automatic evidence deletion.
+
 Processing output keys include job ID and claim token. Claim records
 `autograph_processing_artifacts` before PUT; adoption is atomic with cleaned
 Asset/job success. Conditional PUT prevents overwrite. Partial cleanup retires
@@ -54,7 +63,7 @@ discard failed/ambiguous clients; financial state machines keep their UNKNOWN ru
 
 ## Rollout and rollback gates
 
-Migration0022 is additive. Verify clean/repeated and populated A02 upgrades,
+Migrations0022/0023 are additive. Verify clean/repeated and populated A02 upgrades,
 including legacy processing artifacts. Drain **every old API/worker writer**
 before enabling this protocol: old code does not understand durable fences.
 Keep originals, backup/evidence and tombstones. Do not mix old writer versions or

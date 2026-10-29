@@ -1253,3 +1253,20 @@ export const autographProcessingArtifacts = pgTable(
     ),
   ],
 );
+
+// One durable round-robin cursor. It advances with a claim, including claims
+// whose external deletion subsequently fails or whose process exits.
+export const autographCleanupSchedule = pgTable(
+  'autograph_cleanup_schedule',
+  {
+    id: integer('id').primaryKey(),
+    nextSource: integer('next_source').notNull().default(0),
+  },
+  (table) => [
+    check('autograph_cleanup_schedule_singleton', sql`${table.id} = 1`),
+    check(
+      'autograph_cleanup_schedule_source',
+      sql`${table.nextSource} BETWEEN 0 AND 2`,
+    ),
+  ],
+);

@@ -427,7 +427,7 @@ it('applies all migrations to a clean database and repeats idempotently', async 
           "SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'",
         )
       ).rows[0].count,
-    ).toBe(37);
+    ).toBe(38);
     expect(
       (
         await db.pool.query(

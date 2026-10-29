@@ -12,9 +12,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   AutographError,
   maxOriginalBytes,
-  PrivateObjectTooLargeError,
   type PrivateOriginalStorage,
 } from '@digital-autograph/autographs';
+import { readPrivateObject } from './private-object-read';
 
 export type PrivateS3Config = {
   endpoint?: string;
@@ -112,35 +112,14 @@ export function createPrivateS3Storage(
     },
 
     async getPrivateObject(key, maxBytes) {
-      const controller = new AbortController();
-      const result = await client.send(
-        new GetObjectCommand({ Bucket: config.bucket, Key: key }),
-        { abortSignal: controller.signal },
+      return readPrivateObject(
+        (signal) =>
+          client.send(
+            new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+            { abortSignal: signal },
+          ),
+        maxBytes,
       );
-      if (!result.Body) throw new Error('Private object has no body');
-      const reader = result.Body.transformToWebStream().getReader();
-      const chunks: Buffer[] = [];
-      let size = 0;
-      try {
-        while (true) {
-          const next = await reader.read();
-          if (next.done) break;
-          const bytes = Buffer.from(next.value);
-          size += bytes.length;
-          if (size > maxBytes)
-            throw new PrivateObjectTooLargeError(
-              'Private object exceeds byte limit',
-            );
-          chunks.push(bytes);
-        }
-      } catch (error) {
-        controller.abort();
-        await reader.cancel().catch(() => {});
-        throw error;
-      } finally {
-        reader.releaseLock();
-      }
-      return Buffer.concat(chunks, size);
     },
 
     async putPrivateObject(key, bytes) {

@@ -13,7 +13,10 @@ export { createPgFreeClaimRepository } from './free-claim-repository';
 export { createPgPublicPlacementMediaRepository } from './public-placement-media-repository';
 export { createPgPricingRepository } from './pricing-repository';
 export { createPgTakeoverReservationRepository } from './takeover-reservation-repository';
-export { createPgAutographRepository } from './autograph-repository';
+export {
+  autographResourceLimits,
+  createPgAutographRepository,
+} from './autograph-repository';
 export { createPgAutographModerationRepository } from './autograph-moderation-repository';
 export {
   createPgAutographProcessingRepository,

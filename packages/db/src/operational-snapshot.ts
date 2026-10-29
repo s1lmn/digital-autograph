@@ -11,9 +11,25 @@ export type OperationalDatabaseState = {
   reconciliationOverdue5Minutes: number;
   awaitingModeration: number;
   moderationOldestSeconds: number;
+  originalUploadsReserved: number;
+  originalUploadsExpired: number;
+  originalUploadsOldestExpiredSeconds: number;
+  retiredUploadKeys: number;
+  retiredUploadKeysDue: number;
+  retiredUploadOldestDueSeconds: number;
 };
 
-const query = `SELECT
+const query = `WITH original_uploads AS (
+  SELECT count(*) AS reserved,
+    count(*) FILTER (WHERE upload_expires_at <= now()) AS expired,
+    coalesce(greatest(0, floor(extract(epoch FROM now() - min(upload_expires_at)))), 0) AS oldest_expired_seconds
+  FROM autograph_assets WHERE role = 'original' AND status = 'reserved'
+), retired_uploads AS (
+  SELECT count(*) AS total,
+    count(*) FILTER (WHERE next_check_at <= now()) AS due,
+    coalesce(greatest(0, floor(extract(epoch FROM now() - min(next_check_at)))), 0) AS oldest_due_seconds
+  FROM original_upload_tombstones
+) SELECT
   current_setting('transaction_read_only') AS "readOnly",
   (SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()) AS connections,
   current_setting('max_connections') AS "connectionLimit",
@@ -34,7 +50,14 @@ const query = `SELECT
     AND next_check_at < now() - interval '5 minutes') AS "reconciliationOverdue5Minutes",
   (SELECT count(*) FROM autographs WHERE status = 'awaiting_moderation') AS "awaitingModeration",
   (SELECT coalesce(greatest(0, floor(extract(epoch FROM now() - min(updated_at)))), 0)
-    FROM autographs WHERE status = 'awaiting_moderation') AS "moderationOldestSeconds"`;
+    FROM autographs WHERE status = 'awaiting_moderation') AS "moderationOldestSeconds",
+  original_uploads.reserved AS "originalUploadsReserved",
+  original_uploads.expired AS "originalUploadsExpired",
+  original_uploads.oldest_expired_seconds AS "originalUploadsOldestExpiredSeconds",
+  retired_uploads.total AS "retiredUploadKeys",
+  retired_uploads.due AS "retiredUploadKeysDue",
+  retired_uploads.oldest_due_seconds AS "retiredUploadOldestDueSeconds"
+  FROM original_uploads CROSS JOIN retired_uploads`;
 
 const fields: readonly (keyof OperationalDatabaseState)[] = [
   'connections',
@@ -47,6 +70,12 @@ const fields: readonly (keyof OperationalDatabaseState)[] = [
   'reconciliationOverdue5Minutes',
   'awaitingModeration',
   'moderationOldestSeconds',
+  'originalUploadsReserved',
+  'originalUploadsExpired',
+  'originalUploadsOldestExpiredSeconds',
+  'retiredUploadKeys',
+  'retiredUploadKeysDue',
+  'retiredUploadOldestDueSeconds',
 ];
 
 export function decodeOperationalState(

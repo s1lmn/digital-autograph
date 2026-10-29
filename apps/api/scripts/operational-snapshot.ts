@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import {
+  autographResourceLimits,
   createOperationalReader,
   type OperationalDatabaseState,
 } from '@digital-autograph/db';
@@ -34,6 +35,17 @@ export function evaluateOperationalAlerts(
   add(!storageReachable, 'STORAGE_UNAVAILABLE', 'critical');
   if (!database) return alerts;
   add(database.paidNotFulfilled > 0, 'PAID_NOT_FULFILLED', 'critical');
+  add(
+    database.originalUploadsReserved >= autographResourceLimits.globalPending,
+    'ORIGINAL_UPLOAD_CAPACITY_EXHAUSTED',
+    'critical',
+  );
+  add(
+    database.originalUploadsReserved + database.retiredUploadKeys >=
+      autographResourceLimits.retiredKeyBudget,
+    'ORIGINAL_UPLOAD_KEY_BUDGET_EXHAUSTED',
+    'critical',
+  );
   add(
     database.connections / database.connectionLimit >= 0.8,
     'DATABASE_CONNECTION_PRESSURE',

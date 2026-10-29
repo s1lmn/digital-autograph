@@ -4,10 +4,10 @@ import { workerFailureRecord } from './logging';
 import type {
   Database,
   AutographProcessingRepository,
-  ClaimedAutographJob,
 } from '@digital-autograph/db';
 import {
   PrivateObjectTooLargeError,
+  processingArtifactKey,
   type PrivateOriginalStorage,
 } from '@digital-autograph/autographs';
 import {
@@ -31,16 +31,12 @@ export type WorkerOperations = {
 
 export const oauthAttemptCleanupIntervalMs = 60_000;
 
-function cleanedKey(job: ClaimedAutographJob): string {
-  return `autographs/${job.autographId}/cleaned/${job.id}.png`;
-}
-
 export async function processOneAutographJob(
   operations: WorkerOperations,
 ): Promise<boolean> {
   const job = await operations.repository.claim(operations.leaseSeconds);
   if (!job) return false;
-  const key = cleanedKey(job);
+  const key = processingArtifactKey(job);
   let putAttempted = false;
   let uploaded = false;
   try {
@@ -67,8 +63,8 @@ export async function processOneAutographJob(
       operations.leaseSeconds,
     );
   } catch (error) {
-    // A failed PUT may leave a partial object. A DB error after a successful PUT
-    // keeps the deterministic private key so a retry can adopt/overwrite it.
+    // Every attempt owns an immutable key. A DB error after PUT keeps durable
+    // artifact evidence; stale attempts cannot overwrite/delete a successor.
     if (putAttempted && !uploaded) {
       try {
         await operations.repository.cleanupPartial(

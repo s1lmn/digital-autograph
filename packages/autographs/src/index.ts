@@ -48,6 +48,14 @@ export type ReservedOriginal = {
   status: 'reserved' | 'uploaded';
 };
 
+export function processingArtifactKey(job: {
+  id: string;
+  autographId: string;
+  leaseToken: string;
+}): string {
+  return `autographs/${job.autographId}/cleaned/${job.id}/${job.leaseToken}.png`;
+}
+
 export interface AutographRepository {
   listReadyOwned(userId: string): Promise<ReadyAutographChoice[]>;
   create(userId: string, source: AutographSource): Promise<AutographView>;
@@ -279,14 +287,8 @@ export class AutographService {
           failure = 'UPLOAD_METADATA_MISMATCH';
         }
         if (failure) {
-          try {
-            await this.storage.deleteObject(target.storageKey);
-          } catch {
-            console.warn('Rejected private upload cleanup failed', {
-              autographId,
-              assetId: target.id,
-            });
-          }
+          // A stale HEAD must never authorize a DELETE. Keep the private reserved
+          // generation charged until the fenced expiry-cleanup protocol retires it.
           throw new AutographError(failure);
         }
         return object.sizeBytes;

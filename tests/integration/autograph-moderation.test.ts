@@ -38,7 +38,7 @@ const sessions = new SessionService(
 );
 const signedReads: Array<{ key: string; ttl: number }> = [];
 const storage: PrivateOriginalStorage = {
-  signUpload: async () => {
+  putOriginal: async () => {
     throw new Error('Unexpected upload');
   },
   statObject: async () => null,

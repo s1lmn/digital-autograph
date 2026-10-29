@@ -9,7 +9,11 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { PrivateOriginalStorage } from '@digital-autograph/autographs';
+import {
+  AutographError,
+  maxOriginalBytes,
+  type PrivateOriginalStorage,
+} from '@digital-autograph/autographs';
 import { readPrivateObject } from './private-object-read';
 
 export type PrivateS3Config = {
@@ -46,27 +50,43 @@ export function createPrivateS3Storage(
         abortSignal: signal,
       });
     },
-    async signUpload(input) {
-      const command = new PutObjectCommand({
-        Bucket: config.bucket,
-        Key: input.key,
-        ContentType: input.contentType,
-        IfNoneMatch: '*',
-      });
-      const url = await getSignedUrl(client, command, {
-        expiresIn: input.expiresInSeconds,
-        signableHeaders: new Set(['content-type', 'if-none-match']),
-      });
-      return {
-        url,
-        headers: { 'Content-Type': input.contentType, 'If-None-Match': '*' },
-      };
+    async putOriginal(input) {
+      if (input.bytes.length < 1 || input.bytes.length > maxOriginalBytes)
+        throw new AutographError('UPLOAD_TOO_LARGE');
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Bucket: config.bucket,
+            Key: input.key,
+            Body: input.bytes,
+            ContentType: input.contentType,
+            ContentLength: input.bytes.length,
+            IfNoneMatch: '*',
+          }),
+          {
+            abortSignal: AbortSignal.any([
+              input.signal,
+              AbortSignal.timeout(10_000),
+            ]),
+          },
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          '$metadata' in error &&
+          (error.$metadata as { httpStatusCode?: number }).httpStatusCode ===
+            412
+        )
+          throw new AutographError('UPLOAD_ALREADY_EXISTS');
+        throw error;
+      }
     },
 
     async statObject(key) {
       try {
         const result = await client.send(
           new HeadObjectCommand({ Bucket: config.bucket, Key: key }),
+          { abortSignal: AbortSignal.timeout(10_000) },
         );
         return {
           sizeBytes: result.ContentLength ?? -1,
@@ -87,6 +107,7 @@ export function createPrivateS3Storage(
     async deleteObject(key) {
       await client.send(
         new DeleteObjectCommand({ Bucket: config.bucket, Key: key }),
+        { abortSignal: AbortSignal.timeout(10_000) },
       );
     },
 

@@ -63,7 +63,7 @@ function installApi(failFirstUpload = false) {
       if (url.endsWith('/autographs/autograph-1/upload')) {
         return response({
           method: 'PUT',
-          url: 'https://private-storage.test/signed-upload',
+          url: '/autographs/autograph-1/upload/asset',
           headers: {
             'Content-Type': JSON.parse(String(init?.body)).contentType,
           },
@@ -175,8 +175,8 @@ describe('autograph creation method selection', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
       method: 'PUT',
-      url: 'https://private-storage.test/signed-upload',
-      withCredentials: false,
+      url: 'http://127.0.0.1:4000/autographs/autograph-1/upload/asset',
+      withCredentials: true,
       headers: { 'Content-Type': 'image/jpeg' },
       sentBody: expect.objectContaining({ type: 'image/jpeg', size: 12 }),
     });
@@ -240,7 +240,7 @@ describe('autograph creation method selection', () => {
     });
     expect(requests[0]).toMatchObject({
       method: 'PUT',
-      withCredentials: false,
+      withCredentials: true,
       headers: { 'Content-Type': 'image/png' },
       sentBody: expect.objectContaining({ type: 'image/png', size: 7 }),
     });

@@ -63,6 +63,12 @@ export interface AutographRepository {
       expiresAt: Date;
     },
   ): Promise<ReservedOriginal>;
+  uploadOriginal(
+    userId: string,
+    autographId: string,
+    assetId: string,
+    write: (asset: ReservedOriginal) => Promise<void>,
+  ): Promise<void>;
   completionTarget(
     userId: string,
     autographId: string,
@@ -84,11 +90,12 @@ export interface AutographRepository {
 }
 
 export interface PrivateOriginalStorage {
-  signUpload(input: {
+  putOriginal(input: {
     key: string;
     contentType: OriginalContentType;
-    expiresInSeconds: number;
-  }): Promise<{ url: string; headers: Record<string, string> }>;
+    bytes: Buffer;
+    signal: AbortSignal;
+  }): Promise<void>;
   statObject(
     key: string,
   ): Promise<{ sizeBytes: number; contentType: string | null } | null>;
@@ -112,6 +119,11 @@ export type AutographErrorCode =
   | 'FORBIDDEN'
   | 'INVALID_AUTOGRAPH_STATE'
   | 'INVALID_UPLOAD'
+  | 'UPLOAD_EXPIRED'
+  | 'UPLOAD_ALREADY_EXISTS'
+  | 'UPLOAD_QUOTA_EXCEEDED'
+  | 'UPLOAD_BUSY'
+  | 'UPLOAD_TIMEOUT'
   | 'UPLOAD_NOT_FOUND'
   | 'UPLOAD_TOO_LARGE'
   | 'UPLOAD_METADATA_MISMATCH'
@@ -206,18 +218,45 @@ export class AutographService {
         ),
       },
     );
-    const signed = await this.storage.signUpload({
-      key: reserved.storageKey,
-      contentType: reserved.expectedContentType,
-      expiresInSeconds: this.uploadTtlSeconds,
-    });
     return {
       assetId: reserved.id,
       method: 'PUT' as const,
-      url: signed.url,
-      headers: signed.headers,
+      url: `/autographs/${autographId}/upload/${reserved.id}`,
+      headers: { 'Content-Type': reserved.expectedContentType },
       expiresAt: reserved.uploadExpiresAt,
     };
+  }
+
+  async uploadOriginal(
+    userId: string,
+    autographId: string,
+    assetId: string,
+    contentType: string,
+    read: (expectedBytes: number) => Promise<Buffer>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    await this.repository.uploadOriginal(
+      userId,
+      autographId,
+      assetId,
+      async (asset) => {
+        if (contentType !== asset.expectedContentType)
+          throw new AutographError('UPLOAD_METADATA_MISMATCH');
+        // No storage request exists until the complete HTTP body has been bounded.
+        const bytes = await read(asset.expectedSizeBytes);
+        if (bytes.length > maxOriginalBytes)
+          throw new AutographError('UPLOAD_TOO_LARGE');
+        if (bytes.length !== asset.expectedSizeBytes)
+          throw new AutographError('UPLOAD_METADATA_MISMATCH');
+        signal.throwIfAborted();
+        await this.storage.putOriginal({
+          key: asset.storageKey,
+          contentType: asset.expectedContentType,
+          bytes,
+          signal,
+        });
+      },
+    );
   }
 
   async completeUpload(

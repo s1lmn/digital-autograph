@@ -156,6 +156,49 @@ afterAll(async () => {
 });
 
 describe('durable private storage fencing with real PostgreSQL and MinIO', () => {
+  it('reuses a healthy single connection across bounded same-key contention', async () => {
+    const f = await fixture();
+    const single = createDatabase(url);
+    single.pool.options.max = 1;
+    let connections = 0;
+    single.pool.on('connect', () => {
+      connections++;
+    });
+    const activeRepo = createPgAutographRepository(single.pool);
+    const active = new AutographService(activeRepo, storage, 300);
+    const entered = gate(),
+      resume = gate();
+    const uploading = active.uploadOriginal(
+      f.user,
+      f.draft.id,
+      f.upload.assetId,
+      'image/png',
+      async () => {
+        entered.resolve();
+        await resume.promise;
+        return f.bytes;
+      },
+      new AbortController().signal,
+    );
+    try {
+      await entered.promise;
+      await expect(
+        activeRepo.uploadOriginal(
+          f.user,
+          f.draft.id,
+          f.upload.assetId,
+          async () => {
+            throw new Error('Busy write must not start');
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'UPLOAD_BUSY' });
+      expect(connections).toBe(1);
+    } finally {
+      resume.resolve();
+      await uploading;
+      await single.close();
+    }
+  });
   it.each(['claim', 'put'])(
     'recovers after SIGKILL following %s without losing the original generation',
     async (phase) => {

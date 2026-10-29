@@ -37,6 +37,9 @@ export async function storageTransaction<T>(
     else {
       try {
         await client.query('ROLLBACK');
+        // Expected refusals do not poison a connection. In particular, a
+        // same-key retry must not establish a new connection every25ms.
+        if (error instanceof AutographError) destroy = false;
       } catch {
         // Discard the client; preserve the original bounded failure.
       }

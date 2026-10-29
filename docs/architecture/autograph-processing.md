@@ -29,8 +29,9 @@ and PNG/verified-size checks remain in the existing service.
 The fixed `TimeoutError` is a transient `STORAGE_FAILURE` for worker processing,
 using existing lease/retry rules; public media uses its existing unavailable
 response. This is an engineering resource ceiling, not a measured network SLO.
-It does not bound image decoding, PUT/HEAD/delete or PostgreSQL waits, nor move
-storage I/O outside transactions or complete the broader A03 work. Deployment
+The A03 candidate separately bounds PUT/HEAD/delete/SQL and moves external work
+outside transactions; see [its protocol and rollout gates](autograph-io-next-stage.md).
+Image decoding retains the existing worker/image limits. Deployment
 and target-provider/mobile performance acceptance remain separate. Portable
 tests include real AWS SDK requests to isolated loopback HTTP servers, stalled
 headers/body, single-socket recovery, exact 10 MiB and +1-byte rejection. Clock
@@ -40,14 +41,30 @@ fixtures, not a live cloud-provider test.
 
 EXIF orientation is applied before geometry work; decoded pixels are converted to sRGB. The photo path computes luminance, maps dark ink to alpha and white/light paper to transparent pixels, finds an ink bounding box, adds 16 transparent pixels of padding, and resizes down to at most 2048 pixels per side. The canvas path preserves RGB and alpha, crops by nontransparent pixels, pads, and resizes without the paper threshold. A minimum of eight foreground pixels or 0.001% of input pixels, whichever is larger, rejects blank input. These deterministic MVP thresholds live in `apps/worker/src/image-processing.ts`; faint pencil and uneven paper may need user review in a later editor.
 
-Output is an 8-bit PNG, at most 2048 pixels per side and 10 MiB. Sharp's default output strips source EXIF, GPS, XMP, IPTC, and ICC metadata; no metadata-preservation call is made. The cleaned object stays in the private bucket under `autographs/<autograph-id>/cleaned/<job-id>.png`. The original has a separate immutable key and is never copied into a public bucket.
+Output is an 8-bit PNG, at most 2048 pixels per side and 10 MiB. Sharp's default output strips source EXIF, GPS, XMP, IPTC, and ICC metadata; no metadata-preservation call is made. The cleaned object stays in the private bucket under `autographs/<autograph-id>/cleaned/<job-id>/<lease-token>.png`. The original has a separate immutable key and is never copied into a public bucket.
 
 ## S3 and database consistency
 
-S3 and PostgreSQL cannot commit together. The job's stable ID determines the cleaned key. The worker uploads privately, then transactionally inserts the one cleaned Asset, marks the job succeeded, and sets `awaiting_approval`. A retry after an uncertain database response overwrites/adopts the same private key. A failed PUT is best-effort deleted only while the same unexpired lease is locked; otherwise the object remains private for operational reconciliation. A lost lease cannot create a duplicate cleaned Asset. Succeeded jobs are not claimed again.
+S3 and PostgreSQL cannot commit together. Each processing lease records an immutable
+attempt key before PUT. Success adopts it atomically with the cleaned Asset and job
+outcome. A stale attempt cannot overwrite a successor's object. Partial cleanup
+retires its own artifact before deleting outside SQL. Unadopted keys remain tracked
+for repeated reconciliation, including unknown/late PUT outcomes; adopted keys are
+excluded. Lost COMMIT responses are resolved by durable receipts, never by assuming
+rollback and deleting an output. Succeeded jobs are not claimed again. Migration0022
+also preserves legacy keys; its rollout requires draining all old writers.
 
 Owner preview is `GET /autographs/:id/preview`. The authenticated owner receives a short-lived signed GET URL only when an uploaded cleaned Asset exists and status is `awaiting_approval` or `awaiting_moderation`. Default lifetime is 120 seconds, bounded 60–300; the response uses `Cache-Control: no-store`. The signed URL is a temporary credential and must not be logged. No original read URL or public Wall field exists. The preview response includes the owner-only cleaned Asset ID so approval can reject a derivative that differs from the one reviewed.
 
 ## Invalid and abandoned uploads
 
-For `UPLOAD_TOO_LARGE` or `UPLOAD_METADATA_MISMATCH`, completion rejects the object and attempts deletion while holding the Autograph lock. If S3 deletion fails, the reserved Asset remains so the worker can retry cleanup. The worker selects reservations with `upload_expires_at` older than the configured grace period (default 600 seconds, bounded 60–86400), locks the Autograph, rechecks status, deletes the private object, removes the reserved Asset, and resets the Autograph to `draft`. A successful concurrent completion wins the row lock and prevents deletion. Deletion failure rolls back the cleanup transaction and is retried later.
+For `UPLOAD_TOO_LARGE` or `UPLOAD_METADATA_MISMATCH`, completion rejects without
+an immediate DELETE: stale HEAD metadata cannot authorize deletion. The private
+reserved generation stays charged until fenced expiry cleanup. The worker keeps
+the existing grace (default600s, bounded60–86400), commits permanent retirement
+and an exclusive key lease, deletes externally, then finalizes only the matching
+unexpired token/generation. Failure/restart retains the retired reserved row and
+quota. Successful finalization atomically records the original tombstone, removes
+the reservation and restores draft. Completion that already owns a valid lease
+prevents cleanup; a retired generation cannot complete. See the A03 protocol for
+late writes, processing artifacts, finite deadlines and rollback restrictions.

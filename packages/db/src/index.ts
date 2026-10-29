@@ -25,7 +25,29 @@ export {
 } from './autograph-processing-repository';
 
 export function createDatabase(databaseUrl: string) {
-  const pool = new Pool({ connectionString: databaseUrl });
+  // pg parses DSN parameters after explicit options. Fix runtime startup/timeout
+  // options so a stale URL or PGOPTIONS cannot restore infinite waits.
+  const url = new URL(databaseUrl);
+  for (const field of [
+    'statement_timeout',
+    'lock_timeout',
+    'query_timeout',
+    'idle_in_transaction_session_timeout',
+    'connectionTimeoutMillis',
+    'connect_timeout',
+    'options',
+  ])
+    url.searchParams.delete(field);
+  const pool = new Pool({
+    connectionString: url.href,
+    connectionTimeoutMillis: 3000,
+    statement_timeout: 10000,
+    lock_timeout: 5000,
+    idle_in_transaction_session_timeout: 15000,
+    query_timeout: 12000,
+    options:
+      '-c statement_timeout=10000 -c lock_timeout=5000 -c idle_in_transaction_session_timeout=15000',
+  });
   pool.on('error', (error: unknown) => {
     console.error(
       JSON.stringify({

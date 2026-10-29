@@ -47,9 +47,13 @@ export function createPrivateS3Storage(
 
   return {
     async checkConnection(signal) {
-      await client.send(new HeadBucketCommand({ Bucket: config.bucket }), {
-        abortSignal: signal,
-      });
+      await privateObjectOperation(
+        (boundedSignal) =>
+          client.send(new HeadBucketCommand({ Bucket: config.bucket }), {
+            abortSignal: boundedSignal,
+          }),
+        signal,
+      );
     },
     async putOriginal(input) {
       if (input.bytes.length < 1 || input.bytes.length > maxOriginalBytes)

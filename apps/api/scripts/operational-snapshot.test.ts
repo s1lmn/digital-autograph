@@ -14,6 +14,9 @@ const healthy = {
   processingReady: 0,
   processingOldestReadySeconds: 0,
   processingFailedLast15Minutes: 0,
+  processingInFlight: 0,
+  processingClaimsPastMaxLease: 0,
+  processingOldestClaimSeconds: 0,
   paidNotFulfilled: 0,
   reconciliationOverdue5Minutes: 0,
   awaitingModeration: 0,
@@ -230,6 +233,29 @@ describe('operator snapshot and alert privacy', () => {
     ).toEqual([]);
   });
 
+  it('warns on even one claim past the supported maximum, without calling in-flight work a failure', () => {
+    const processing = {
+      ...healthy,
+      processingInFlight: 2,
+      processingOldestClaimSeconds: 400,
+    };
+    expect(evaluateOperationalAlerts(processing, true)).toEqual([]);
+    expect(
+      evaluateOperationalAlerts(
+        { ...processing, processingClaimsPastMaxLease: 1 },
+        true,
+      ),
+    ).toEqual([
+      { code: 'PROCESSING_CLAIMS_PAST_MAX_LEASE', severity: 'warning' },
+    ]);
+    expect(
+      evaluateOperationalAlerts(
+        { ...processing, processingClaimsPastMaxLease: 1, paidNotFulfilled: 1 },
+        true,
+      ),
+    ).toContainEqual({ code: 'PAID_NOT_FULFILLED', severity: 'critical' });
+  });
+
   it('projects only numeric fields and rejects corrupt/overflow/noninteger aggregates', () => {
     const row = Object.fromEntries(
       Object.entries(healthy).map(([k, v]) => [k, String(v)]),
@@ -254,6 +280,9 @@ describe('operator snapshot and alert privacy', () => {
       decodeOperationalState({ ...row, connectionLimit: '0' }),
     ).toThrow();
     for (const field of [
+      'processingInFlight',
+      'processingClaimsPastMaxLease',
+      'processingOldestClaimSeconds',
       'originalUploadsReserved',
       'originalUploadsExpired',
       'originalUploadsOldestExpiredSeconds',

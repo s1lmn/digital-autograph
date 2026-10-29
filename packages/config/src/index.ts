@@ -1,5 +1,11 @@
 import { z, ZodError } from 'zod';
 
+export const workerLeaseLimits = {
+  minSeconds: 60,
+  maxSeconds: 900,
+  defaultSeconds: 300,
+} as const;
+
 const appEnvironment = z.enum([
   'local',
   'test',
@@ -223,7 +229,12 @@ const workerSchema = databaseSchema
       .min(250)
       .max(10000)
       .default(1000),
-    WORKER_LEASE_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
+    WORKER_LEASE_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(workerLeaseLimits.minSeconds)
+      .max(workerLeaseLimits.maxSeconds)
+      .default(workerLeaseLimits.defaultSeconds),
     UPLOAD_CLEANUP_GRACE_SECONDS: z.coerce
       .number()
       .int()

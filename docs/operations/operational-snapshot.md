@@ -75,6 +75,15 @@ high-frequency probes: aggregate scans can time out as volume grows. A timeout
 is an unavailable observation, never a fabricated zero. No schema/index change
 or business-path dependency is introduced.
 
+These read-only/startup and deadline settings are fixed by the reader, including
+when a reused `OPS_DATABASE_URL` contains conflicting `options`,
+`statement_timeout`, `query_timeout`, `connect_timeout` or
+`connectionTimeoutMillis`. Protected DSN fields are removed before constructing
+the pool; other URL/SSL parameters remain. Custom startup `options` are not
+accepted by this collector. Do not reuse it for session settings or migrations.
+Real PostgreSQL regression checks successful read-only collection with conflicting
+DSN options, server-side statement cancellation and a subsequent successful read.
+
 ## Proposed alert policy, not accepted SLOs
 
 Any unavailable DB/storage observation or paid-not-fulfilled order is critical.

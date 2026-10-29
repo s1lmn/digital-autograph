@@ -30,6 +30,57 @@ afterAll(async () => {
 });
 
 describe('real operator aggregates and private storage probe', () => {
+  it('preserves read-only startup and finite deadlines against DSN overrides, then recovers after cancellation', async () => {
+    const overridden = new URL(url);
+    overridden.searchParams.set('statement_timeout', '0');
+    overridden.searchParams.set('query_timeout', '30000');
+    overridden.searchParams.set('connect_timeout', '0');
+    overridden.searchParams.set('connectionTimeoutMillis', '30000');
+    overridden.searchParams.set(
+      'options',
+      '-c statement_timeout=0 -c default_transaction_read_only=off',
+    );
+    const bounded = createOperationalReader(overridden.href);
+    let renamed = false;
+    let viewCreated = false;
+    try {
+      // A successful observation also proves the reader's transaction_read_only
+      // check passed, despite the conflicting startup option in the URL.
+      expect((await bounded.read()).connectionLimit).toBeGreaterThan(0);
+      // This file runs sequentially in an isolated test database. Only the
+      // temporary view sleeps; application rows and constraints are preserved.
+      await database.pool.query(
+        'ALTER TABLE autograph_processing_jobs RENAME TO ops_snapshot_saved_jobs',
+      );
+      renamed = true;
+      await database.pool.query(
+        `CREATE VIEW autograph_processing_jobs AS SELECT
+          'queued'::autograph_processing_job_status AS status,
+          now() AS available_at, NULL::timestamptz AS claimed_at,
+          NULL::timestamptz AS finished_at FROM pg_sleep(8)`,
+      );
+      viewCreated = true;
+      const started = performance.now();
+      await expect(bounded.read()).rejects.toMatchObject({ code: '57014' });
+      expect(performance.now() - started).toBeLessThan(4500);
+      await database.pool.query('DROP VIEW autograph_processing_jobs');
+      viewCreated = false;
+      await database.pool.query(
+        'ALTER TABLE ops_snapshot_saved_jobs RENAME TO autograph_processing_jobs',
+      );
+      renamed = false;
+      expect((await bounded.read()).connectionLimit).toBeGreaterThan(0);
+    } finally {
+      await bounded.close();
+      if (viewCreated)
+        await database.pool.query('DROP VIEW autograph_processing_jobs');
+      if (renamed)
+        await database.pool.query(
+          'ALTER TABLE ops_snapshot_saved_jobs RENAME TO autograph_processing_jobs',
+        );
+    }
+  });
+
   it('observes committed upload reservations and retired-key backlog without disclosing or changing evidence', async () => {
     await storage.bootstrapLocalBucket();
     const user = randomUUID();

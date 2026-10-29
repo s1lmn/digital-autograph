@@ -74,37 +74,45 @@ describe('structured diagnostics in real worker failure paths', () => {
     expect(JSON.stringify(records)).not.toContain(canary);
   });
 
-  it('records storage failure safely with the same failure/lease arguments', async () => {
-    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const fail = vi.fn(async () => {});
-    const job = { id: jobId, originalKey: canary, autographId: jobId };
-    const repository = {
-      claim: async () => job,
-      fail,
-    } as unknown as WorkerOperations['repository'];
-    const getPrivateObject = vi.fn(async () => {
-      throw failure();
-    });
-    expect(
-      await processOneAutographJob(
-        operations({
-          repository,
-          storage: {
-            getPrivateObject,
-          } as unknown as WorkerOperations['storage'],
-        }),
-      ),
-    ).toBe(true);
-    expect(fail).toHaveBeenCalledWith(job, 'STORAGE_FAILURE', false, 60);
-    expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({
-      event: 'AUTOGRAPH_PROCESSING_FAILED',
-      level: 40,
-      jobId,
-      reason: 'STORAGE_FAILURE',
-      err: { code: 'ECONNRESET' },
-    });
-    expect(JSON.stringify(log.mock.calls)).not.toContain(canary);
-  });
+  it.each(['connection', 'deadline'])(
+    'records %s storage failure safely with the same failure/lease arguments',
+    async (kind) => {
+      const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const fail = vi.fn(async () => {});
+      const job = { id: jobId, originalKey: canary, autographId: jobId };
+      const repository = {
+        claim: async () => job,
+        fail,
+      } as unknown as WorkerOperations['repository'];
+      const getPrivateObject = vi.fn(async () => {
+        throw kind === 'deadline'
+          ? new DOMException('Private object read timed out', 'TimeoutError')
+          : failure();
+      });
+      expect(
+        await processOneAutographJob(
+          operations({
+            repository,
+            storage: {
+              getPrivateObject,
+            } as unknown as WorkerOperations['storage'],
+          }),
+        ),
+      ).toBe(true);
+      expect(fail).toHaveBeenCalledWith(job, 'STORAGE_FAILURE', false, 60);
+      expect(JSON.parse(log.mock.calls[0]![0])).toMatchObject({
+        event: 'AUTOGRAPH_PROCESSING_FAILED',
+        level: 40,
+        jobId,
+        reason: 'STORAGE_FAILURE',
+        err:
+          kind === 'deadline'
+            ? { name: 'TimeoutError' }
+            : { code: 'ECONNRESET' },
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain(canary);
+    },
+  );
 
   it('preserves partial-PUT cleanup and failure recording even when both fail', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

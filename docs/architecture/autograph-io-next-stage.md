@@ -8,10 +8,19 @@ from accepted A02 main. This document is a design checkpoint, not implemented co
 Autograph completion/cleanup and A02 byte ingestion hold a PostgreSQL transaction
 and Autograph row lock across external I/O. A02 bounds incoming byte memory and
 PUT/HEAD/delete time and shared I/O concurrency; it does not remove this coupling.
-Private GET body reads elsewhere still lack an overall deadline. The shared Pool
-has default connection/query/statement timeouts and its idle error listener emits
-raw error.message. Financial repositories have independent lock/idempotency rules
+The shared Pool still uses default connection/query/statement timeouts.
+Accepted PR81 now provides safe allowlisted idle diagnostics; accepted PR82
+provides the private GET/header/body overall deadline and recovery tests. Financial repositories have independent lock/idempotency rules
 which must not be rewritten as a side effect.
+
+## Accepted prerequisites — 29 October 2026
+
+Main `90341e404aa87e10fc18626322bd5a30d7d743f5` includes PR81/82 and has green
+post-merge CI/Secret Scan. A02 merges these changes normally: preserve bounded
+conditional PUT, HEAD/delete deadlines and `readPrivateObject` GET handling.
+A03 must reuse these accepted helpers/tests. They do not provide the remaining
+lease/fencing protocol or finite PostgreSQL acquisition/query deadlines.
+The A02 protected merge and new green main remain the start gate for full A03.
 
 ## Sequence
 
@@ -37,9 +46,9 @@ which must not be rewritten as a side effect.
    to settle and discard unusable connections. Roll out separately with tests for
    cancellations, pool recovery and UNKNOWN financial outcomes. Never blindly
    retry payment/takeover transactions after a client timeout or commit ambiguity.
-6. Replace raw Pool error messages with the observability package's allowlisted
-   error metadata/event code. Add a canary regression proving provider/DSN values
-   cannot reach logs. Do not log keys, signed URLs, raw query text or payloads.
+6. Retain PR81's observability allowlist/event code and its hostile-message
+   canary regressions proving provider/DSN values cannot reach logs. Extend the
+   same safe boundary to any newly introduced deadline diagnostics. Do not log keys, signed URLs, raw query text or payloads.
 
 ## Required verification before acceptance
 

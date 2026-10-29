@@ -1,5 +1,22 @@
 # A01: Deployment runner isolation blocker — 27 October 2026
 
+## Containment and audit update — 29 October 2026
+
+With explicit owner permission, only repository registration21 was detached on
+27 October (idle/no jobs verified; DELETE204). Fresh authenticated GitHub reads
+on29 October return runners=[] and Release disabled_manually. Host service,
+Docker/sudo, credentials, metadata and effective inherited IAM remain unverified;
+no trusted host operator context was identified. No host/cloud changes were made.
+
+Retained Actions metadata:912 runs, no foreign head repository among these records.
+A bounded job audit covered43 runs (all retained Release/manual runs plus ten
+latest PR Policy runs),109 jobs: historical deploy jobs used runner21; selected
+PR Policy jobs used ubuntu-latest. This is metadata triage, not a forensic clearance
+or proof that no untrusted job ever executed. Deleted/expired logs and host state
+remain outside this check. New trusted deployment identity/isolation and an
+independent security sign-off are still required. The historical pre-containment
+snapshot below must not be read as the current registration state.
+
 ## Read-only evidence
 
 Repository `s1lmn/digital-autograph` is public. GitHub REST reports repository

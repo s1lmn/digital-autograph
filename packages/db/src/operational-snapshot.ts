@@ -117,13 +117,24 @@ export function decodeOperationalState(
 
 // Separate one-connection operator pool; no runtime pool/listener changes.
 export function createOperationalReader(databaseUrl: string) {
+  // pg merges DSN parameters after explicit constructor options. A reused URL
+  // must not disable read-only startup or extend the collector's fixed budgets.
+  const url = new URL(databaseUrl);
+  for (const field of [
+    'statement_timeout',
+    'query_timeout',
+    'connectionTimeoutMillis',
+    'connect_timeout',
+    'options',
+  ])
+    url.searchParams.delete(field);
   const pool = new Pool({
-    connectionString: databaseUrl,
+    connectionString: url.href,
     max: 1,
     connectionTimeoutMillis: 3000,
     query_timeout: 5000,
     statement_timeout: 3000,
-    options: '-c default_transaction_read_only=on',
+    options: '-c default_transaction_read_only=on -c statement_timeout=3000',
     application_name: 'autograph-operations',
   });
   // Never let pg's idle error event print raw connection details.

@@ -4,7 +4,7 @@ import { autographApi } from './autograph-api';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('browser autograph API', () => {
-  it('uses session cookies for API calls and omits them from signed object uploads', async () => {
+  it('uses session cookies for API calls and bounded backend uploads', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -15,8 +15,8 @@ describe('browser autograph API', () => {
         ok: true,
         json: async () => ({
           method: 'PUT',
-          url: 'http://127.0.0.1:9000/signed',
-          headers: { 'Content-Type': 'image/jpeg', 'If-None-Match': '*' },
+          url: '/autographs/a/upload/asset',
+          headers: { 'Content-Type': 'image/jpeg' },
           expiresAt: 'later',
         }),
       })
@@ -52,11 +52,13 @@ describe('browser autograph API', () => {
       method: 'POST',
       body: JSON.stringify({ contentType: 'image/jpeg', sizeBytes: 3 }),
     });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe('http://127.0.0.1:9000/signed');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      'http://127.0.0.1:4000/autographs/a/upload/asset',
+    );
     expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
-      credentials: 'omit',
+      credentials: 'include',
       method: 'PUT',
-      headers: { 'Content-Type': 'image/jpeg', 'If-None-Match': '*' },
+      headers: { 'Content-Type': 'image/jpeg' },
     });
     expect(fetchMock.mock.calls[3]?.[0]).toBe(
       'http://127.0.0.1:4000/autographs/autograph-id/approve',

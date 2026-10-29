@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { randomUUID } from 'node:crypto';
+import { request as httpRequest } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 import { SessionService } from '../../packages/auth/src/index';
 import { AutographService } from '../../packages/autographs/src/index';
@@ -10,6 +10,7 @@ import {
 import {
   createDatabase,
   createPgAutographRepository,
+  createPgAutographProcessingRepository,
   createPgSessionRepository,
   createPgWallRepository,
 } from '../../packages/db/src/index';
@@ -144,10 +145,15 @@ async function originalKey(assetId: string): Promise<string> {
 
 describe('Autograph private upload with PostgreSQL and MinIO', () => {
   beforeAll(async () => {
+    await app.listen({ host: '127.0.0.1', port: 0 });
     await database.checkConnection();
     await storage.bootstrapLocalBucket();
   });
-  beforeEach(async () => database.pool.query('TRUNCATE TABLE users CASCADE'));
+  beforeEach(async () =>
+    database.pool.query(
+      'TRUNCATE TABLE users, original_upload_tombstones CASCADE',
+    ),
+  );
   afterAll(async () => {
     await Promise.all(objectKeys.map((key) => storage.deleteObject(key)));
     await app.close();
@@ -191,126 +197,112 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
     expect(result.body).not.toContain(owner.id);
   });
 
-  it('issues a private signed PUT, confirms HEAD, and never marks bytes ready', async () => {
+  async function put(
+    url: string,
+    token: string,
+    bytes: Buffer,
+    contentType = 'image/png',
+  ) {
+    return app.inject({
+      method: 'PUT',
+      url,
+      headers: { ...headers(token), 'content-type': contentType },
+      payload: bytes,
+    });
+  }
+
+  it('bounds the authenticated upload, preserves private reads and conditional writes, and completes idempotently', async () => {
     const { owner, ownerToken, otherToken } = await usersAndTokens();
     const id = (await create(ownerToken)).json().id as string;
     expect((await initiate(id, otherToken)).statusCode).toBe(403);
     expect((await complete(id, otherToken)).statusCode).toBe(403);
-    expect(
-      (
-        await initiate(id, ownerToken, {
-          contentType: 'image/svg+xml',
-          sizeBytes: 4,
-        })
-      ).statusCode,
-    ).toBe(400);
-    expect(
-      (
-        await initiate(id, ownerToken, {
-          contentType: 'image/png',
-          sizeBytes: 10 * 1024 * 1024 + 1,
-        })
-      ).statusCode,
-    ).toBe(400);
-    const started = await initiate(id, ownerToken);
-    expect(started.statusCode).toBe(200);
-    const upload = started.json() as {
-      assetId: string;
-      url: string;
-      headers: Record<string, string>;
-      method: string;
-    };
-    expect(upload.method).toBe('PUT');
-    expect(upload.url).not.toContain(s3SecretKey);
-    expect(upload.url).not.toContain(owner.id);
-    expect(upload.headers).toEqual({
-      'Content-Type': 'image/png',
-      'If-None-Match': '*',
-    });
-    const key = await originalKey(upload.assetId);
-    expect(key).toBe(`autographs/${id}/original/${upload.assetId}`);
-    expect(key).not.toContain(owner.id);
-    expect((await complete(id, ownerToken)).statusCode).toBe(404);
-    const bytes = Buffer.from([137, 80, 78, 71]);
-    const unsignedCondition = await fetch(upload.url, {
+    for (const payload of [
+      { contentType: 'image/svg+xml', sizeBytes: 4 },
+      { contentType: 'image/png', sizeBytes: 10485761 },
+    ])
+      expect((await initiate(id, ownerToken, payload)).statusCode).toBe(400);
+    const upload = (await initiate(id, ownerToken)).json();
+    expect(upload).toMatchObject({
       method: 'PUT',
       headers: { 'Content-Type': 'image/png' },
-      body: bytes,
     });
-    expect(unsignedCondition.status).toBeGreaterThanOrEqual(400);
-    expect(await storage.statObject(key)).toBeNull();
-    const wrongType = await fetch(upload.url, {
-      method: 'PUT',
-      headers: { ...upload.headers, 'Content-Type': 'image/jpeg' },
-      body: bytes,
-    });
-    expect(wrongType.status).toBe(403);
-    const put = await fetch(upload.url, {
-      method: 'PUT',
-      headers: upload.headers,
-      body: bytes,
-    });
-    expect(put.status).toBe(200);
-    const anonymous = await fetch(`${s3Endpoint}/${s3Bucket}/${key}`);
-    expect(anonymous.status).toBeGreaterThanOrEqual(400);
-    expect(await anonymous.text()).not.toContain(bytes.toString());
+    expect(upload.url).toBe(`/autographs/${id}/upload/${upload.assetId}`);
+    expect(JSON.stringify(upload)).not.toContain(s3SecretKey);
+    expect(JSON.stringify(upload)).not.toContain(owner.id);
+    const key = await originalKey(upload.assetId);
+    expect(key).toBe(`autographs/${id}/original/${upload.assetId}`);
+    expect((await put(upload.url, '', Buffer.from('test'))).statusCode).toBe(
+      401,
+    );
+    expect(
+      (await put(upload.url, otherToken, Buffer.from('test'))).statusCode,
+    ).toBe(403);
+    expect((await complete(id, ownerToken)).statusCode).toBe(404);
+    expect(
+      (await put(upload.url, ownerToken, Buffer.from('test'), 'image/jpeg'))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await put(upload.url, ownerToken, Buffer.from('test'))).statusCode,
+    ).toBe(204);
+    expect((await fetch(`${s3Endpoint}/${s3Bucket}/${key}`)).status).toBe(403);
     expect(await storage.statObject(key)).toEqual({
       sizeBytes: 4,
       contentType: 'image/png',
     });
-    const completions = await Promise.all([
+    expect(
+      (await put(upload.url, ownerToken, Buffer.from('new!'))).statusCode,
+    ).toBe(412);
+    expect(await storage.getPrivateObject(key, 4)).toEqual(Buffer.from('test'));
+    const completed = await Promise.all([
       complete(id, ownerToken),
       complete(id, ownerToken),
     ]);
-    expect(completions.map((result) => result.statusCode)).toEqual([200, 200]);
-    const finished = completions[0];
-    if (!finished) throw new Error('Expected completion');
-    expect(finished.json()).toMatchObject({
+    expect(completed.map((r) => r.statusCode)).toEqual([200, 200]);
+    expect(completed[0]!.json()).toMatchObject({
       status: 'uploaded_unverified',
       original: { status: 'uploaded', verifiedSizeBytes: 4 },
     });
-    expect(finished.body).not.toContain(key);
-    expect(finished.body).not.toContain(upload.url);
-    expect((await complete(id, ownerToken)).statusCode).toBe(200);
+    expect(completed[0]!.body).not.toContain(key);
     expect((await initiate(id, ownerToken)).statusCode).toBe(409);
-    const replay = await fetch(upload.url, {
-      method: 'PUT',
-      headers: upload.headers,
-      body: Buffer.from('new!'),
-    });
-    expect(replay.status).toBe(412);
-    expect((await storage.statObject(key))?.sizeBytes).toBe(4);
   });
 
-  it('limits signed URL lifetime and allows browser PUT preflight', async () => {
-    const key = `autographs/${randomUUID()}/original/${randomUUID()}`;
-    objectKeys.push(key);
-    const signed = await storage.signUpload({
-      key,
-      contentType: 'image/png',
-      expiresInSeconds: 1,
-    });
-    expect(new URL(signed.url).searchParams.get('X-Amz-Expires')).toBe('1');
-    const preflight = await fetch(signed.url, {
-      method: 'OPTIONS',
-      headers: {
-        origin: 'http://127.0.0.1:3000',
-        'access-control-request-method': 'PUT',
-        'access-control-request-headers': 'content-type,if-none-match',
-      },
-    });
-    expect(preflight.status).toBe(204);
-    expect(preflight.headers.get('access-control-allow-origin')).toBe(
-      'http://127.0.0.1:3000',
+  it('expires reservations without renewal and rejects foreign or forged asset keys', async () => {
+    const { ownerToken } = await usersAndTokens();
+    const id = (await create(ownerToken)).json().id as string;
+    const first = (await initiate(id, ownerToken)).json();
+    const second = (await initiate(id, ownerToken)).json();
+    expect(second.expiresAt).toBe(first.expiresAt);
+    const key = await originalKey(first.assetId);
+    await database.pool.query(
+      "UPDATE autograph_assets SET created_at = now() - interval '2 hours', upload_expires_at = now() - interval '1 hour' WHERE id = $1",
+      [first.assetId],
     );
-    await delay(2200);
-    const expired = await fetch(signed.url, {
-      method: 'PUT',
-      headers: signed.headers,
-      body: Buffer.from('late'),
-    });
-    expect(expired.status).toBe(403);
+    expect(
+      (await put(first.url, ownerToken, Buffer.from('late'))).statusCode,
+    ).toBe(410);
+    expect((await initiate(id, ownerToken)).statusCode).toBe(410);
     expect(await storage.statObject(key)).toBeNull();
+    expect(
+      (
+        await put(
+          `/autographs/${id}/upload/not-a-uuid`,
+          ownerToken,
+          Buffer.from('late'),
+        )
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      await createPgAutographProcessingRepository(
+        database.pool,
+      ).cleanupAbandoned(60, (key) => storage.deleteObject(key)),
+    ).toBe(true);
+    expect((await initiate(id, ownerToken)).json().assetId).not.toBe(
+      first.assetId,
+    );
+    expect(
+      (await put(first.url, ownerToken, Buffer.from('late'))).statusCode,
+    ).toBe(410);
   });
 
   it('serializes repeated initiation into one original asset', async () => {
@@ -339,26 +331,38 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
     ).toBe(409);
   });
 
-  it('rejects an actually oversized object even when declared size passed validation', async () => {
+  it('rejects oversized real chunked HTTP bodies before S3 persistence, regardless of declared size', async () => {
     const { ownerToken } = await usersAndTokens();
     const id = (await create(ownerToken)).json().id as string;
-    const upload = (await initiate(id, ownerToken)).json() as {
-      assetId: string;
-      url: string;
-      headers: Record<string, string>;
-    };
+    const upload = (await initiate(id, ownerToken)).json();
     const key = await originalKey(upload.assetId);
-    const put = await fetch(upload.url, {
-      method: 'PUT',
-      headers: upload.headers,
-      body: Buffer.alloc(10 * 1024 * 1024 + 1),
+    const address = app.server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Expected TCP listener');
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          host: '127.0.0.1',
+          port: address.port,
+          path: upload.url,
+          method: 'PUT',
+          headers: {
+            ...headers(ownerToken),
+            'Content-Type': 'image/png',
+            'Transfer-Encoding': 'chunked',
+          },
+        },
+        (res) => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode!));
+        },
+      );
+      req.on('error', reject);
+      for (let i = 0; i < 161; i++) req.write(Buffer.alloc(65536));
+      req.end();
     });
-    expect(put.status).toBe(200);
-    const result = await complete(id, ownerToken);
-    expect(result.statusCode).toBe(413);
-    expect(result.json()).toEqual({ error: { code: 'UPLOAD_TOO_LARGE' } });
+    expect(status).toBe(413);
     expect(await storage.statObject(key)).toBeNull();
-    expect((await initiate(id, ownerToken)).statusCode).toBe(200);
     expect(
       (
         await app.inject({
@@ -369,29 +373,510 @@ describe('Autograph private upload with PostgreSQL and MinIO', () => {
     ).toBe('upload_pending');
   });
 
-  it('removes an uploaded object whose HEAD size does not match the reservation', async () => {
+  it('accepts the exact 10 MiB limit, rejects size mismatch, and caps retries durably', async () => {
     const { ownerToken } = await usersAndTokens();
     const id = (await create(ownerToken)).json().id as string;
-    const upload = (await initiate(id, ownerToken)).json() as {
-      assetId: string;
-      url: string;
-      headers: Record<string, string>;
-    };
+    const upload = (
+      await initiate(id, ownerToken, {
+        contentType: 'image/png',
+        sizeBytes: 10485760,
+      })
+    ).json();
     const key = await originalKey(upload.assetId);
     expect(
-      (
-        await fetch(upload.url, {
-          method: 'PUT',
-          headers: upload.headers,
-          body: Buffer.from('five!'),
-        })
-      ).status,
-    ).toBe(200);
-    expect((await complete(id, ownerToken)).json()).toEqual({
-      error: { code: 'UPLOAD_METADATA_MISMATCH' },
+      (await put(upload.url, ownerToken, Buffer.alloc(10485760))).statusCode,
+    ).toBe(204);
+    expect((await storage.statObject(key))?.sizeBytes).toBe(10485760);
+    const otherId = (await create(ownerToken)).json().id as string;
+    const other = (await initiate(otherId, ownerToken)).json();
+    const otherKey = await originalKey(other.assetId);
+    for (let i = 0; i < 5; i++) {
+      expect(
+        (await put(other.url, ownerToken, Buffer.from('five!'))).json(),
+      ).toEqual({ error: { code: 'UPLOAD_METADATA_MISMATCH' } });
+      expect(await storage.statObject(otherKey)).toBeNull();
+    }
+    expect(
+      (await put(other.url, ownerToken, Buffer.from('test'))).statusCode,
+    ).toBe(410);
+    expect((await initiate(otherId, ownerToken)).json().assetId).toBe(
+      other.assetId,
+    );
+  });
+
+  it('charges at most five attempts atomically across concurrent pools, without charging a foreign owner', async () => {
+    const { owner, other } = await usersAndTokens();
+    const draft = await autographs.create(owner.id, 'photo');
+    const upload = await autographs.initiateUpload(owner.id, draft.id, {
+      contentType: 'image/png',
+      sizeBytes: 4,
     });
+    const key = await originalKey(upload.assetId);
+    const otherDatabase = createDatabase(dbUrl!);
+    const repositories = [
+      createPgAutographRepository(database.pool),
+      createPgAutographRepository(otherDatabase.pool),
+    ];
+    let writes = 0;
+    const rejectBody = async () => {
+      writes++;
+      throw new Error('Synthetic rejected upload');
+    };
+    try {
+      await expect(
+        repositories[1]!.uploadOriginal(
+          other.id,
+          draft.id,
+          upload.assetId,
+          rejectBody,
+        ),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const results = await Promise.allSettled(
+        Array.from({ length: 12 }, (_, i) =>
+          repositories[i % 2]!.uploadOriginal(
+            owner.id,
+            draft.id,
+            upload.assetId,
+            rejectBody,
+          ),
+        ),
+      );
+      expect(results.every((result) => result.status === 'rejected')).toBe(
+        true,
+      );
+      expect(
+        results.filter(
+          (result) =>
+            result.status === 'rejected' &&
+            result.reason.code === 'UPLOAD_EXPIRED',
+        ).length,
+      ).toBe(7);
+      const stored = await database.pool.query(
+        'SELECT upload_attempts FROM autograph_assets WHERE id = $1',
+        [upload.assetId],
+      );
+      expect(stored.rows[0].upload_attempts).toBe(5);
+      expect(writes).toBeGreaterThan(0);
+      expect(writes).toBeLessThanOrEqual(5);
+      await expect(
+        repositories[0]!.uploadOriginal(
+          owner.id,
+          draft.id,
+          upload.assetId,
+          rejectBody,
+        ),
+      ).rejects.toMatchObject({ code: 'UPLOAD_EXPIRED' });
+      expect(await storage.statObject(key)).toBeNull();
+    } finally {
+      await otherDatabase.close();
+    }
+  });
+
+  it('enforces concurrent account draft and pending quotas in PostgreSQL across repository instances', async () => {
+    const { owner } = await usersAndTokens();
+    const repo = createPgAutographRepository(database.pool);
+    const otherRepo = createPgAutographRepository(database.pool);
+    const drafts = await Promise.allSettled(
+      Array.from({ length: 30 }, (_, i) =>
+        (i % 2 ? repo : otherRepo).create(owner.id, 'photo'),
+      ),
+    );
+    expect(drafts.filter((r) => r.status === 'fulfilled')).toHaveLength(20);
+    expect(
+      drafts
+        .filter((r) => r.status === 'rejected')
+        .every(
+          (r) =>
+            r.status === 'rejected' &&
+            r.reason.code === 'UPLOAD_QUOTA_EXCEEDED',
+        ),
+    ).toBe(true);
+    const ids = drafts.flatMap((r) =>
+      r.status === 'fulfilled' ? [r.value.id] : [],
+    );
+    const reservations = await Promise.allSettled(
+      ids.map((id) =>
+        autographs.initiateUpload(owner.id, id, {
+          contentType: 'image/png',
+          sizeBytes: 10485760,
+        }),
+      ),
+    );
+    expect(reservations.filter((r) => r.status === 'fulfilled')).toHaveLength(
+      3,
+    );
+    const count = await database.pool.query(
+      "SELECT count(*) AS count, sum(expected_size_bytes) AS bytes FROM autograph_assets WHERE status = 'reserved'",
+    );
+    expect(count.rows[0]).toEqual({ count: '3', bytes: '31457280' });
+    for (const r of reservations)
+      if (r.status === 'fulfilled') await originalKey(r.value.assetId);
+  });
+
+  it('enforces total account and global creation budgets even when existing drafts are old', async () => {
+    const { owner, other } = await usersAndTokens();
+    await database.pool.query(
+      "INSERT INTO autographs(user_id, source, created_at) SELECT $1::uuid, 'photo', now() - interval '2 hours' FROM generate_series(1,100)",
+      [owner.id],
+    );
+    const repo = createPgAutographRepository(database.pool);
+    await expect(repo.create(owner.id, 'photo')).rejects.toMatchObject({
+      code: 'UPLOAD_QUOTA_EXCEEDED',
+    });
+    await database.pool.query(
+      "INSERT INTO autographs(user_id, source) SELECT $1::uuid, 'photo' FROM generate_series(1,1999)",
+      [owner.id],
+    );
+    const results = await Promise.allSettled([
+      repo.create(other.id, 'photo'),
+      repo.create(other.id, 'canvas'),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('keeps expired reservations charged until cleanup succeeds, including the global pending budget', async () => {
+    const { owner, other, ownerToken } = await usersAndTokens();
+    const repo = createPgAutographRepository(database.pool);
+    await database.pool.query(
+      "INSERT INTO autographs(user_id, source, status) SELECT $1::uuid, 'photo', 'upload_pending' FROM generate_series(1,300)",
+      [other.id],
+    );
+    await database.pool.query(
+      `INSERT INTO autograph_assets(autograph_id, role, status, storage_key, expected_content_type, expected_size_bytes, created_at, upload_expires_at)
+      SELECT id, 'original', 'reserved', 'synthetic/' || id, 'image/png', 10485760, now() - interval '2 hours', now() - interval '1 hour'
+      FROM autographs WHERE user_id = $1::uuid`,
+      [other.id],
+    );
+    const draft = await repo.create(owner.id, 'photo');
+    await expect(
+      autographs.initiateUpload(owner.id, draft.id, {
+        contentType: 'image/png',
+        sizeBytes: 4,
+      }),
+    ).rejects.toMatchObject({ code: 'UPLOAD_QUOTA_EXCEEDED' });
+    const cleanup = createPgAutographProcessingRepository(database.pool);
+    await expect(
+      cleanup.cleanupAbandoned(60, async () => {
+        throw new Error('synthetic unavailable');
+      }),
+    ).rejects.toThrow('synthetic unavailable');
+    expect((await initiate(draft.id, ownerToken)).statusCode).toBe(429);
+    expect(
+      await cleanup.cleanupAbandoned(60, (key) => storage.deleteObject(key)),
+    ).toBe(true);
+    expect((await initiate(draft.id, ownerToken)).statusCode).toBe(200);
+    const asset = (await initiate(draft.id, ownerToken)).json();
+    await originalKey(asset.assetId);
+  });
+
+  it('bounds actual concurrent I/O across repository pools and releases permits after completion', async () => {
+    const otherDatabase = createDatabase(dbUrl!);
+    const otherService = new AutographService(
+      createPgAutographRepository(otherDatabase.pool),
+      storage,
+      300,
+    );
+    const fixtures = [];
+    for (let i = 0; i < 5; i++) {
+      const user = userFixture(i + 10);
+      await database.db.insert(users).values(user);
+      const draft = await autographs.create(user.id!, 'photo');
+      const upload = await autographs.initiateUpload(user.id!, draft.id, {
+        contentType: 'image/png',
+        sizeBytes: 4,
+      });
+      await originalKey(upload.assetId);
+      fixtures.push({
+        userId: user.id!,
+        autographId: draft.id,
+        assetId: upload.assetId,
+      });
+    }
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const entered: Promise<void>[] = [];
+    const uploads = fixtures.slice(0, 4).map((f, i) => {
+      let signalEntry!: () => void;
+      entered.push(
+        new Promise((resolve) => {
+          signalEntry = resolve;
+        }),
+      );
+      return (i % 2 ? autographs : otherService).uploadOriginal(
+        f.userId,
+        f.autographId,
+        f.assetId,
+        'image/png',
+        async () => {
+          signalEntry();
+          await gate;
+          return Buffer.from('test');
+        },
+        new AbortController().signal,
+      );
+    });
+    try {
+      await Promise.all(entered);
+      const fifth = fixtures[4]!;
+      await expect(
+        otherService.uploadOriginal(
+          fifth.userId,
+          fifth.autographId,
+          fifth.assetId,
+          'image/png',
+          async () => Buffer.from('test'),
+          new AbortController().signal,
+        ),
+      ).rejects.toMatchObject({ code: 'UPLOAD_BUSY' });
+    } finally {
+      release();
+      await Promise.all(uploads);
+      await otherDatabase.close();
+    }
+    const fifth = fixtures[4]!;
+    await expect(
+      autographs.uploadOriginal(
+        fifth.userId,
+        fifth.autographId,
+        fifth.assetId,
+        'image/png',
+        async () => Buffer.from('test'),
+        new AbortController().signal,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
+  it('recovers a successful S3 write with an unknown response without overwrite or a duplicate job', async () => {
+    const { owner } = await usersAndTokens();
+    const repo = createPgAutographRepository(database.pool);
+    const uncertain = new AutographService(
+      repo,
+      {
+        ...storage,
+        putOriginal: async (input) => {
+          await storage.putOriginal(input);
+          throw new Error('synthetic response lost');
+        },
+      },
+      300,
+    );
+    const draft = await uncertain.create(owner.id, 'photo');
+    const upload = await uncertain.initiateUpload(owner.id, draft.id, {
+      contentType: 'image/png',
+      sizeBytes: 4,
+    });
+    const key = await originalKey(upload.assetId);
+    await expect(
+      uncertain.uploadOriginal(
+        owner.id,
+        draft.id,
+        upload.assetId,
+        'image/png',
+        async () => Buffer.from('test'),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('synthetic response lost');
+    expect((await autographs.get(owner.id, draft.id)).status).toBe(
+      'upload_pending',
+    );
+    await expect(
+      autographs.uploadOriginal(
+        owner.id,
+        draft.id,
+        upload.assetId,
+        'image/png',
+        async () => Buffer.from('new!'),
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ code: 'UPLOAD_ALREADY_EXISTS' });
+    expect(await storage.getPrivateObject(key, 4)).toEqual(Buffer.from('test'));
+    await autographs.completeUpload(owner.id, draft.id);
+    await autographs.completeUpload(owner.id, draft.id);
+    expect(
+      (
+        await database.pool.query(
+          'SELECT count(*) FROM autograph_processing_jobs WHERE autograph_id = $1',
+          [draft.id],
+        )
+      ).rows[0].count,
+    ).toBe('1');
+  });
+
+  it('cancels an incomplete HTTP stream without creating an object and allows a bounded retry', async () => {
+    const { ownerToken } = await usersAndTokens();
+    const id = (await create(ownerToken)).json().id as string;
+    const upload = (await initiate(id, ownerToken)).json();
+    const key = await originalKey(upload.assetId);
+    const address = app.server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('TCP listener required');
+    const req = httpRequest({
+      host: '127.0.0.1',
+      port: address.port,
+      path: upload.url,
+      method: 'PUT',
+      headers: {
+        ...headers(ownerToken),
+        'Content-Type': 'image/png',
+        'Transfer-Encoding': 'chunked',
+      },
+    });
+    req.on('error', () => {});
+    req.write('te');
+    try {
+      let attempts = 0;
+      for (let i = 0; i < 100; i++) {
+        attempts = (
+          await database.pool.query(
+            'SELECT upload_attempts FROM autograph_assets WHERE id = $1',
+            [upload.assetId],
+          )
+        ).rows[0].upload_attempts;
+        if (attempts === 1) break;
+        await delay(10);
+      }
+      expect(attempts).toBe(1);
+    } finally {
+      req.destroy();
+    }
+    // A new request serializes with rollback of the aborted stream transaction.
+    expect(
+      (await put(upload.url, ownerToken, Buffer.from('test'))).statusCode,
+    ).toBe(204);
+    expect(await storage.getPrivateObject(key, 4)).toEqual(Buffer.from('test'));
+  });
+
+  it('tracks retired keys after reservation cleanup and reaps late orphan objects without touching a fresh upload', async () => {
+    const { owner } = await usersAndTokens();
+    const draft = await autographs.create(owner.id, 'photo');
+    const upload = await autographs.initiateUpload(owner.id, draft.id, {
+      contentType: 'image/png',
+      sizeBytes: 4,
+    });
+    const key = await originalKey(upload.assetId);
+    await database.pool.query(
+      "UPDATE autograph_assets SET created_at = now() - interval '2 hours', upload_expires_at = now() - interval '1 hour' WHERE id = $1",
+      [upload.assetId],
+    );
+    const cleanup = createPgAutographProcessingRepository(database.pool);
+    expect(
+      await cleanup.cleanupAbandoned(60, (key) => storage.deleteObject(key)),
+    ).toBe(true);
+    expect(
+      (
+        await database.pool.query(
+          'SELECT storage_key FROM original_upload_tombstones',
+        )
+      ).rows,
+    ).toEqual([{ storage_key: key }]);
+    const fresh = await autographs.initiateUpload(owner.id, draft.id, {
+      contentType: 'image/png',
+      sizeBytes: 4,
+    });
+    const freshKey = await originalKey(fresh.assetId);
+    await autographs.uploadOriginal(
+      owner.id,
+      draft.id,
+      fresh.assetId,
+      'image/png',
+      async () => Buffer.from('new!'),
+      new AbortController().signal,
+    );
+    // Synthetic late provider commit after an earlier request was aborted.
+    await storage.putPrivateObject(key, Buffer.from('late'));
+    await database.pool.query(
+      'UPDATE original_upload_tombstones SET next_check_at = now()',
+    );
+    expect(
+      await cleanup.cleanupAbandoned(60, (key) => storage.deleteObject(key)),
+    ).toBe(true);
     expect(await storage.statObject(key)).toBeNull();
-    expect((await initiate(id, ownerToken)).statusCode).toBe(200);
+    expect(await storage.getPrivateObject(freshKey, 4)).toEqual(
+      Buffer.from('new!'),
+    );
+    expect(
+      (
+        await database.pool.query(
+          'SELECT count(*) FROM original_upload_tombstones',
+        )
+      ).rows[0].count,
+    ).toBe('1');
+  });
+
+  it('rejects concurrent rewrites through real S3 conditional writes and expires private read signatures', async () => {
+    const { ownerToken } = await usersAndTokens();
+    const id = (await create(ownerToken)).json().id as string;
+    const upload = (await initiate(id, ownerToken)).json();
+    const key = await originalKey(upload.assetId);
+    const results = await Promise.all([
+      put(upload.url, ownerToken, Buffer.from('one!')),
+      put(upload.url, ownerToken, Buffer.from('two!')),
+    ]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([204, 412]);
+    const winner = results[0]!.statusCode === 204 ? 'one!' : 'two!';
+    expect(await storage.getPrivateObject(key, 4)).toEqual(Buffer.from(winner));
+    const signedRead = await storage.signPrivateRead(key, 1);
+    expect((await fetch(signedRead)).status).toBe(200);
+    await delay(2200);
+    expect((await fetch(signedRead)).status).toBe(403);
+    expect((await fetch(`${s3Endpoint}/${s3Bucket}/${key}`)).status).toBe(403);
+  });
+
+  it('caps durable retired-key bookkeeping instead of growing an unbounded orphan queue', async () => {
+    const { owner } = await usersAndTokens();
+    await database.pool.query(
+      "INSERT INTO original_upload_tombstones(storage_key) SELECT 'synthetic-retired/' || i FROM generate_series(1,9999) AS i",
+    );
+    const first = await autographs.create(owner.id, 'photo');
+    const second = await autographs.create(owner.id, 'photo');
+    const results = await Promise.allSettled(
+      [first, second].map((draft) =>
+        autographs.initiateUpload(owner.id, draft.id, {
+          contentType: 'image/png',
+          sizeBytes: 4,
+        }),
+      ),
+    );
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    for (const r of results)
+      if (r.status === 'fulfilled') await originalKey(r.value.assetId);
+  });
+
+  it('applies the original-object account cap to legacy drafts without deleting existing originals', async () => {
+    const { owner } = await usersAndTokens();
+    await database.pool.query(
+      "INSERT INTO autographs(user_id, source, created_at) SELECT $1::uuid, 'photo', now() - interval '2 hours' FROM generate_series(1,101)",
+      [owner.id],
+    );
+    await database.pool.query(
+      `INSERT INTO autograph_assets(autograph_id, role, status, storage_key, expected_content_type, expected_size_bytes, verified_size_bytes, uploaded_at, upload_expires_at)
+      SELECT id, 'original', 'uploaded', 'synthetic-legacy/' || id, 'image/png', 4, 4, now(), now() + interval '5 minutes'
+      FROM autographs WHERE user_id = $1::uuid ORDER BY id LIMIT 100`,
+      [owner.id],
+    );
+    const target = (
+      await database.pool.query(
+        'SELECT id FROM autographs WHERE user_id = $1 AND NOT EXISTS (SELECT 1 FROM autograph_assets aa WHERE aa.autograph_id = autographs.id)',
+        [owner.id],
+      )
+    ).rows[0].id;
+    await expect(
+      autographs.initiateUpload(owner.id, target, {
+        contentType: 'image/png',
+        sizeBytes: 4,
+      }),
+    ).rejects.toMatchObject({ code: 'UPLOAD_QUOTA_EXCEEDED' });
+    expect(
+      (
+        await database.pool.query(
+          "SELECT count(*) FROM autograph_assets WHERE status = 'uploaded'",
+        )
+      ).rows[0].count,
+    ).toBe('100');
   });
 
   it('does not expose an original through public Wall or Creator reads', async () => {

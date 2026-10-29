@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "version": "destka-owner-2026-10-27-v1",
+  "ownerDecisionDate": "2026-10-27",
+  "pricing": {
+    "algorithmVersion": "takeover_ladder_v1",
+    "currency": "RUB",
+    "baseAmountMinor": "8900",
+    "minimumAmountMinor": "8900",
+    "maximumAmountMinor": "498900",
+    "stepAmountMinor": "10000",
+    "takeoverStepSize": 1,
+    "dynamicTakeoverLimit": 49,
+    "guaranteedVisibilitySeconds": 900
+  },
+  "creatorShareBps": 5000,
+  "pendingDecisions": {
+    "decayIntervalSeconds": null,
+    "decayAmountMinor": null,
+    "decayFloorAmountMinor": null,
+    "creatorRevenueBasis": null,
+    "refundAdjustment": null,
+    "chargebackAdjustment": null
+  },
+  "productionApplication": "not-authorized"
+}

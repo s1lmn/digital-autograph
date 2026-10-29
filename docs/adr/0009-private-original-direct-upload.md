@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted. Replacement for new original uploads is proposed in [ADR 0010](0010-bounded-original-upload.md).
 
 ## Context
 

@@ -483,6 +483,16 @@ it.each([false, true])(
           disabled && !path.startsWith('/autographs') ? 503 : 409,
         );
       }
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: `/autographs/${id}/upload/${id}`,
+            headers: { ...headers, 'content-type': 'image/png' },
+            payload: Buffer.from('test'),
+          })
+        ).json().error.code,
+      ).toBe('FIRST_USE_REQUIRED');
       for (const fn of [
         calls.claim,
         calls.quote,

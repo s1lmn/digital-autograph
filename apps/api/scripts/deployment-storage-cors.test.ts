@@ -52,9 +52,10 @@ describe('staging CORS validation without platform executable shims', () => {
         ),
         'utf8',
       );
-      expect(storage).toContain(
-        "signableHeaders: new Set(['content-type', 'if-none-match'])",
-      );
+      // Bucket CORS remains compatible with the old client during rollout.
+      // New originals use a bounded backend PUT; never mint a direct capability.
+      expect(storage).not.toContain('async signUpload(');
+      expect(storage).toContain('ContentLength: input.bytes.length');
       expect(storage).toContain("IfNoneMatch: '*'");
     } finally {
       f.cleanup();

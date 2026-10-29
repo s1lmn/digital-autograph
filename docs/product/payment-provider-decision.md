@@ -13,27 +13,25 @@ business effects, earnings, and atomic takeover belong to
 [EGO-100](https://linear.app/egor-loshkarev/issue/EGO-100/0404-realizovat-payment-orchestration-webhooks-i-atomic-takeover).
 This record does not authorize production activation or financial operations.
 
-## Read-only repository audit
+## Updated repository audit — 27.10.2026
 
-Paths below are relative to the repository root. PASS describes an existing
-foundation, not an implemented payment flow. Provider decision and sandbox
-availability below reflect the project owner's confirmation; this update did not
-read Lockbox payloads or perform provider API calls.
+Baseline main: `5fc77c3ccb4464b880fa2b41d3c4f4036535b6c6`.
+Earlier comparison/owner confirmation below remains historical input, not current
+merchant terms. See [merchant checklist](merchant-review-readiness.md),
+[owner decisions](commercial-owner-decisions.md) and
+[launch evidence](../operations/destka-launch-readiness.md).
 
-| Requirement                                   | Result  | Evidence                                                                                                                                                                         | Action                                                                                               |
-| --------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Backend-authoritative amount/currency         | PASS    | `packages/walls/src/pricing.ts`, `packages/db/src/pricing-repository.ts`, `apps/api/src/walls/pricing-http.ts`, `docs/architecture/pricing.md`                                   | Bind payment to the stored quote; never accept browser price as authority                            |
-| Reservation/idempotency/Slot locks            | PASS    | `packages/walls/src/reservation.ts`, `packages/db/src/takeover-reservation-repository.ts`, `apps/api/src/walls/reservation-http.ts`, `docs/architecture/takeover-reservation.md` | Re-read eligibility under locks in EGO-100; expired/cancelled reservations cannot authorize takeover |
-| Provider decision                             | PASS    | Egor confirmed ЮKassa primary / Т-Бизнес fallback; decision below                                                                                                                | Implement only the primary adapter in EGO-100                                                        |
-| Production merchant approval / KYB            | MISSING | Human input explicitly leaves production onboarding/KYB pending                                                                                                                  | Complete merchant review and approval; no live activation                                            |
-| Provider adapter                              | MISSING | `packages/integrations/src/` contains auth/private S3 adapters, no acquiring adapter; `apps/api/src/main.ts` composes them                                                       | Use the [proposed boundary](../architecture/payment-provider-boundary.md) when implementing EGO-100  |
-| Order/Payment/Refund/ledger                   | MISSING | `packages/db/src/schema.ts` has quote/reservation but no payment/Order/refund/ledger tables                                                                                      | EGO-100 scope; do not add unused tables here                                                         |
-| Safe config/secret mechanism                  | PARTIAL | `packages/config/src/index.ts`, `.env.example`, `deploy/render-lockbox-env.mjs`, `deploy/deploy-on-vm.sh`, `docs/operations/deployment.md`                                       | Document payment config now; add validated consumed config only with adapter                         |
-| Public merchant information/approved consents | MISSING | `apps/web/app/page.tsx` is bootstrap; no seller, terms, offer, privacy, refund or contact routes; consent schema is not approved legal content                                   | Close the merchant gaps below after legal review                                                     |
-| Acquiring economics inputs                    | MISSING | No approved acquiring tariff, mix, average ticket or settlement terms                                                                                                            | Use the [configurable planning model](payment-economics.md), obtain written current terms            |
-| Test foundation/private storage               | PASS    | `vitest.config.ts`, `tests/integration/`, `tests/e2e/`, `docs/operations/e2e.md`, private S3 adapter                                                                             | Add provider contract tests in EGO-100; preserve original upload privacy                             |
-| ЮKassa sandbox credentials                    | PASS    | Egor confirmed test shop created and shopId/secretKey stored externally in Yandex Lockbox; values unavailable to repository                                                      | Development uses operator-managed secret reference; validate provider protocol in EGO-100            |
-| Live merchant credentials / activation        | MISSING | No production credentials or activation confirmed                                                                                                                                | Separate approval and production secret handling; no production changes here                         |
+| Requirement                    | Actual implementation / remaining gate                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Backend price/reservation      | Implemented immutable quote/config and server locking; owner approved89/+100/4989 RUB and900s; decay/publication/application still pending             |
+| Primary adapter                | `packages/integrations/src/yookassa.ts`, with strict test flag/identity/amount/currency verification; real provider contract evidence remains separate |
+| Order/payment/webhook/takeover | Implemented in payment repository/domain and integration tests (EGO-100); not permission for live payment                                              |
+| Accounting                     | Creator earning rows exist; full ledger, refunds/fiscal receipts/payout are separate EGO-101/102/103/104 gates                                         |
+| Config/secrets                 | Validated server config and Lockbox mechanism implemented; no payloads inspected, no production credentials/activation confirmed                       |
+| Public/legal                   | Real homepage/core UI and legal current/version/archive routes exist; 14 legal entries remain unready, approved contacts/service/tariff still required |
+| Merchant/site                  | destka.ru currently serves a parking page; no merchant/KYB approval verified                                                                           |
+| Sandbox                        | Owner confirmed shop/externally stored test credentials 02.10; this audit made no provider API call                                                    |
+| Economics                      | Acquiring calculator exists; written merchant fees/mix/settlement and full commercial economics still needed                                           |
 
 ## Comparison template
 
@@ -174,12 +172,10 @@ secret reference/access handoff and method settings; settlement/refund/support
 owners. **No secret values needed in a reply.** Primary/fallback choice and
 sandbox creation/credential storage are already confirmed.
 
-After this preparation PR merges, the technical foundation is ready to start
-EGO-100 with the selected ЮKassa sandbox. The developer retrieves credentials via
-an authorized secret-manager handoff during EGO-100; real provider contract tests
-and receipt/config decisions are part of that implementation. Production legal,
-commercial, fiscal and KYB completion remain independent gates. EGO-100 is not
-implemented or started by this update; EGO-99 remains incomplete.
+EGO-100 orchestration is now implemented. An authorized secret-reference handoff
+and real sandbox verification remain separate from local provider fixtures.
+Production legal, commercial, fiscal and KYB completion remain independent gates;
+EGO-99 remains incomplete.
 
 ## Official sources
 

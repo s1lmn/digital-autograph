@@ -1,5 +1,13 @@
 # Pricing Engine and Takeover Quote (EGO-97)
 
+## Owner product decision — 27.10.2026
+
+[Pricing Spec v1](../product/pricing-spec-v1.md) records the approved 89 RUB
+base/minimum,100 RUB per successful Wall takeover,4989 RUB cap and 900-second
+protection. The versioned partial policy is preparation only: decay remains
+unapproved, so it is not seeded/applied as a complete runtime config. Creator50%
+rate does not approve the payout base. No production/publication authorization.
+
 ## Boundary
 
 PostgreSQL and the backend determine the takeover price. A Quote is an immutable offer snapshot, not a Reservation, Order, payment, or transfer of ownership. Quote creation never mutates Wall, Slot, Placement, or Autograph. Multiple users may quote the same active Placement. The EGO-98 Reservation flow consumes an existing unexpired Quote and validates its target Placement without recomputing the Quote's amount.

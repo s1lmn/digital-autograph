@@ -1,11 +1,10 @@
-# EGO-75 — legal Web routes (stacked Draft)
+# EGO-75 — implemented legal Web routes; publication pending
 
-This change depends on PR #46 at
-`d09ba6ae5e9c629fa3ce3a27aed3f60efb4d1fd1`. Do not merge it before the
-parent is integrated, the branch is synced against main and independent review
-and full exact-head checks are repeated. All 14 legal entries and the separate
-security entry remain `ready: false`. No document wording, hash, source, effective
-date or publication approval is changed. EGO-75 and full EGO-110 are not Done.
+Routes, archives and publication boundaries were integrated through PR65.
+The former stacked-draft prerequisite is historical. All 14 legal entries and
+the separate security entry remain `ready: false`; implementation is not legal
+approval. EGO-75 and full EGO-110 are not Done. See the current
+[merchant readiness checklist](../product/merchant-review-readiness.md).
 
 ## Proposed URL contract — owner confirmation still required
 

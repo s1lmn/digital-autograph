@@ -9,6 +9,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { PaidCheckout } from './paid-checkout';
+import { LocaleProvider } from './locale-provider';
 const id = '11111111-1111-4111-8111-111111111111';
 const types = ['public_offer', 'community_guidelines', 'refund_policy'];
 const summary = {
@@ -40,10 +41,14 @@ function fixture({
   failure = '',
   postUrl = 'https://yoomoney.ru/payments/external/confirmation?test=1',
   changed = false,
+  summaryPatch = {} as Partial<typeof summary>,
+  locale = undefined as 'ru' | 'en' | undefined,
 } = {}) {
   const fetch = vi.fn(async (url: string, options?: RequestInit) => {
     if (url.includes('/payments/checkout'))
-      return failure ? json({ error: { code: failure } }, 409) : json(summary);
+      return failure
+        ? json({ error: { code: failure } }, 409)
+        : json({ ...summary, ...summaryPatch });
     if (url.includes('/legal/documents/')) {
       const type = url.split('/').at(-2)!;
       return new Response(`fixture ${type}`, {
@@ -67,12 +72,19 @@ function fixture({
   });
   vi.stubGlobal('fetch', fetch);
   vi.stubGlobal('crypto', webcrypto);
-  render(
+  const checkout = (
     <PaidCheckout
       apiOrigin="http://api.test"
       reservationId={id}
       autographId={id}
-    />,
+    />
+  );
+  render(
+    locale ? (
+      <LocaleProvider initialLocale={locale}>{checkout}</LocaleProvider>
+    ) : (
+      checkout
+    ),
   );
   return fetch;
 }
@@ -252,3 +264,29 @@ it('document body/hash mismatch prevents submission even if metadata says publis
   );
   expect(screen.queryByRole('checkbox')).toBeNull();
 });
+
+it.each(['ru', 'en'] as const)(
+  'renders approved server prices and 900-second protection in %s',
+  async (locale) => {
+    for (const amountMinor of ['8900', '18900', '498900']) {
+      fixture({
+        locale,
+        summaryPatch: { amountMinor, guaranteedVisibilitySeconds: 900 },
+      });
+      await screen.findByRole('checkbox');
+      const expected = new Intl.NumberFormat(
+        locale === 'ru' ? 'ru-RU' : 'en-US',
+        { style: 'currency', currency: 'RUB' },
+      ).format(Number(amountMinor) / 100);
+      expect(
+        screen
+          .getAllByRole('definition')
+          .some((node) => node.textContent === expected),
+      ).toBe(true);
+      expect(
+        screen.getByText(locale === 'ru' ? '900 секунд' : '900 seconds'),
+      ).toBeTruthy();
+      cleanup();
+    }
+  },
+);

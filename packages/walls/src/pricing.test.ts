@@ -73,6 +73,33 @@ function service(state: QuoteContext): TakeoverQuoteService {
 const input = { userId: 'buyer', wallId: 'wall', slotId: 'slot' };
 
 describe('Takeover Quote boundary rules', () => {
+  it('enforces the approved 900-second boundary to one millisecond', async () => {
+    const state = {
+      ...context,
+      pricing: { ...pricing, guaranteedVisibilitySeconds: 900 },
+      targetPlacement: {
+        id: 'target',
+        userId: 'seller',
+        startedAt: new Date(now.getTime() - 900000),
+      },
+    };
+    await expect(service(state).createQuote(input)).resolves.toMatchObject({
+      amountMinor: '50000',
+    });
+    await expect(
+      service({
+        ...state,
+        targetPlacement: {
+          ...state.targetPlacement,
+          startedAt: new Date(now.getTime() - 899999),
+        },
+      }).createQuote(input),
+    ).rejects.toMatchObject({
+      code: 'TAKEOVER_COOLDOWN_ACTIVE',
+      availableAt: new Date(now.getTime() + 1),
+    });
+  });
+
   it('includes exact startAt and exact cooldown end', async () => {
     const response = await service({
       ...context,

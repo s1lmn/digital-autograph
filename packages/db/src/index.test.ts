@@ -12,10 +12,15 @@ describe('PostgreSQL pool', () => {
       expect(database.pool.emit('error', new Error('connection lost'))).toBe(
         true,
       );
-      expect(log).toHaveBeenCalledWith(
-        'PostgreSQL idle connection error:',
-        'connection lost',
-      );
+      expect(log).toHaveBeenCalledTimes(1);
+      expect(log.mock.calls[0]).toHaveLength(1);
+      const serialized = log.mock.calls[0]![0] as string;
+      expect(JSON.parse(serialized)).toMatchObject({
+        event: 'POSTGRES_IDLE_CONNECTION_FAILED',
+        err: { name: 'Error' },
+        msg: 'PostgreSQL idle connection failed',
+      });
+      expect(serialized).not.toContain('connection lost');
     } finally {
       await database.close();
       log.mockRestore();

@@ -38,6 +38,17 @@ Reproduce a failure with synthetic local configuration when more detail is
 needed; do not temporarily enable raw error logging on real traffic.
 Adding a diagnostic field requires a privacy review and regression coverage.
 
+The shared PostgreSQL Pool emits one JSON record for an idle connection error:
+`POSTGRES_IDLE_CONNECTION_FAILED`, level 50, timestamp, fixed message and the same
+allowlisted `err` metadata. Neither the error message/stack/cause nor driver
+connection parameters or SQL detail are read or logged. The listener remains
+installed for API, worker and command-line callers; pg still removes the failed
+idle client and can acquire a replacement. This changes diagnostics only, not
+Pool timeouts, transaction/retry policy or financial outcomes. Unit canaries
+exercise the actual Pool listener without connecting, and a PostgreSQL integration
+test terminates only its own isolated idle backend and checks safe logging and
+successful replacement.
+
 `pnpm test:build-smoke` checks normal built API startup/login and both built
 runtimes' safe failure path. A temporary preload throws an exception containing
 synthetic secret canaries before any DB/storage/provider call. Both children

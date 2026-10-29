@@ -1,5 +1,8 @@
 # Operations
 
+[Destka.ru launch readiness](destka-launch-readiness.md) distinguishes engineering,
+website, merchant and paid-pilot gates, with owners and evidence requirements.
+
 [Local image-processing benchmark](image-processing-benchmark.md) documents the
 bounded synthetic processor workload, JSON measurements and capacity-test limits.
 

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { approvedDestkaPolicy } from '../../apps/api/scripts/destka-pricing-plan';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildAcceptedApi as buildApi,
@@ -95,6 +96,7 @@ async function createWall(
     startAt?: Date | null;
     endAt?: Date | null;
     pricingConfigId?: string | null;
+    slotCount?: number;
   } = {},
 ) {
   const creatorId = randomUUID();
@@ -106,7 +108,7 @@ async function createWall(
   );
   await database.pool.query(
     `INSERT INTO walls (id, creator_id, status, start_at, end_at, slot_count, pricing_config_id)
-     VALUES ($1::uuid, $2::uuid, $3::wall_status, $4::timestamptz, $5::timestamptz, 1, $6::uuid)`,
+     VALUES ($1::uuid, $2::uuid, $3::wall_status, $4::timestamptz, $5::timestamptz, $7::integer, $6::uuid)`,
     [
       wallId,
       creatorId,
@@ -114,13 +116,18 @@ async function createWall(
       options.startAt ?? null,
       options.endAt ?? null,
       options.pricingConfigId ?? null,
+      options.slotCount ?? 1,
     ],
   );
-  await database.pool.query(
-    'INSERT INTO slots (id, wall_id, position) VALUES ($1::uuid, $2::uuid, 0)',
-    [slotId, wallId],
-  );
-  return { creatorId, wallId, slotId };
+  const slotIds = [slotId];
+  for (let position = 1; position < (options.slotCount ?? 1); position++)
+    slotIds.push(randomUUID());
+  for (const [position, id] of slotIds.entries())
+    await database.pool.query(
+      'INSERT INTO slots (id, wall_id, position) VALUES ($1::uuid, $2::uuid, $3)',
+      [id, wallId, position],
+    );
+  return { creatorId, wallId, slotId, slotIds };
 }
 
 async function place(
@@ -177,6 +184,96 @@ describe('Pricing config and persisted takeover quotes', () => {
     await app.close();
     await database.close();
   });
+
+  // Explicit no-decay TEST fixture; pending decay is not approved by this test.
+  const approvedNoDecayTestBody = {
+    ...approvedDestkaPolicy.pricing,
+    decayIntervalSeconds: 1,
+    decayAmountMinor: '0',
+    decayFloorAmountMinor: '8900',
+  };
+
+  it.each([
+    [0, '8900'],
+    [1, '18900'],
+    [2, '28900'],
+    [48, '488900'],
+    [49, '498900'],
+    [50, '498900'],
+  ])(
+    'serves approved ladder after %i successful takeovers elsewhere on the Wall at %s kopecks',
+    async (count, expected) => {
+      const admin = await person('admin');
+      const seller = await person();
+      const buyer = await person();
+      const config = await createConfig(admin.token, approvedNoDecayTestBody);
+      expect(config.statusCode).toBe(201);
+      const wall = await createWall(seller.id, {
+        pricingConfigId: config.json().id,
+        slotCount: 5,
+      });
+      await place(wall.slotId, seller.id, 'free_claim', 1000);
+      await place(wall.slotIds[2]!, seller.id, 'admin', 1000, false);
+      for (let i = 0; i < count; i++)
+        await place(wall.slotIds[1]!, seller.id, 'takeover', 1000 + i, false);
+      const quotes = await Promise.all([
+        quote(wall.wallId, wall.slotId, buyer.token),
+        quote(wall.wallId, wall.slotId, buyer.token),
+      ]);
+      for (const response of quotes) {
+        expect(response.statusCode).toBe(201);
+        expect(response.json()).toMatchObject({
+          amountMinor: expected,
+          currency: 'RUB',
+          explanation: { wallTakeoverCount: String(count) },
+        });
+      }
+      expect(
+        (
+          await quote(wall.wallId, wall.slotId, buyer.token, {
+            amountMinor: '1',
+          })
+        ).statusCode,
+      ).toBe(400);
+      expect(
+        (await quote(wall.wallId, wall.slotId, buyer.token)).json().amountMinor,
+      ).toBe(expected);
+      expect(
+        (
+          await database.pool.query(
+            "SELECT count(*)::int AS n FROM placements p JOIN slots s ON s.id=p.slot_id WHERE s.wall_id=$1 AND p.source='takeover'",
+            [wall.wallId],
+          )
+        ).rows[0].n,
+      ).toBe(count);
+    },
+  );
+  it.each(['free_claim', 'takeover', 'admin'] as const)(
+    'enforces 900-second protection for %s and admits a quote after its boundary',
+    async (source) => {
+      const admin = await person('admin');
+      const seller = await person();
+      const buyer = await person();
+      const config = await createConfig(admin.token, approvedNoDecayTestBody);
+      const wall = await createWall(seller.id, {
+        pricingConfigId: config.json().id,
+      });
+      await place(wall.slotId, seller.id, source, 870);
+      expect(
+        (await quote(wall.wallId, wall.slotId, buyer.token)).json().error.code,
+      ).toBe('TAKEOVER_COOLDOWN_ACTIVE');
+      expect(await quoteCount(wall.wallId)).toBe(0);
+      // Placement identity/timestamps are immutable: create an independent
+      // boundary fixture rather than weakening the DB trigger for a test.
+      const eligible = await createWall(seller.id, {
+        pricingConfigId: config.json().id,
+      });
+      await place(eligible.slotId, seller.id, source, 900);
+      expect(
+        (await quote(eligible.wallId, eligible.slotId, buyer.token)).statusCode,
+      ).toBe(201);
+    },
+  );
 
   it('allows only admin creation and keeps config versions append-only', async () => {
     const admin = await person('admin');

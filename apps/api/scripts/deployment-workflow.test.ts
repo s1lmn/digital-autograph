@@ -205,7 +205,7 @@ function stepScript(name: string) {
 }
 
 describe('deployment configuration without POSIX execution', () => {
-  it('checks host capacity before installed configuration writes and ships the helper used by deploy', () => {
+  it('retains legacy workflow authorization while the retired entrypoint refuses execution', () => {
     const step = stepScript('Deploy or roll back this VM');
     expect(step).toContain(
       'sudo -n /usr/local/sbin/digital-autograph-preflight "$RELEASE_OPERATION"',
@@ -215,9 +215,8 @@ describe('deployment configuration without POSIX execution', () => {
       'cmp --silent deploy/host-capacity.mjs /usr/local/lib/digital-autograph/host-capacity.mjs',
     );
     expect(step).toContain('elif [[ "$RELEASE_OPERATION" == rollback ]]');
-    expect(deploy).toContain('operation=deploy');
-    expect(deploy).toContain('operation=rollback');
-    expect(deploy).toContain('preflight "$operation"');
+    expect(deploy).toContain('legacy deploy/rollback disabled');
+    expect(deploy).not.toContain('yc lockbox');
     expect(
       step.indexOf('sudo -n /usr/local/sbin/digital-autograph-preflight'),
     ).toBeGreaterThan(-1);
@@ -227,9 +226,7 @@ describe('deployment configuration without POSIX execution', () => {
     expect(step).toContain(
       'deploy/render-lockbox-env.mjs deploy/host-capacity.mjs',
     );
-    expect(deploy.indexOf('host-capacity.mjs" preflight')).toBeLessThan(
-      deploy.indexOf('install -d -m 700'),
-    );
+    expect(deploy).not.toContain('install -d');
   });
   it('uses the selected SHA for deploy checkout, with main configuration only for rollback', () => {
     expect(workflow).toContain(
@@ -264,7 +261,7 @@ describe('deployment configuration without POSIX execution', () => {
 
   it('isolates PostgreSQL in a persistent staging network without published ports or volume deletion', () => {
     const postgres = staging.split('\n  api:')[0];
-    expect(postgres).toContain('image: postgres:17-alpine');
+    expect(postgres).toContain('POSTGRES_IMAGE:?');
     expect(postgres).toContain(
       'staging_postgres_data:/var/lib/postgresql/data',
     );
@@ -279,15 +276,12 @@ describe('deployment configuration without POSIX execution', () => {
   });
 });
 
-it('keeps cached rollback infrastructure refs aligned with Compose and migration profile-only', () => {
-  const helper = readFileSync(
-    new URL('../../../deploy/host-capacity.mjs', import.meta.url),
-    'utf8',
-  );
-  expect(production).toContain('image: caddy:2.10.2-alpine');
-  expect(helper).toContain("refs.push('caddy:2.10.2-alpine')");
-  expect(staging).toContain('image: postgres:17-alpine');
-  expect(helper).toContain("refs.push('postgres:17-alpine')");
+it('requires immutable infrastructure IDs and keeps migrations profile-only', () => {
+  expect(production).toContain('CADDY_IMAGE:?');
+  expect(staging).toContain('POSTGRES_IMAGE:?');
+  expect(production).toContain('pull_policy: never');
+  expect(staging).toContain('pull_policy: never');
+  expect(production).not.toContain('IMAGE_TAG');
   expect(production).toContain('profiles: [migration]');
 });
 

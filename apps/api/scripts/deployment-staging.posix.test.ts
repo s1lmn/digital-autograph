@@ -1,350 +1,499 @@
-import { spawnSync } from 'node:child_process';
+import { prepareEnvironments } from '../../../deploy/manual-env.mjs';
 import {
-  chmodSync,
+  realpathSync,
+  statSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  symlinkSync,
   writeFileSync,
+  rmSync,
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
-
-const deploy = readFileSync(
-  new URL('../../../deploy/deploy-on-vm.sh', import.meta.url),
-  'utf8',
-);
-const selected = 'a'.repeat(40);
-const current = 'b'.repeat(40);
-
-function release(
-  environment: string,
-  operation = selected,
-  failure = '',
-  temporaryDirectory = os.tmpdir(),
-) {
-  // Node resolves an aliased cwd/entrypoint; the fixture must use the same path
-  // so the capacity CLI's direct-execution guard actually runs.
+import { expect, it } from 'vitest';
+import {
+  deploy,
+  fingerprint,
+  sha256,
+  fileHash,
+} from '../../../deploy/manual-deploy.mjs';
+const toolFiles = [
+  'manual-deploy.mjs',
+  'manual-env.mjs',
+  'deploy-on-vm.sh',
+  'Caddyfile',
+  'Caddyfile.destka',
+  'postgres-bootstrap.sql',
+  'postgres-preflight.sql',
+  'postgres-normalize.sql',
+  'postgres-runtime.sql',
+  'database-state.sql',
+  'compose.yaml',
+  'compose.staging.yaml',
+  'compose.manual.yaml',
+];
+const id = 'sha256:' + 'a'.repeat(64);
+function fixture(failure = '') {
   const dir = realpathSync(
-    mkdtempSync(path.join(temporaryDirectory, 'da-staging-release-')),
+    mkdtempSync(path.join(os.tmpdir(), 'destka-manual-')),
   );
-  try {
-    const root = path.join(dir, 'release');
-    const state = path.join(dir, 'state');
-    const config = path.join(dir, 'deploy.conf');
-    const log = path.join(dir, 'commands');
-    for (const item of [root, state, path.join(state, 'staging-backups')])
-      mkdirSync(item, { recursive: true });
-    writeFileSync(
-      config,
-      `APP_ENV=${environment}\nYC_REGISTRY_ID=registry\nYC_LOCKBOX_API_SECRET_ID=api\nYC_LOCKBOX_WORKER_SECRET_ID=worker\nWEB_DOMAIN=web.invalid\nAPI_DOMAIN=api.invalid\n`,
-    );
-    writeFileSync(path.join(state, 'current-image-tag'), current);
-    writeFileSync(path.join(state, 'previous-image-tag'), selected);
-    for (let i = 1; i <= 3; i++)
-      writeFileSync(
-        path.join(state, `staging-backups/2020010${i}.dump`),
-        'old backup',
-      );
-    const tools: Record<string, string> = {
-      yc: '#!/bin/bash\necho yc >>"$COMMAND_LOG"\necho synthetic-test-payload\n',
-      node: `#!/bin/bash
-if [[ "$1" == *host-capacity.mjs ]]; then
-  printf 'capacity %s\\n' "$2" >>"$COMMAND_LOG"
-  if [[ "$2" == preflight ]]; then exec '${process.execPath}' "$@"; fi
-  printf 'retained current=%s previous=%s\\n' "$(cat "$3/current-image-tag")" "$(cat "$3/previous-image-tag")" >>"$COMMAND_LOG"
-  if [[ "$FAILURE" == retention ]]; then exit 1; fi
-else cat >/dev/null; fi
-`,
-      df: `#!/bin/bash
-if [[ "$FAILURE" == df-command ]]; then exit 1; fi
-if [[ "$FAILURE" == df-parse ]]; then echo unknown; exit 0; fi
-if [[ "$1" == --output=iavail ]]; then
-  echo IFree; if [[ "$FAILURE" == inodes ]]; then echo 0; else echo 1000000; fi
-else
-  echo Avail; if [[ "$FAILURE" == bytes ]]; then echo 1024; elif [[ "$FAILURE" == five-gib || "$FAILURE" == missing-image ]]; then echo 5368709120; else echo 20000000000; fi
-fi
-`,
-      curl: '#!/bin/bash\nexit 0\n',
-      docker: `#!/bin/bash
-printf '%s\\n' "$*" >>"$COMMAND_LOG"
-if [[ "$1" == login ]]; then cat >/dev/null
-elif [[ "$1" == info ]]; then echo /
-elif [[ "$1" == image && "$2" == inspect ]]; then
-  if [[ "$FAILURE" == missing-image ]]; then echo '[]'; else
-    '${process.execPath}' -e 'console.log(JSON.stringify(process.argv.slice(1).map((ref,i)=>({Id:"sha256:"+String(i+1).padStart(64,"0"),RepoTags:[ref],Size:1000000000}))))' "\${@:4}"
-  fi
-elif [[ "$1" == compose ]]; then
-  case "$*" in
-    *"--profile migration pull"*) if [[ "$FAILURE" == pull ]]; then exit 1; fi ;;
-    *"exec -T postgres"*) if [[ "$FAILURE" == backup ]]; then exit 1; fi; echo dump ;;
-    *"run --rm migration"*) if [[ "$FAILURE" == migration ]]; then exit 1; fi ;;
-    *"up -d --remove-orphans"*) if [[ "$FAILURE" == startup && ! -f "$COMMAND_LOG.failed" ]]; then touch "$COMMAND_LOG.failed"; exit 1; fi ;;
-    *"ps -q"*) echo "\${!#}" ;;
-  esac
-elif [[ "$1" == inspect ]]; then
-  if [[ "$3" == '{{.State.Status}}' ]]; then echo running;
-  else echo "cr.yandex/registry/digital-autograph/\${!#}:$IMAGE_TAG"; fi
-fi
-`,
-    };
-    if (
-      operation === 'rollback' &&
-      !['bytes', 'inodes', 'df-command', 'df-parse', 'missing-image'].includes(
-        failure,
-      )
-    ) {
-      mkdirSync(path.join(dir, 'env'));
-      for (const app of ['api', 'worker', 'postgres'])
-        writeFileSync(path.join(dir, `env/${app}.env`), 'synthetic=local');
-    }
+  const root = path.join(dir, 'root'),
+    state = path.join(dir, 'state');
+  mkdirSync(root);
+  mkdirSync(state);
+  for (const f of toolFiles)
     copyFileSync(
-      new URL('../../../deploy/host-capacity.mjs', import.meta.url),
-      path.join(root, 'host-capacity.mjs'),
+      new URL('../../../deploy/' + f, import.meta.url),
+      path.join(root, f),
     );
-    for (const [name, content] of Object.entries(tools)) {
-      writeFileSync(path.join(dir, name), content);
-      chmodSync(path.join(dir, name), 0o755);
-    }
-    const script = deploy
-      .replace('root=/opt/digital-autograph', `root=${root}`)
-      .replace('config=/etc/digital-autograph/deploy.conf', `config=${config}`)
-      .replace('state=/var/lib/digital-autograph', `state=${state}`)
-      .replaceAll('/etc/digital-autograph/env', path.join(dir, 'env'));
-    const result = spawnSync('bash', ['-c', script, 'release', operation], {
-      env: {
-        ...process.env,
-        PATH: `${dir}:${process.env.PATH}`,
-        COMMAND_LOG: log,
-        FAILURE: failure,
-      },
-      encoding: 'utf8',
+  const m = {
+    schemaVersion: 1,
+    caddyConfig: 'Caddyfile',
+    sourceSha: 'a'.repeat(40),
+    instanceId: 'a'.repeat(20),
+    runtimeServiceAccountId: 'b'.repeat(20),
+    runtimeSecretIds: ['c'.repeat(20), 'd'.repeat(20)],
+    operation: 'synthetic-operation',
+    database: 'synthetic_db',
+    project: 'digital-autograph',
+    environment: 'staging',
+    images: Object.fromEntries(
+      ['api', 'web', 'worker', 'migration'].map((app) => [
+        app,
+        { id, archive: app + '.tar', archiveSha256: sha256('archive') },
+      ]),
+    ),
+    infrastructure: { postgres: id, caddy: id },
+    domains: { web: 'web.invalid', api: 'api.invalid' },
+    drainSeconds: 330,
+    migrations: Array.from({ length: 24 }, (_, i) => ({
+      hash: 'a'.repeat(64),
+      created_at: i,
+    })),
+    metadataProofSha256: '',
+    toolBundleSha256: '',
+  };
+  const incoming = path.join(root, 'incoming', m.operation);
+  mkdirSync(path.join(incoming, 'env'), { recursive: true });
+  for (const app of ['api', 'web', 'worker', 'migration'])
+    writeFileSync(path.join(incoming, app + '.tar'), 'archive', {
+      mode: 0o600,
     });
-    const backups = readdirSync(path.join(state, 'staging-backups'));
-    return {
-      result,
-      commands: readFileSync(log, 'utf8').split('\n').filter(Boolean),
-      active: readFileSync(
-        path.join(state, 'current-image-tag'),
-        'utf8',
-      ).trim(),
-      previous: readFileSync(
-        path.join(state, 'previous-image-tag'),
-        'utf8',
-      ).trim(),
-      envCreated: readdirSync(dir).includes('env'),
-      releaseCreated: readdirSync(root).includes('release.env'),
-      backups,
-      modes: backups.map(
-        (name) =>
-          statSync(path.join(state, 'staging-backups', name)).mode & 0o777,
-      ),
-    };
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-describe('staging release context and persistence', () => {
-  it('executes the capacity guard from an aliased temporary directory', () => {
-    const root = realpathSync(
-      mkdtempSync(path.join(os.tmpdir(), 'staging-alias-')),
+  for (const app of ['api', 'worker', 'migration'])
+    writeFileSync(path.join(incoming, 'env', app + '.env'), 'private', {
+      mode: 0o600,
+    });
+  const proof = JSON.stringify({
+    instanceId: m.instanceId,
+    observedAt: new Date().toISOString(),
+    runtimeServiceAccountId: m.runtimeServiceAccountId,
+    effectiveAuthorityReviewedBy: 'second-maintainer',
+    lockbox: [
+      { secretId: m.runtimeSecretIds[0], bindings: [] },
+      { secretId: m.runtimeSecretIds[1], bindings: [] },
+    ],
+    metadata_options: {
+      aws_v1_http_token: 'DISABLED',
+      aws_v2_http_token: 'DISABLED',
+      gce_http_token: 'DISABLED',
+    },
+  });
+  writeFileSync(path.join(incoming, 'metadata-proof.json'), proof, {
+    mode: 0o600,
+  });
+  m.metadataProofSha256 = sha256(proof);
+  m.toolBundleSha256 = fingerprint(
+    Object.fromEntries(
+      toolFiles.map((f) => [f, sha256(readFileSync(path.join(root, f)))]),
+    ),
+  );
+  const model = {
+    services: {
+      api: {
+        environment: {
+          DATABASE_URL:
+            'postgresql://da_api:' + 'a'.repeat(40) + '@postgres/synthetic_db',
+          S3_ACCESS_KEY_ID: 'synthetic',
+          S3_SECRET_ACCESS_KEY: 'synthetic',
+          S3_BUCKET: 'synthetic-bucket',
+          S3_ENDPOINT: 'https://storage.example.invalid',
+          DISABLE_NEW_PAYMENTS: 'true',
+          DISABLE_FREE_CLAIMS: 'false',
+        },
+      },
+      worker: {
+        environment: {
+          DATABASE_URL:
+            'postgresql://da_worker:' +
+            'b'.repeat(40) +
+            '@postgres/synthetic_db',
+          S3_ACCESS_KEY_ID: 'synthetic',
+          S3_SECRET_ACCESS_KEY: 'synthetic',
+          S3_BUCKET: 'synthetic-bucket',
+          S3_ENDPOINT: 'https://storage.example.invalid',
+        },
+      },
+      migration: {
+        environment: {
+          DATABASE_URL:
+            'postgresql://da_migrator:' +
+            'c'.repeat(40) +
+            '@postgres/synthetic_db',
+        },
+      },
+      postgres: {
+        environment: {
+          POSTGRES_USER: 'bootstrap',
+          POSTGRES_DB: 'synthetic_db',
+        },
+      },
+    },
+  };
+  const commands: string[] = [];
+  let migrated = false;
+  let clients = 0;
+  let dataVersion = 'a';
+  let epoch = 0;
+  let hba = '';
+  const legacy = ['api', 'worker'].map((app) => ({
+    Id: app + '-container',
+    Image: id,
+    State: { Status: 'running', StartedAt: 'initial', FinishedAt: 'initial' },
+    RestartCount: 0,
+    HostConfig: { RestartPolicy: { Name: 'unless-stopped' } },
+  }));
+  const inputs: string[] = [];
+  const baseline = {
+    migrations: m.migrations.slice(0, 17),
+    tables: { users: 1 },
+  };
+  const run = (
+    program: string,
+    args: string[],
+    options?: { input?: string; stdoutFile?: string },
+  ) => {
+    const command = program + ' ' + args.join(' ');
+    commands.push(command);
+    if (options?.input) inputs.push(options.input);
+    if (program === 'docker' && args[0] === 'update') {
+      legacy.forEach((c) => (c.HostConfig.RestartPolicy.Name = 'no'));
+      return '';
+    }
+    if (command.includes('stop --timeout')) {
+      legacy.forEach((c) => (c.State.Status = 'exited'));
+      return '';
+    }
+    if (command.includes('restart --timeout')) {
+      epoch++;
+      return '';
+    }
+    if (options?.input && command.includes('pg_hba.conf.destka-next')) {
+      hba = sha256(options.input);
+      return '';
+    }
+    if (program === 'docker' && args[0] === 'inspect' && args[1] !== '--format')
+      return JSON.stringify(legacy);
+    if (options?.input?.includes('pg_postmaster_start_time'))
+      return JSON.stringify({
+        epoch: 'epoch-' + epoch,
+        hba,
+        clients,
+        migratorLogin: false,
+      });
+    if (
+      options?.input?.includes('Direct/default ACL normalization') &&
+      failure === 'ownership-unknown'
+    )
+      throw Error('synthetic unknown commit');
+    if (program === 'df') return 'Avail\n20000000000\n';
+    if (command.includes('image inspect'))
+      return JSON.stringify([
+        {
+          Id: id,
+          Os: 'linux',
+          Architecture: 'amd64',
+          Config: {
+            Labels: { 'org.opencontainers.image.revision': m.sourceSha },
+          },
+        },
+      ]);
+    if (command.includes('config --format')) return JSON.stringify(model);
+    if (command.includes('ps -q')) return args.at(-1)!;
+    if (command.includes('ps -aq')) return 'api-container\nworker-container';
+    if (command.includes('inspect --format')) {
+      if (command.includes('.State.Status')) return id + ' running';
+      return id;
+    }
+    if (command.includes('pg_dump')) {
+      if (failure === 'dump') throw Error('synthetic');
+      writeFileSync(options!.stdoutFile!, Buffer.from([0, 255, 128, 5]), {
+        mode: 0o600,
+      });
+      return '';
+    }
+    if (command.includes('run --rm') && command.endsWith(' migration')) {
+      if (failure === 'migration') throw Error('synthetic');
+      migrated = true;
+      return '';
+    }
+    if (options?.input?.includes('pg_hba_file_rules')) return '0';
+    if (options?.input?.includes('pg_database_size')) return '10';
+    if (options?.input?.includes('NOT datistemplate')) return '0';
+    if (
+      options?.input?.includes(
+        'SELECT count(*) FROM pg_roles WHERE rolcanlogin',
+      )
+    )
+      return '0';
+    if (options?.input?.includes('pg_stat_activity')) return '0';
+    if (options?.input?.includes('json_build_object'))
+      return JSON.stringify({
+        ...baseline,
+        migrations: migrated ? m.migrations : baseline.migrations,
+        contents: { users: dataVersion },
+      });
+    if (command.includes('curl') && failure === 'health')
+      throw Error('synthetic');
+    if (command.includes('node --input-type'))
+      return JSON.stringify({
+        name: 'da_' + args[args.indexOf('-T') + 1],
+        unsafe: false,
+      });
+    return '';
+  };
+  const options = {
+    root,
+    state,
+    run,
+    ownerUid: process.getuid!(),
+    wait: () => {
+      commands.push('drained');
+    },
+  };
+  const recovery = () => {
+    const op = path.join(state, m.operation),
+      record = JSON.parse(readFileSync(path.join(op, 'state.json'), 'utf8'));
+    writeFileSync(path.join(op, 'files-manifest.json'), 'files', {
+      mode: 0o600,
+    });
+    writeFileSync(
+      path.join(op, 'recovery-proof.json'),
+      JSON.stringify({
+        checkpointId: record.checkpointId,
+        manifestHash: record.manifestHash,
+        fenceHash: fingerprint(record.fence),
+        databaseArchiveSha256: fileHash(path.join(op, 'database.dump')),
+        baselineHash: record.baselineHash,
+        filesManifestSha256: sha256('files'),
+        sourceBucket: 'synthetic-bucket',
+        sourceEndpoint: 'https://storage.example.invalid',
+        offVm: true,
+        databaseRestorePassed: true,
+        filesRestorePassed: true,
+        reviewedBy: 'independent-maintainer',
+      }),
+      { mode: 0o600 },
     );
+  };
+  return {
+    m,
+    commands,
+    options,
+    dir,
+    recovery,
+    inputs,
+    resume: (app: string) => {
+      legacy.find((c) => c.Id === app + '-container')!.State.StartedAt =
+        'resumed';
+    },
+    idle: () => {
+      clients = 1;
+    },
+    update: () => {
+      dataVersion = 'updated';
+    },
+    proofPath: path.join(state, m.operation, 'recovery-proof.json'),
+    record: () =>
+      JSON.parse(
+        readFileSync(path.join(state, m.operation, 'state.json'), 'utf8'),
+      ),
+  };
+}
+it('stops old writers/restart policies before binary backup, requires off-VM recovery before migration, then starts verified immutable images', () => {
+  const f = fixture();
+  try {
+    expect(deploy(f.m, 'prepare', f.options).stage).toBe('BACKUP_REQUIRED');
+    expect(
+      f.commands.findIndex((x) => x.includes('update --restart=no')),
+    ).toBeLessThan(f.commands.findIndex((x) => x.includes('pg_dump')));
+    expect(
+      f.commands.findIndex((x) => x.includes('stop --timeout')),
+    ).toBeLessThan(f.commands.indexOf('drained'));
+    expect(
+      f.commands.some(
+        (x) => x.includes('run --rm') && x.endsWith(' migration'),
+      ),
+    ).toBe(false);
+    expect(() => deploy(f.m, 'apply', f.options)).toThrow();
+    expect(
+      f.commands.some(
+        (x) => x.includes('run --rm') && x.endsWith(' migration'),
+      ),
+    ).toBe(false);
+    f.recovery();
+    expect(deploy(f.m, 'apply', f.options).stage).toBe('MIGRATED');
+    expect(deploy(f.m, 'start', f.options).stage).toBe('HEALTHY');
+    expect(
+      f.commands.some((x) =>
+        /yc |lockbox|docker login| pull|prune|rollback/.test(x),
+      ),
+    ).toBe(false);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+it.each(['dump', 'migration', 'health', 'ownership-unknown'])(
+  'stops safely on %s failure and never starts incompatible old images',
+  (failure) => {
+    const f = fixture(failure);
     try {
-      const target = path.join(root, 'target');
-      const alias = path.join(root, 'alias');
-      mkdirSync(target);
-      symlinkSync(target, alias, 'dir');
-      const run = release('staging', selected, 'bytes', alias);
-      expect(run.result.status).toBe(1);
-      expect(run.envCreated).toBe(false);
-      expect(run.releaseCreated).toBe(false);
-      expect(run.active).toBe(current);
-      expect(run.previous).toBe(selected);
+      if (failure === 'dump')
+        expect(() => deploy(f.m, 'prepare', f.options)).toThrow();
+      else {
+        deploy(f.m, 'prepare', f.options);
+        f.recovery();
+        if (failure === 'migration' || failure === 'ownership-unknown')
+          expect(() => deploy(f.m, 'apply', f.options)).toThrow();
+        else {
+          deploy(f.m, 'apply', f.options);
+          expect(() => deploy(f.m, 'start', f.options)).toThrow();
+        }
+      }
+      expect(f.record().stage).toBe('STOPPED');
       expect(
-        run.commands.some((line) => /login|compose|capacity retain/.test(line)),
+        f.commands.some(
+          (x) => x.includes('old_image') || x.includes('pg_restore'),
+        ),
+      ).toBe(false);
+      if (failure === 'migration')
+        expect(f.commands.some((x) => x.includes('up -d'))).toBe(false);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it('rejects partial migration replay and changed manifest before any migration', () => {
+  const f = fixture('migration');
+  try {
+    deploy(f.m, 'prepare', f.options);
+    f.recovery();
+    expect(() => deploy(f.m, 'apply', f.options)).toThrow();
+    const before = f.commands.filter(
+      (x) => x.includes('run --rm') && x.endsWith(' migration'),
+    ).length;
+    expect(() => deploy(f.m, 'apply', f.options)).toThrow('partial');
+    expect(
+      f.commands.filter(
+        (x) => x.includes('run --rm') && x.endsWith(' migration'),
+      ),
+    ).toHaveLength(before);
+    expect(() =>
+      deploy({ ...f.m, sourceSha: 'b'.repeat(40) }, 'start', f.options),
+    ).toThrow('Manifest changed');
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+it.each(['api', 'worker', 'idle', 'update'])(
+  'invalidates checkpoint before ownership/DDL when %s changes after backup',
+  (change) => {
+    const f = fixture();
+    try {
+      deploy(f.m, 'prepare', f.options);
+      f.recovery();
+      if (change === 'api' || change === 'worker') f.resume(change);
+      else if (change === 'idle') f.idle();
+      else f.update();
+      expect(() => deploy(f.m, 'apply', f.options)).toThrow('invalidated');
+      expect(f.record().stage).toBe('INVALIDATED');
+      expect(
+        f.inputs.some((s) => s.includes('Direct/default ACL normalization')),
+      ).toBe(false);
+      expect(() => deploy(f.m, 'apply', f.options)).toThrow('partial');
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it.each(['checkpointId', 'manifestHash', 'fenceHash'])(
+  'rejects substituted/replayed %s in restore proof before DDL',
+  (field) => {
+    const f = fixture();
+    try {
+      deploy(f.m, 'prepare', f.options);
+      f.recovery();
+      const proof = JSON.parse(readFileSync(f.proofPath, 'utf8'));
+      proof[field] = 'f'.repeat(64);
+      writeFileSync(f.proofPath, JSON.stringify(proof), { mode: 0o600 });
+      expect(() => deploy(f.m, 'apply', f.options)).toThrow('recovery proof');
+      expect(
+        f.inputs.some((s) => s.includes('Direct/default ACL normalization')),
       ).toBe(false);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(f.dir, { recursive: true, force: true });
     }
-  });
-
-  it.each(['bytes', 'inodes', 'df-command', 'df-parse'])(
-    'fails closed on %s before env/state writes, pull, backup and migration',
-    (failure) => {
-      const run = release('staging', selected, failure);
-      expect(run.result.status).toBe(1);
-      expect(
-        run.commands.some((line) => /login|compose|capacity retain/.test(line)),
-      ).toBe(false);
-      expect(run.active).toBe(current);
-      expect(run.previous).toBe(selected);
-      expect(run.envCreated).toBe(false);
-      expect(run.releaseCreated).toBe(false);
-      expect(run.backups).toHaveLength(3);
-    },
-  );
-  it('runs retention only after healthy deployment and recording both release tags', () => {
-    const run = release('staging');
-    expect(run.result.status, run.result.stderr).toBe(0);
-    expect(run.commands).toContain(
-      `retained current=${selected} previous=${current}`,
-    );
-    expect(run.commands).toContain('capacity retain');
-  });
-  it('reports retention failure without rolling back a healthy recorded release', () => {
-    const run = release('staging', selected, 'retention');
-    expect(run.result.status).toBe(0);
-    expect(run.result.stderr).toContain('Post-success image retention failed');
-    expect(run.active).toBe(selected);
-    expect(run.previous).toBe(current);
-  });
-  it.each(['staging', 'production'])(
-    'uses the same %s compose context for every command',
-    (environment) => {
-      const run = release(environment);
-      expect(run.result.status, run.result.stderr).toBe(0);
-      const commands = run.commands.filter((line) =>
-        line.startsWith('compose '),
-      );
-      expect(commands.some((line) => line.includes('run --rm migration'))).toBe(
-        true,
-      );
-      expect(commands.some((line) => line.includes('ps -q'))).toBe(true);
-      expect(
-        commands.every(
-          (line) =>
-            line.includes('compose.staging.yaml') ===
-            (environment === 'staging'),
-        ),
-      ).toBe(true);
-      if (environment === 'production')
-        expect(commands.some((line) => line.includes('postgres'))).toBe(false);
-    },
-  );
-  it.each(['staging', 'production'])(
-    'requires all published images before %s migration without building',
-    (environment) => {
-      const run = release(environment, selected, 'pull');
-      expect(run.result.status).toBe(1);
-      expect(
-        run.commands.some((line) => line.includes('--profile migration pull')),
-      ).toBe(true);
-      expect(
-        run.commands.some((line) =>
-          /build|push|run --rm migration|up -d/.test(line),
-        ),
-      ).toBe(false);
-      expect(run.active).toBe(current);
-      expect(run.commands).not.toContain('capacity retain');
-    },
-  );
-  it('backs up the available staging DB before migration and retains three owner-only dumps', () => {
-    const run = release('staging');
-    const backup = run.commands.findIndex((line) =>
-      line.includes('exec -T postgres'),
-    );
-    const migration = run.commands.findIndex((line) =>
-      line.includes('run --rm migration'),
-    );
-    const replacement = run.commands.findIndex((line) =>
-      line.includes('up -d --remove-orphans'),
-    );
-    expect(backup).toBeGreaterThan(-1);
-    expect(backup).toBeLessThan(migration);
-    expect(migration).toBeLessThan(replacement);
-    expect(run.backups).toHaveLength(3);
-    expect(run.backups).not.toContain('20200101.dump');
-    expect(run.modes).toContain(0o600);
-  });
-  it.each(['backup', 'migration'])(
-    'keeps the current application and backup when %s fails',
-    (failure) => {
-      const run = release('staging', selected, failure);
-      expect(run.result.status).toBe(1);
-      expect(run.commands).not.toContain('capacity retain');
-      expect(run.active).toBe(current);
-      expect(
-        run.commands.some((line) => line.includes('up -d --remove-orphans')),
-      ).toBe(false);
-      expect(run.backups.some((name) => name.endsWith('.tmp'))).toBe(false);
-      if (failure === 'migration')
-        expect(run.backups.some((name) => !name.startsWith('2020'))).toBe(true);
-      else
-        expect(
-          run.commands.some((line) => line.includes('run --rm migration')),
-        ).toBe(false);
-    },
-  );
-  it('uses cached staging rollback at 5 GiB without cloud, pull, migration, backup or DB restore', () => {
-    const run = release('staging', 'rollback', 'five-gib');
+  },
+);
+it('runs actual image config validation before freeze, and never masks config failure with payment shutdown', () => {
+  const f = fixture();
+  try {
+    const original = f.options.run;
+    f.options.run = (program, args, options) => {
+      if (args.includes('--check-config'))
+        throw Error('synthetic config rejection');
+      return original(program, args, options);
+    };
+    expect(() => deploy(f.m, 'prepare', f.options)).toThrow();
+    expect(f.commands.some((x) => x.includes('stop --timeout'))).toBe(false);
     expect(
-      run.commands.some(
-        (line) => /^(yc|login)/.test(line) || / pull(?:$| )/.test(line),
+      f.inputs.some((x) => x.includes('Direct/default ACL normalization')),
+    ).toBe(false);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+it('retains the exact previous env only as private evidence while removing all provider configuration', () => {
+  const f = fixture();
+  try {
+    const source = path.join(f.dir, 'source');
+    mkdirSync(source);
+    const old =
+      "PAYMENT_PROVIDER='yookassa'\nPAYMENT_MODE='sandbox'\nPAYMENT_RETURN_URL='https://old.invalid/return'\nPAYMENT_CREATOR_SHARE_BPS='5000'\nYOOKASSA_SECRET_KEY='test_synthetic_disabled'\n";
+    for (const app of ['api', 'worker'])
+      writeFileSync(path.join(source, app + '.env'), old, { mode: 0o600 });
+    const m = { ...f.m, operation: f.m.operation + '-env' };
+    mkdirSync(path.join(f.options.root, 'incoming', m.operation));
+    prepareEnvironments(m, {
+      source,
+      incoming: path.join(f.options.root, 'incoming'),
+      uid: process.getuid!(),
+    });
+    const target = path.join(f.options.root, 'incoming', m.operation, 'env');
+    expect(readFileSync(path.join(target, 'evidence', 'api.env'), 'utf8')).toBe(
+      old,
+    );
+    expect(
+      statSync(path.join(target, 'evidence', 'api.env')).mode & 0o777,
+    ).toBe(0o600);
+    expect(
+      /^(PAYMENT_|YOOKASSA_)/m.test(
+        readFileSync(path.join(target, 'api.env'), 'utf8'),
       ),
     ).toBe(false);
-    expect(run.backups).toHaveLength(3);
-    expect(run.commands.some((line) => line.includes('--pull never'))).toBe(
-      true,
-    );
-    expect(run.result.status, run.result.stderr).toBe(0);
-    expect(
-      run.commands
-        .filter((line) => line.startsWith('compose '))
-        .every((line) => line.includes('compose.staging.yaml')),
-    ).toBe(true);
-    expect(
-      run.commands
-        .filter((line) => line.startsWith('compose '))
-        .some((line) => /migration|pg_dump|pg_restore/.test(line)),
-    ).toBe(false);
-    expect(run.active).toBe(selected);
-  });
-  it.each(['bytes', 'inodes', 'df-command', 'df-parse', 'missing-image'])(
-    'failed rollback %s preserves state and performs no mutation or retention',
-    (failure) => {
-      const run = release('staging', 'rollback', failure);
-      expect(run.result.status).toBe(1);
-      expect(run.active).toBe(current);
-      expect(run.previous).toBe(selected);
-      expect(run.envCreated).toBe(false);
-      expect(run.releaseCreated).toBe(false);
-      expect(run.backups).toHaveLength(3);
-      expect(
-        run.commands.some((line) =>
-          /^(yc|login|compose)|capacity retain/.test(line),
-        ),
-      ).toBe(false);
-    },
-  );
-  it('fails deploy at 5 GiB before mutation', () => {
-    const run = release('staging', selected, 'five-gib');
-    expect(run.result.status).toBe(1);
-    expect(run.envCreated).toBe(false);
-    expect(run.releaseCreated).toBe(false);
-  });
-  it('uses the staging context during automatic application rollback without restoring the database', () => {
-    const run = release('staging', selected, 'startup');
-    expect(run.result.status, run.result.stderr).toBe(1);
-    expect(run.commands).not.toContain('capacity retain');
-    expect(run.result.stderr).toContain('Previous application image restored');
-    expect(run.active).toBe(current);
-    expect(
-      run.commands.filter((line) => line.includes('run --rm migration')),
-    ).toHaveLength(1);
-    expect(
-      run.commands
-        .filter((line) => line.startsWith('compose '))
-        .every((line) => line.includes('compose.staging.yaml')),
-    ).toBe(true);
-    expect(run.commands.some((line) => /pg_restore|down/.test(line))).toBe(
-      false,
-    );
-  });
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
 });

@@ -5,6 +5,7 @@ variable "GITHUB_ACTIONS" {
 }
 
 target "_base" {
+  args       = { SOURCE_SHA = IMAGE_TAG }
   context    = "."
   dockerfile = "Dockerfile"
   platforms  = ["linux/amd64"]

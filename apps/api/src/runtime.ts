@@ -1,5 +1,5 @@
+import { loadApiStartupConfig } from './startup-config';
 import type { LegalHttp } from './legal-http';
-import { assertFirstUseActivation } from './first-use';
 import {
   loadLegalDocuments,
   loadSecurityDocuments,
@@ -15,12 +15,6 @@ import {
 } from '@digital-autograph/payments';
 import { createPgPaymentRepository } from '@digital-autograph/db';
 import { createYookassaProvider } from '@digital-autograph/integrations';
-import {
-  loadApiConfig,
-  loadPaymentConfig,
-  loadYandexAuthConfig,
-  loadVkIdAuthConfig,
-} from '@digital-autograph/config';
 import {
   IdentityService,
   OAuthAttemptService,
@@ -72,18 +66,19 @@ import {
   createPgNotificationRepository,
   createPgShareRepository,
 } from '@digital-autograph/db';
-import { loadNotificationTelegramApiConfig } from '@digital-autograph/config';
 
 export async function startApi(
   legalDocuments: LegalHttp['documents'] = loadLegalDocuments(),
   syntheticPayment?: { provider: PaymentProvider; settings: PaymentSettings },
 ): Promise<void> {
-  const config = loadApiConfig();
-  // Opt-in cannot make unpublished or placeholder documents usable. Fail before I/O.
-  assertFirstUseActivation(
-    config.FIRST_USE_ENFORCEMENT_ENABLED,
-    legalDocuments,
-  );
+  const {
+    config,
+    paymentConfig,
+    yandexConfig,
+    vkIdConfig,
+    notificationTelegram,
+    enableTestAuthSeam,
+  } = loadApiStartupConfig(legalDocuments);
   if (
     syntheticPayment &&
     (config.APP_ENV !== 'test' || process.env.NODE_ENV === 'production')
@@ -91,19 +86,6 @@ export async function startApi(
     throw new Error(
       'Synthetic payment composition requires isolated test runtime',
     );
-  const paymentConfig = loadPaymentConfig();
-  const yandexConfig = loadYandexAuthConfig();
-  const vkIdConfig = loadVkIdAuthConfig();
-  const notificationTelegram = loadNotificationTelegramApiConfig();
-  const enableTestAuthSeam = process.env.ENABLE_TEST_AUTH_SEAM === 'true';
-  if (
-    enableTestAuthSeam &&
-    (config.APP_ENV !== 'test' || process.env.NODE_ENV === 'production')
-  ) {
-    throw new Error(
-      'ENABLE_TEST_AUTH_SEAM is only permitted in a non-production test environment',
-    );
-  }
   const database = createDatabase(config.DATABASE_URL);
   const storage = createPrivateS3Storage({
     endpoint: config.S3_ENDPOINT,

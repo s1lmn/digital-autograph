@@ -277,40 +277,15 @@ fi
   );
 });
 
-describe('running deployment images', () => {
-  it.each(['new', 'old'])(
-    'rejects healthy containers still using %s image tags',
-    (image) => {
-      const fn = deploy
-        .split('function application_images_match() {')[1]
-        ?.split('\n}\n')[0];
-      expect(fn).toBeTruthy();
-      const docker = `#!/bin/bash
-if [[ "$1" == compose ]]; then echo "\${!#}"; elif [[ "$3" == '{{.State.Status}}' ]]; then echo running; else echo "cr.yandex/registry/digital-autograph/\${!#}:$ACTUAL_TAG"; fi
-`;
-      const result = runScript(
-        `function compose() { docker compose "$@"; }\nfunction application_images_match() {${fn}\n}\napplication_images_match`,
-        'docker',
-        docker,
-        {
-          root: '/test',
-          YC_REGISTRY_ID: 'registry',
-          IMAGE_TAG: selected,
-          ACTUAL_TAG: image === 'new' ? selected : current,
-        },
-      );
-      expect(result.status, result.stderr).toBe(image === 'new' ? 0 : 1);
+describe('retired release entrypoint', () => {
+  it.each(['rollback', selected])(
+    'refuses legacy %s before any command',
+    (action) => {
+      const result = spawnSync('bash', ['-c', deploy, 'deploy', action], {
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain('legacy deploy/rollback disabled');
     },
   );
-  it('does not accept old-container health after startup failure and keeps login through rollback', () => {
-    expect(deploy).toContain('compose_updated=false');
-    expect(deploy).toContain(
-      'if [[ "$compose_updated" != true ]]; then break; fi',
-    );
-    expect(deploy).toContain(
-      "trap 'docker logout cr.yandex >/dev/null 2>&1 || true' EXIT",
-    );
-    expect(deploy).not.toContain('\ndocker logout cr.yandex');
-    expect(deploy).toContain('if [[ "$rollback" == false ]]; then');
-  });
 });

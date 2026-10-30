@@ -17,6 +17,8 @@ RUN pnpm install --frozen-lockfile \
     && pnpm --filter @digital-autograph/worker deploy --legacy --prod /out/worker
 
 FROM node:24-bookworm-slim AS api
+ARG SOURCE_SHA=unverified
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
 RUN apt-get update \
     && apt-get install -y --no-install-recommends fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
@@ -30,6 +32,8 @@ EXPOSE 4000
 CMD ["node", "dist/main.js"]
 
 FROM node:24-bookworm-slim AS worker
+ARG SOURCE_SHA=unverified
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /out/worker/ ./
@@ -37,6 +41,8 @@ USER node
 CMD ["node", "dist/main.js"]
 
 FROM node:24-bookworm-slim AS web
+ARG SOURCE_SHA=unverified
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
 ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000
@@ -48,6 +54,8 @@ EXPOSE 3000
 CMD ["node", "apps/web/server.js"]
 
 FROM build AS migration
+ARG SOURCE_SHA=unverified
+LABEL org.opencontainers.image.revision=$SOURCE_SHA
 ENV NODE_ENV=production
 WORKDIR /workspace/packages/db
 CMD ["./node_modules/.bin/drizzle-kit", "migrate"]

@@ -47,6 +47,25 @@ export function scram(password) {
     .digest('base64');
   return `SCRAM-SHA-256$4096:${salt.toString('base64')}$${createHash('sha256').update(client).digest('base64')}:${server}`;
 }
+export function databaseHba(database, operator, checkpointId, runtime = false) {
+  if (
+    !/^[a-z][a-z0-9_]{2,62}$/.test(database) ||
+    !/^[A-Za-z_][A-Za-z0-9_]{0,62}$/.test(operator) ||
+    !/^[a-f0-9]{64}$/.test(checkpointId) ||
+    ['da_api', 'da_worker', 'da_migrator'].includes(operator)
+  )
+    throw Error('Unsupported database fence identity');
+  const roles = runtime ? 'da_api,da_worker' : 'da_migrator';
+  return `# Destka checkpoint ${checkpointId} ${runtime ? 'runtime' : 'maintenance'}\nlocal all ${operator} trust\nlocal all all reject\nhost ${database} ${roles} 0.0.0.0/0 scram-sha-256\nhost ${database} ${roles} ::/0 scram-sha-256\nhost all all 0.0.0.0/0 reject\nhost all all ::/0 reject\nhost replication all 0.0.0.0/0 reject\nhost replication all ::/0 reject\n`;
+}
+export function sqlScript(root, file) {
+  if (!['postgres-bootstrap.sql', 'postgres-runtime.sql'].includes(file))
+    throw Error('Unsupported SQL script');
+  return readFileSync(path.join(root, file), 'utf8').replace(
+    /^\\ir (postgres-(?:preflight|normalize)\.sql)$/gm,
+    (_, include) => readFileSync(path.join(root, include), 'utf8'),
+  );
+}
 export function validateManifest(m) {
   if (
     m?.schemaVersion !== 1 ||
@@ -297,6 +316,8 @@ export function deploy(
     'Caddyfile',
     'Caddyfile.destka',
     'postgres-bootstrap.sql',
+    'postgres-preflight.sql',
+    'postgres-normalize.sql',
     'postgres-runtime.sql',
     'database-state.sql',
     'compose.yaml',
@@ -365,6 +386,87 @@ export function deploy(
       ],
       { input: sql },
     );
+  const snapshot = () =>
+    JSON.parse(db(readFileSync(path.join(root, 'database-state.sql'), 'utf8')));
+  const legacyState = () => {
+    const ids = compose(['ps', '-aq', 'api', 'worker'])
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (ids.length !== 2) throw Error('Exact legacy API and worker required');
+    return JSON.parse(run('docker', ['inspect', ...ids]))
+      .map((c) => ({
+        id: c.Id,
+        image: c.Image,
+        started: c.State.StartedAt,
+        finished: c.State.FinishedAt,
+        status: c.State.Status,
+        restarts: c.RestartCount,
+        policy: c.HostConfig.RestartPolicy.Name,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  };
+  const fenceState = () =>
+    JSON.parse(
+      db(
+        "SELECT json_build_object('epoch',pg_postmaster_start_time()::text,'hba',encode(sha256(pg_read_binary_file(current_setting('hba_file'))),'hex'),'clients',(SELECT count(*) FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND backend_type='client backend'),'migratorLogin',coalesce((SELECT rolcanlogin FROM pg_roles WHERE rolname='da_migrator'),false));",
+      ),
+    );
+  const installHba = (content) => {
+    const id = compose(['ps', '-q', 'postgres']).trim();
+    run(
+      'docker',
+      [
+        'exec',
+        '-i',
+        id,
+        'sh',
+        '-ceu',
+        'test "$(psql -X -qAt -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SHOW hba_file")" = "$PGDATA/pg_hba.conf"; set -C; cat > "$PGDATA/pg_hba.conf.destka-next"; chmod 600 "$PGDATA/pg_hba.conf.destka-next"; chown "$(stat -c "%u:%g" "$PGDATA/pg_hba.conf")" "$PGDATA/pg_hba.conf.destka-next"; mv "$PGDATA/pg_hba.conf.destka-next" "$PGDATA/pg_hba.conf"; sync',
+      ],
+      { input: content },
+    );
+    // A restart, not asynchronous SIGHUP: no pre-fence authenticated backend survives.
+    compose(['restart', '--timeout', '60', 'postgres'], { timeout: 90000 });
+    run(
+      'docker',
+      [
+        'exec',
+        id,
+        'sh',
+        '-ceu',
+        'i=0; until pg_isready -h 127.0.0.1 >/dev/null 2>&1; do i=$((i+1)); test "$i" -lt 30; sleep 1; done',
+      ],
+      { timeout: 40000 },
+    );
+  };
+  const preflightConfig = (model) => {
+    const file = path.join(op, 'startup-api.env');
+    const entries = model.services.api.environment;
+    if (Object.values(entries).some((v) => /[\r\n\0]/.test(String(v))))
+      throw Error('Invalid effective environment');
+    writeFileSync(
+      file,
+      Object.entries(entries)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n') + '\n',
+      { mode: 0o600 },
+    );
+    run('docker', [
+      'run',
+      '--rm',
+      '--network',
+      'none',
+      '--read-only',
+      '--env-file',
+      file,
+      '--entrypoint',
+      'node',
+      m.images.api.id,
+      'dist/main.js',
+      '--check-config',
+    ]);
+  };
   let record;
   const mark = (stage) => {
     record = {
@@ -382,6 +484,28 @@ export function deploy(
       .filter(Boolean);
     if (ids.length) run('docker', ['update', '--restart=no', ...ids]);
     compose(['stop', '--timeout', '60', 'api', 'worker']);
+  };
+  const assertLegacy = () => {
+    const actual = legacyState();
+    if (
+      actual.some((c) => c.status !== 'exited' || c.policy !== 'no') ||
+      fingerprint(actual) !== fingerprint(record.legacy)
+    )
+      throw Error('Legacy writer resumed; checkpoint invalidated');
+  };
+  const assertFence = () => {
+    assertLegacy();
+    const actual = fenceState();
+    if (
+      !record.fence ||
+      actual.clients !== 0 ||
+      actual.migratorLogin !== false ||
+      actual.epoch !== record.fence.epoch ||
+      actual.hba !== record.fence.hba
+    )
+      throw Error(
+        'Database fence changed or sessions present; checkpoint invalidated',
+      );
   };
   if (phase === 'prepare') {
     if (existsSync(recordFile))
@@ -417,6 +541,24 @@ export function deploy(
       read(path.join(incoming, 'env', `${app}.env`));
     const model = JSON.parse(compose(['config', '--format', 'json']));
     validateRuntime(model, m);
+    databaseHba(
+      m.database,
+      model.services.postgres.environment.POSTGRES_USER,
+      '0'.repeat(64),
+    );
+    if (
+      db(
+        "SELECT count(*) FROM pg_roles WHERE rolcanlogin AND rolname NOT IN (current_user,'da_api','da_worker','da_migrator');",
+      ).trim() !== '0'
+    )
+      throw Error('Unreviewed database login identities');
+    db(readFileSync(path.join(root, 'postgres-preflight.sql'), 'utf8'));
+    if (
+      db(
+        "SELECT count(*) FROM pg_database WHERE NOT datistemplate AND datname NOT IN (current_database(),'postgres');",
+      ).trim() !== '0'
+    )
+      throw Error('Dedicated single-application PostgreSQL required');
     if (
       db(
         "SELECT count(*) FROM pg_hba_file_rules WHERE type LIKE 'host%' AND auth_method='trust' AND coalesce(address,'') NOT IN ('127.0.0.1','::1');",
@@ -432,7 +574,7 @@ export function deploy(
         sum + BigInt(statSync(path.join(incoming, m.images[app].archive)).size),
       0n,
     );
-    const required = 2n * archiveBytes + BigInt(sizeText) + 1024n ** 3n;
+    const required = 2n * archiveBytes + 2n * BigInt(sizeText) + 1024n ** 3n;
     for (const location of [root, state]) {
       const available = run('df', ['-B1', '--output=avail', '--', location])
         .trim()
@@ -478,7 +620,9 @@ export function deploy(
       )
         throw Error('Existing infrastructure mismatch');
     }
+    preflightConfig(model);
     record = {
+      checkpointId: randomBytes(32).toString('hex'),
       manifestHash: fingerprint(m),
       configHash: fingerprint(model),
       stage: 'PREFLIGHT',
@@ -488,6 +632,35 @@ export function deploy(
     mark('FREEZING');
     try {
       stopWriters();
+      compose(
+        [
+          'exec',
+          '-T',
+          'postgres',
+          'sh',
+          '-c',
+          'exec pg_dump --format=custom --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"',
+        ],
+        { timeout: 600000, stdoutFile: path.join(op, 'pre-fence.dump') },
+      );
+      const pgId = compose(['ps', '-q', 'postgres']).trim();
+      run('docker', ['exec', pgId, 'sh', '-ceu', 'cat "$PGDATA/pg_hba.conf"'], {
+        stdoutFile: path.join(op, 'pg_hba.before'),
+      });
+      mark('FENCING');
+      // Existing migrator credentials cannot become the maintenance bypass.
+      db(
+        "DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname='da_migrator') THEN ALTER ROLE da_migrator NOLOGIN; END IF; END $$;",
+      );
+      installHba(
+        databaseHba(
+          m.database,
+          model.services.postgres.environment.POSTGRES_USER,
+          record.checkpointId,
+        ),
+      );
+      record = { ...record, legacy: legacyState(), fence: fenceState() };
+      assertFence();
       wait(m.drainSeconds * 1000);
       if (
         db(
@@ -495,9 +668,8 @@ export function deploy(
         ).trim() !== '0'
       )
         throw Error('Other writers/sessions remain');
-      const baseline = JSON.parse(
-        db(readFileSync(path.join(root, 'database-state.sql'), 'utf8')),
-      );
+      assertFence();
+      const baseline = snapshot();
       if (
         !Array.isArray(baseline.migrations) ||
         baseline.migrations.length > m.migrations.length ||
@@ -517,6 +689,9 @@ export function deploy(
         ],
         { timeout: 600000, stdoutFile: dumpPath },
       );
+      assertFence();
+      if (fingerprint(snapshot()) !== fingerprint(baseline))
+        throw Error('Data changed during backup');
       record = {
         ...record,
         baseline,
@@ -537,6 +712,9 @@ export function deploy(
     throw Error('Manifest changed; new approval required');
   const proof = json(path.join(op, 'recovery-proof.json'));
   if (
+    proof.checkpointId !== record.checkpointId ||
+    proof.manifestHash !== record.manifestHash ||
+    proof.fenceHash !== fingerprint(record.fence) ||
     proof.databaseArchiveSha256 !== record.databaseArchiveSha256 ||
     proof.baselineHash !== record.baselineHash ||
     !hash.test(proof.filesManifestSha256) ||
@@ -563,14 +741,20 @@ export function deploy(
       throw Error(
         'Unknown/partial migration state; inspect, never replay automatically',
       );
-    if (
-      fingerprint(
-        JSON.parse(
-          db(readFileSync(path.join(root, 'database-state.sql'), 'utf8')),
-        ),
-      ) !== record.baselineHash
-    )
-      throw Error('Database changed after backup');
+    try {
+      assertFence();
+      if (fingerprint(snapshot()) !== record.baselineHash)
+        throw Error('Database changed after backup');
+      db(readFileSync(path.join(root, 'postgres-preflight.sql'), 'utf8'));
+      preflightConfig(model);
+      assertFence();
+    } catch {
+      stopWriters();
+      mark('INVALIDATED');
+      throw Error(
+        'Checkpoint invalidated; fresh freeze, backup and restore proof required',
+      );
+    }
     if (
       fileHash(path.join(op, 'database.dump')) !== record.databaseArchiveSha256
     )
@@ -583,20 +767,17 @@ export function deploy(
           (role, i) => `SET destka.${role}_scram = '${scram(passwords[i])}';`,
         )
         .join('\n');
-      db(
-        settings +
-          '\n' +
-          readFileSync(path.join(root, 'postgres-bootstrap.sql'), 'utf8'),
-      );
+      db(settings + '\n' + sqlScript(root, 'postgres-bootstrap.sql'));
       compose(['run', '--rm', '-T', '--no-deps', 'migration'], {
         timeout: 600000,
       });
-      db(readFileSync(path.join(root, 'postgres-runtime.sql'), 'utf8'));
+      db(sqlScript(root, 'postgres-runtime.sql'));
       const after = JSON.parse(
         db(readFileSync(path.join(root, 'database-state.sql'), 'utf8')),
       );
       if (fingerprint(after.migrations) !== fingerprint(m.migrations))
         throw Error('Migration receipts mismatch');
+      assertFence();
       record = { ...record, schemaHash: fingerprint(after.migrations) };
       mark('MIGRATED');
     } catch {
@@ -617,8 +798,17 @@ export function deploy(
     ) !== record.schemaHash
   )
     throw Error('Schema changed');
+  assertFence();
   mark('STARTING');
   try {
+    installHba(
+      databaseHba(
+        m.database,
+        model.services.postgres.environment.POSTGRES_USER,
+        record.checkpointId,
+        true,
+      ),
+    );
     compose(
       [
         'up',

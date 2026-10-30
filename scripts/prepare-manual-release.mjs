@@ -78,6 +78,8 @@ try {
     'Caddyfile',
     'Caddyfile.destka',
     'postgres-bootstrap.sql',
+    'postgres-preflight.sql',
+    'postgres-normalize.sql',
     'postgres-runtime.sql',
     'database-state.sql',
     'compose.yaml',

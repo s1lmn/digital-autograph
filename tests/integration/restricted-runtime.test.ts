@@ -1,4 +1,8 @@
-import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
+import { renderEnvironment } from '../../deploy/manual-env.mjs';
+import { loadPaymentConfig } from '../../packages/config/src/index';
+import { loadApiStartupConfig } from '../../apps/api/src/startup-config';
+import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   mkdtempSync,
@@ -14,7 +18,12 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { beforeAll, afterAll, expect, it } from 'vitest';
-import { scram, fileHash, fingerprint } from '../../deploy/manual-deploy.mjs';
+import {
+  scram,
+  fileHash,
+  fingerprint,
+  sqlScript,
+} from '../../deploy/manual-deploy.mjs';
 import {
   createDatabase,
   migrate,
@@ -154,11 +163,22 @@ beforeAll(async () => {
     legacyStorage.destroy();
   }
 
+  // Previously valid runtime roles with stale direct and default grants.
+  await admin.query(
+    'CREATE ROLE da_api NOSUPERUSER; CREATE ROLE da_worker NOSUPERUSER',
+  );
+  rolesOwned = true;
+  await admin.query(`GRANT CREATE,TEMPORARY ON DATABASE ${name} TO da_api,da_worker;
+    GRANT CREATE,USAGE ON SCHEMA public TO da_api,da_worker;
+    GRANT EXECUTE ON FUNCTION pg_catalog.pg_read_file(text) TO da_api,da_worker;
+    GRANT UPDATE(status) ON users TO da_api;
+    ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO da_api,da_worker;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO da_api,da_worker;`);
   const settings = ['api', 'worker', 'migrator']
     .map((role, i) => `SET destka.${role}_scram='${scram(passwords[i]!)}';`)
     .join('\n');
   await admin.query(
-    settings + readFileSync('deploy/postgres-bootstrap.sql', 'utf8'),
+    settings + sqlScript(path.resolve('deploy'), 'postgres-bootstrap.sql'),
   );
   rolesOwned = true;
   const migrationUrl = new URL(url);
@@ -178,7 +198,9 @@ beforeAll(async () => {
     0,
   );
 
-  await admin.query(readFileSync('deploy/postgres-runtime.sql', 'utf8'));
+  await migrate(roleDbs[2]!.db, { migrationsFolder: 'packages/db/drizzle' });
+  await migrator.end();
+  await admin.query(sqlScript(path.resolve('deploy'), 'postgres-runtime.sql'));
   expect(
     (
       await worker.query(
@@ -211,7 +233,7 @@ afterAll(async () => {
     cleanupStorage.destroy();
   }
   storage.close();
-  await Promise.all(pools.map((p) => p.end()));
+  await Promise.all([api, worker].map((p) => p.end()));
   await admin.end();
   if (created) await control.query(`DROP DATABASE ${name} WITH (FORCE)`);
   if (rolesOwned)
@@ -223,16 +245,17 @@ afterAll(async () => {
 it('migrates populated baseline with a non-superuser owner; separate runtime roles cannot own/DDL/admin', async () => {
   expect(
     (
-      await migrator.query(
+      await admin.query(
         'SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations',
       )
     ).rows[0].n,
   ).toBe(24);
-  for (const p of pools)
+  for (const role of ['da_api', 'da_worker', 'da_migrator'])
     expect(
       (
-        await p.query(
-          'SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=current_user',
+        await admin.query(
+          'SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls FROM pg_roles WHERE rolname=$1',
+          [role],
         )
       ).rows[0],
     ).toEqual({
@@ -262,7 +285,91 @@ it('migrates populated baseline with a non-superuser owner; separate runtime rol
   await expect(
     worker.query('SELECT * FROM payment_orders'),
   ).rejects.toMatchObject({ code: '42501' });
-  await migrate(roleDbs[2]!.db, { migrationsFolder: 'packages/db/drizzle' });
+});
+it('normalizes stale direct function/schema/database/column grants and permissive defaults, preserving normal runtime', async () => {
+  for (const role of ['da_api', 'da_worker']) {
+    const result = await admin.query(
+      `SELECT has_database_privilege($1,current_database(),'CREATE') AS ddl,
+      has_database_privilege($1,current_database(),'TEMP') AS temp,
+      has_schema_privilege($1,'public','CREATE') AS schema,
+      has_function_privilege($1,'pg_catalog.pg_read_file(text)','EXECUTE') AS file`,
+      [role],
+    );
+    expect(result.rows[0]).toEqual({
+      ddl: false,
+      temp: false,
+      schema: false,
+      file: false,
+    });
+  }
+  await expect(
+    api.query("SELECT pg_catalog.pg_read_file('/synthetic-never-read')"),
+  ).rejects.toMatchObject({ code: '42501' });
+  await expect(
+    worker.query("SELECT pg_catalog.pg_read_file('/synthetic-never-read')"),
+  ).rejects.toMatchObject({ code: '42501' });
+  await expect(
+    api.query("UPDATE users SET status='active'"),
+  ).rejects.toMatchObject({ code: '42501' });
+  const stale = await admin.query(
+    `SELECT count(*)::int AS n FROM pg_default_acl d, LATERAL aclexplode(d.defaclacl) a WHERE a.grantee IN (SELECT oid FROM pg_roles WHERE rolname IN ('da_api','da_worker'))`,
+  );
+  expect(stale.rows[0].n).toBe(0);
+});
+it('rejects SECURITY DEFINER escalation and unreviewed routine ownership before ownership/schema changes', async () => {
+  const c = await admin.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(
+      `CREATE FUNCTION public.review_escalate() RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN ALTER ROLE da_api SUPERUSER; END $$; GRANT EXECUTE ON FUNCTION public.review_escalate() TO da_api`,
+    );
+    // Demonstrate that the stale ACL fixture really permits the original attack.
+    await c.query(
+      'SET LOCAL ROLE da_api; SELECT public.review_escalate(); RESET ROLE',
+    );
+    expect(
+      (await c.query("SELECT rolsuper FROM pg_roles WHERE rolname='da_api'"))
+        .rows[0].rolsuper,
+    ).toBe(true);
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+  }
+  const checked = await admin.connect();
+  try {
+    await checked.query('BEGIN');
+    await checked.query(
+      `CREATE FUNCTION public.review_escalate() RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN ALTER ROLE da_api SUPERUSER; END $$; GRANT EXECUTE ON FUNCTION public.review_escalate() TO da_api`,
+    );
+    await expect(
+      checked.query(
+        sqlScript(path.resolve('deploy'), 'postgres-bootstrap.sql'),
+      ),
+    ).rejects.toMatchObject({ code: 'P0001' });
+  } finally {
+    await checked.query('ROLLBACK');
+    checked.release();
+  }
+  expect(
+    (
+      await api.query(
+        'SELECT rolsuper FROM pg_roles WHERE rolname=current_user',
+      )
+    ).rows[0].rolsuper,
+  ).toBe(false);
+  const owner = await admin.connect();
+  try {
+    await owner.query('BEGIN');
+    await owner.query(
+      'CREATE FUNCTION public.review_owned() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$; ALTER FUNCTION public.review_owned() OWNER TO da_api',
+    );
+    await expect(
+      owner.query(sqlScript(path.resolve('deploy'), 'postgres-bootstrap.sql')),
+    ).rejects.toMatchObject({ code: 'P0001' });
+  } finally {
+    await owner.query('ROLLBACK');
+    owner.release();
+  }
 });
 it('rejects a different runtime role password over the real TCP connection', async () => {
   const badUrl = new URL(url);
@@ -384,6 +491,129 @@ it('runs identity → private upload → worker → approval → moderation → 
   await createPgOAuthAttemptCleanup(worker)();
 }, 30000);
 
+it('starts the real API with restricted roles after stripping a previously valid sandbox config, with no secret in config-preflight/startup logs', async () => {
+  const server = createServer();
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const address = server.address();
+  if (!address || typeof address === 'string')
+    throw Error('Synthetic port unavailable');
+  const port = address.port;
+  await new Promise<void>((r) => server.close(() => r()));
+  const original = {
+    APP_ENV: 'test',
+    DATABASE_URL: 'postgresql://legacy:synthetic@postgres/' + name,
+    API_HOST: '127.0.0.1',
+    API_PORT: String(port),
+    SESSION_TTL_SECONDS: '1209600',
+    WEB_ORIGIN: 'https://old.invalid',
+    TRUSTED_WEB_ORIGINS: 'https://old.invalid',
+    GOOGLE_CLIENT_ID: 'synthetic-client',
+    GOOGLE_CLIENT_SECRET: 'synthetic-google',
+    GOOGLE_REDIRECT_URI: 'https://old.invalid/auth/google/callback',
+    TELEGRAM_CLIENT_ID: 'synthetic-client',
+    TELEGRAM_CLIENT_SECRET: 'synthetic-telegram',
+    TELEGRAM_REDIRECT_URI: 'https://old.invalid/auth/telegram/callback',
+    S3_ENDPOINT: process.env.S3_ENDPOINT!,
+    S3_REGION: 'us-east-1',
+    S3_BUCKET: privateBucket,
+    S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID!,
+    S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY!,
+    PAYMENT_PROVIDER: 'yookassa',
+    PAYMENT_MODE: 'sandbox',
+    YOOKASSA_SHOP_ID: '12345',
+    YOOKASSA_SECRET_KEY: 'test_synthetic_disabled_provider',
+    PAYMENT_RETURN_URL: 'https://old.invalid/payments/return',
+    PAYMENT_CREATOR_SHARE_BPS: '5000',
+  };
+  expect(loadPaymentConfig(original)?.PAYMENT_MODE).toBe('sandbox');
+  const text = renderEnvironment(
+    'api',
+    Object.entries(original)
+      .map(([k, v]) => `${k}='${v}'`)
+      .join('\n') + '\n',
+    { database: name, domains: { web: 'web.invalid', api: 'api.invalid' } },
+  );
+  const generated = Object.fromEntries(
+    text
+      .trim()
+      .split('\n')
+      .map((line) => {
+        const i = line.indexOf('=');
+        return [line.slice(0, i), line.slice(i + 2, -1)];
+      }),
+  );
+  const u = new URL(generated.DATABASE_URL!);
+  u.hostname = new URL(base).hostname;
+  u.port = new URL(base).port;
+  u.password = passwords[0]!;
+  generated.DATABASE_URL = u.href;
+  expect(loadApiStartupConfig(undefined, generated).paymentConfig).toBeNull();
+  expect(generated.DISABLE_NEW_PAYMENTS).toBe('true');
+  const env = { ...process.env, ...generated };
+  for (const key of Object.keys(env))
+    if (/^(PAYMENT_|YOOKASSA_)/.test(key)) delete env[key];
+  const check = spawnSync(
+    'pnpm',
+    ['exec', 'tsx', 'apps/api/src/main.ts', '--check-config'],
+    { env, encoding: 'utf8', timeout: 15000 },
+  );
+  expect(check.status, 'Real startup config preflight must succeed').toBe(0);
+  expect(check.stdout.trim()).toBe('API_STARTUP_CONFIG_VALID');
+  expect(
+    (check.stdout + check.stderr).includes(original.YOOKASSA_SECRET_KEY),
+  ).toBe(false);
+  const child = spawn('pnpm', ['exec', 'tsx', 'apps/api/src/main.ts'], {
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let logs = '';
+  child.stdout.on('data', (v) => {
+    logs += String(v);
+  });
+  child.stderr.on('data', (v) => {
+    logs += String(v);
+  });
+  try {
+    let ready = false;
+    for (let i = 0; i < 80; i++) {
+      try {
+        const r = await fetch(`http://127.0.0.1:${port}/health/ready`, {
+          signal: AbortSignal.timeout(200),
+        });
+        if (r.status === 200) {
+          ready = true;
+          break;
+        }
+      } catch {
+        /* bounded local startup */
+      }
+      if (child.exitCode !== null) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(ready, 'Real restricted API should become ready').toBe(true);
+    const auth = await fetch(`http://127.0.0.1:${port}/auth/google/start`, {
+      redirect: 'manual',
+    });
+    expect(auth.status).toBe(302);
+    const payment = await fetch(`http://127.0.0.1:${port}/payments/orders`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect([404, 503]).toContain(payment.status);
+  } finally {
+    child.kill('SIGTERM');
+    await new Promise<void>((r) => {
+      if (child.exitCode !== null) return r();
+      const timer = setTimeout(() => child.kill('SIGKILL'), 3000);
+      child.once('close', () => {
+        clearTimeout(timer);
+        r();
+      });
+    });
+  }
+  expect(logs.includes(original.YOOKASSA_SECRET_KEY)).toBe(false);
+}, 30000);
 it('refuses an existing runtime role granted to another login before changing credentials or ownership', async () => {
   const c = await admin.connect();
   try {
@@ -391,7 +621,7 @@ it('refuses an existing runtime role granted to another login before changing cr
     await c.query('CREATE ROLE destka_untrusted_role NOLOGIN');
     await c.query('GRANT da_api TO destka_untrusted_role');
     await expect(
-      c.query(readFileSync('deploy/postgres-bootstrap.sql', 'utf8')),
+      c.query(sqlScript(path.resolve('deploy'), 'postgres-bootstrap.sql')),
     ).rejects.toMatchObject({ code: 'P0001' });
   } finally {
     await c.query('ROLLBACK');
@@ -402,20 +632,27 @@ it('refuses an existing runtime role granted to another login before changing cr
 it('verifies the real database dump and actual private bytes with the off-VM restore command; source remains unchanged', async () => {
   const { backupPrivateFiles, S3Client } =
     await import('../../packages/integrations/src/file-backup');
-  const ids = spawnSync(
-    'docker',
-    ['ps', '--filter', 'ancestor=postgres:17-alpine', '--format', '{{.ID}}'],
-    { encoding: 'utf8' },
-  )
+  const running = spawnSync('docker', ['ps', '--format', '{{.ID}}'], {
+    encoding: 'utf8',
+  })
     .stdout.trim()
-    .split(/\s+/);
-  expect(ids).toHaveLength(1);
-  const source = ids[0]!;
-  const image = spawnSync(
-    'docker',
-    ['inspect', '--format', '{{.Image}}', source],
-    { encoding: 'utf8' },
-  ).stdout.trim();
+    .split(/\s+/)
+    .filter(Boolean);
+  const containers = JSON.parse(
+    spawnSync('docker', ['inspect', ...running], { encoding: 'utf8' }).stdout,
+  ) as {
+    Id: string;
+    Image: string;
+    NetworkSettings: { Ports: Record<string, { HostPort: string }[] | null> };
+  }[];
+  const sources = containers.filter((c) =>
+    c.NetworkSettings.Ports['5432/tcp']?.some(
+      (p) => p.HostPort === (new URL(base).port || '5432'),
+    ),
+  );
+  expect(sources).toHaveLength(1);
+  const source = sources[0]!.Id,
+    image = sources[0]!.Image;
   const stateSql = readFileSync('deploy/database-state.sql', 'utf8');
   const query = stateSql.slice(stateSql.indexOf('SELECT json_build_object'));
   const snapshot = (await admin.query(query)).rows[0].json_build_object;
@@ -446,6 +683,14 @@ it('verifies the real database dump and actual private bytes with the off-VM res
     JSON.stringify({
       databaseArchiveSha256: fileHash(archive),
       sourceHostname: 'synthetic-source-host',
+      checkpointId: 'a'.repeat(64),
+      manifestHash: 'b'.repeat(64),
+      fence: {
+        epoch: 'synthetic',
+        hba: 'c'.repeat(64),
+        clients: 0,
+        migratorLogin: false,
+      },
       baselineHash: fingerprint(snapshot),
     }),
     { mode: 0o600 },

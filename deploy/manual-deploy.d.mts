@@ -1,3 +1,10 @@
+export function databaseHba(
+  database: string,
+  operator: string,
+  checkpointId: string,
+  runtime?: boolean,
+): string;
+export function sqlScript(root: string, file: string): string;
 export function sha256(value: string | Uint8Array): string;
 export function fileHash(file: string): string;
 export function canonical(value: unknown): unknown;

@@ -2,7 +2,10 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
+\ir postgres-preflight.sql
+\ir postgres-normalize.sql
 GRANT USAGE ON SCHEMA public TO da_api, da_worker;
+DO $$ BEGIN EXECUTE format('GRANT CONNECT ON DATABASE %I TO da_api,da_worker',current_database()); END $$;
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC, da_api, da_worker;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC, da_api, da_worker;
 REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;
@@ -53,9 +56,6 @@ DO $$ DECLARE item record; BEGIN
  FOR item IN SELECT t.typname FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='public' AND t.typtype='e' LOOP
   EXECUTE format('GRANT USAGE ON TYPE public.%I TO da_api,da_worker',item.typname);
  END LOOP;
- FOR item IN SELECT p.oid::regprocedure AS name FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-  WHERE n.nspname='public' AND p.prorettype='trigger'::regtype LOOP
-  EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO da_api,da_worker',item.name);
- END LOOP;
 END $$;
+ALTER ROLE da_migrator NOLOGIN;
 COMMIT;

@@ -41,6 +41,12 @@ try {
     config = JSON.parse(readFileSync(configFile, 'utf8'));
   if (
     !/^sha256:[a-f0-9]{64}$/.test(config.postgresImage) ||
+    !/^[a-f0-9]{64}$/.test(record.checkpointId) ||
+    !/^[a-f0-9]{64}$/.test(record.manifestHash) ||
+    !/^[a-f0-9]{64}$/.test(record.fence?.hba) ||
+    !record.fence?.epoch ||
+    record.fence.clients !== 0 ||
+    record.fence.migratorLogin !== false ||
     !config.reviewedBy ||
     fileHash(archive) !== record.databaseArchiveSha256
   )
@@ -178,6 +184,9 @@ try {
       proofFile,
       JSON.stringify(
         {
+          checkpointId: record.checkpointId,
+          manifestHash: record.manifestHash,
+          fenceHash: fingerprint(record.fence),
           databaseArchiveSha256: record.databaseArchiveSha256,
           baselineHash: record.baselineHash,
           filesManifestSha256: fileProof.filesManifestSha256,

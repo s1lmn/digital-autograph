@@ -52,11 +52,9 @@ all old backups, snapshot, runner forensic evidence and volumes. Do not run
 volume/image prune, `down -v`, backup rotation or old retention helpers.
 
 Install only the reviewed source/artifact files and prepare the new private env
-set, then run `prepare` below. These staging/capacity operations do not change DB
-ownership/schema or replace running images. Freeze, final backup and off-VM
+set, then run `prepare` below. Source installation/capacity checks do not change DB ownership/schema or replace running images. The approved prepare phase additionally changes the existing PostgreSQL HBA and disables migrator login, with a pre-fence dump taken first; it restarts only the existing PostgreSQL container to eliminate every authenticated old backend. Freeze, final backup and off-VM
 restore proof come **before** metadata/IAM changes and `apply`. Keep writers
-stopped throughout the checkpoint. If backup/restore fails, do not change
-credentials, VM options, IAM, ownership or schema.
+stopped throughout the checkpoint. If backup/restore fails, retain the database maintenance fence and all copies; do not change cloud credentials/VM options/IAM, ownership or schema. Never automatically restore the old TCP access.
 
 ### Install reviewed files and prepare separate credentials
 
@@ -72,8 +70,8 @@ sealed bootstrap/operator login. Do not derive it from an application DSN.
 sudo node /opt/digital-autograph/manual-env.mjs /opt/digital-autograph/incoming/OPERATION/manifest.json
 ```
 
-This copies existing API/worker configuration privately, strips old DB URLs and
-YooKassa keys, generates three distinct random passwords, and writes separate
+This preserves the exact original API/worker env in incoming/OPERATION/env/evidence/ (0700 directory,0600 files), without printing values, and copies configuration privately, strips old DB URLs and
+the complete PAYMENT_* and YOOKASSA_* families, generates three distinct random passwords, and writes separate
 API/worker/migration env files. It does not change PostgreSQL. API/worker keep
 only their runtime env; migrator gets only its DB URL. The existing bootstrap
 credential is never copied into these files. Domains/callback URLs follow the
@@ -93,13 +91,44 @@ production pricing, decay or YooKassa/live payment is enabled.
 sudo /opt/digital-autograph/deploy-on-vm.sh --manual prepare /opt/digital-autograph/incoming/OPERATION/manifest.json
 ```
 
-Preflight validates the manifest/proofs/config, >=7GiB and200k free inodes,
+Preflight validates the manifest/config, >=7GiB and200k free inodes,
 archive checksums, source labels, amd64 immutable images and existing PG/Caddy
-image IDs. It never prunes data. It disables restart on **old API/worker only**,
-stops them gracefully, waits at least the actual old upload TTL+approved skew,
-and checks no other DB client sessions remain. Then it writes a binary custom
-`database.dump`, migration/row-count baseline and durable `BACKUP_REQUIRED`
-receipt under `/var/lib/digital-autograph/manual/OPERATION/`.
+image IDs. It executes the **actual target API startup loaders** via
+`node dist/main.js --check-config`, with the effective Compose environment in a
+private0600 file, a read-only container and `--network none`. API startup itself
+uses the same function. `DISABLE_NEW_PAYMENTS=true` never bypasses configuration
+validation. Any invalid payment/auth/notification/legal config fails before freeze.
+
+Read-only PostgreSQL preflight also runs before freeze. This path requires a
+dedicated cluster (application DB plus postgres/templates) and the reviewed
+0000–0023 object inventory. Unreviewed schemas/routines, SECURITY DEFINER,
+event triggers/extensions, runtime ownership (including routines/types/shared
+objects), memberships/SET ROLE paths, role settings, delegated grant options or
+external/global authority stop the transition for private owner analysis. No
+foreign object is dropped or silently adopted. Both SQL entrypoints repeat the
+same checks transactionally before ownership/ACL changes; their fixed psql
+includes are expanded by reviewed code, or honored by `psql -f`.
+
+After valid preflight, prepare disables restart on old API/worker and stops them.
+It first preserves a binary `pre-fence.dump` and the exact original HBA as
+`pg_hba.before`. Then it disables any existing `da_migrator` login and installs an
+operation-specific HBA in the **existing PostgreSQL volume**. Only the existing
+operator can use the local Unix socket; TCP permits the app DB's migrator alone,
+with SCRAM. All other IPv4/IPv6 TCP identities/databases, including the old shared
+bootstrap credentials, are rejected. PostgreSQL is restarted with the same image
+and volume so no old authenticated/idle connection can survive. SSH, firewall,
+Docker networking, Caddy and sealed operator credentials are unchanged.
+
+After restart, prepare drains old uploads, requires zero foreign DB clients,
+records the stopped container IDs/image IDs/StartedAt/FinishedAt/restart counters
+and policies, HBA SHA256 and PostgreSQL postmaster epoch, then writes the final
+binary `database.dump`. Baseline proof covers ordered migration receipts, counts,
+SHA256 of all table rows (stable UTC formatting) and public sequence state. A
+same-count UPDATE is detected. The bounded fingerprint/dump must succeed and
+remain unchanged across backup; otherwise no checkpoint is accepted. Receipt
+`BACKUP_REQUIRED` binds a random checkpoint ID and approved manifest hash.
+The maintenance HBA persists across SSH loss and Docker/VM restarts; a changed
+postmaster epoch invalidates the old checkpoint even if that HBA survives.
 
 Confirm the old configured upload TTL really fits the manifest's drain bound
 (the last observed value was300seconds). Expiration does not cancel an already
@@ -143,7 +172,7 @@ pnpm exec tsx scripts/verify-manual-backup.mts /private/state.json /private/data
 ```
 
 This restores the actual DB archive in a fresh local Docker volume/container with
-no network, checks all baseline migration hashes/table counts, restores the actual
+no network, checks all baseline migration hashes/table counts, complete row hashes and sequence state, restores the actual
 backed-up files into a fresh private **loopback** MinIO bucket and verifies bytes.
 It removes only its own temporary restore resources. Unknown schema/functions
 in an old archive remain untrusted input; no host mounts, sockets or outbound
@@ -151,9 +180,7 @@ network are allowed in that PostgreSQL container. No restore touches the server
 or source bucket. Retain the original archives and evidence.
 
 Copy `recovery-proof.json` and the file archive's `manifest.json` (as
-`files-manifest.json`) owner-only into the server's operation directory. They
-must match the exact DB archive, baseline, source S3 endpoint/bucket and reviewed
-operator state. A human name is an attestation, not an automatic independent
+`files-manifest.json`) owner-only into the server's operation directory. They must match the exact DB archive, baseline, source S3 endpoint/bucket, manifest hash, random checkpoint ID and fence fingerprint. Reusing an old operation proof is rejected. A human name is an attestation, not an automatic independent
 review. The second maintainer actually inspects/reproduces the result.
 
 ### Security change — only after Phase 2 recovery proof
@@ -198,13 +225,27 @@ sudo /opt/digital-autograph/deploy-on-vm.sh --manual start /opt/digital-autograp
 ```
 
 `apply` first requires the security changes and fresh proof described above.
-It rechecks the frozen baseline and recovery proof before writes. The sealed
+Immediately before the first ownership/DDL change it rechecks the exact legacy
+container fingerprint, persistent maintenance HBA/postmaster epoch, zero real DB
+clients (including idle), locked old migrator identity, full row/sequence baseline,
+recovery proof and actual image startup config. A resumed container, UPDATE,
+changed fence or session marks `INVALIDATED`; it stops writers and requires a new
+operation, freeze, final backup and real restore proof. Old receipts cannot be
+resumed. The old login remains rejected for the entire apply, closing the race
+between the final check and DDL; only the new private migration credential becomes
+usable. Trusted root/local operators must not run concurrent SQL or alter the
+fence. This is not a boundary against a compromised host/root administrator. The sealed
 operator creates `da_api/da_worker` non-owner runtime roles and a separate
 `da_migrator` object owner, all NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/
-NOBYPASSRLS without memberships. PostgreSQL gets SCRAM verifiers, not plaintext
+NOBYPASSRLS without memberships. The original HBA, pre-fence/final archives, old env evidence and operation receipts remain private and are never pruned. PostgreSQL gets SCRAM verifiers, not plaintext
 passwords in SQL. The migrator alone runs0017–0023; the operator then applies the
-explicit runtime table/column/sequence grants. Default PUBLIC TEMP/CREATE and
-PUBLIC function execution are restricted. Runtime cannot grant admin, DDL,
+explicit runtime table/column/sequence grants. Both direct and PUBLIC database CREATE/TEMP, schema permissions, user routine
+EXECUTE, stale table/column/sequence grants and permissive default ACLs are
+normalized before ownership; direct catalog-routine/language grants are removed
+too. Named third-party grants and object contents are preserved; unknown or
+delegated authority fails closed. No direct trigger EXECUTE is needed at runtime.
+Default routine grants for both bootstrap and migrator are restricted globally
+and per app schema. Only the explicit API/worker allowlist is restored. Runtime cannot grant admin, DDL,
 TRUNCATE, rewrite append-only evidence, or use the migration credential.
 
 Worker intentionally has column UPDATE(web) on notification_preferences and
@@ -214,7 +255,10 @@ financial tables. The original bootstrap privileges are preserved for recovery;
 they are not returned to API/worker.
 
 Only all24exact migration receipts allow `MIGRATED`. `start` requires that receipt,
-unchanged config and proof, uses the exact loaded immutable IDs with `--pull
+unchanged config/proof and the same maintenance fence. It keeps the migrator
+NOLOGIN, switches HBA to **only** da_api/da_worker SCRAM for the app DB and restarts
+the same PostgreSQL container once more before app startup. The old bootstrap TCP
+login is never reopened. Operator Unix access remains. It uses exact loaded immutable IDs with `--pull
 never`, waits for app health, verifies actual API/worker identities, recreates
 Caddy using its existing cert volumes, then checks public Web/API health. New
 containers regain normal `unless-stopped` behavior. No auto-fallback uses a cached
@@ -224,8 +268,7 @@ Failure/unknown COMMIT is `STOPPED`: writers stay down, backups/DB/files preserv
 Inspect receipts/schema with read-only SQL. Prefer a reviewed compatible forward
 fix. Any whole-DB restore requires a separate recovery decision covering writes
 since the checkpoint; never automatically replay a charge or discard history.
-Before schema writes, restarting the exact old containers is a distinct operator
-recovery action; after ownership/DDL changes do not assume it is safe. No stage
+Before schema writes, any owner-approved recovery of the old containers invalidates the checkpoint and also requires a separately reviewed decision about the old TCP boundary; after ownership/DDL changes do not assume it is safe. No stage
 claims success solely from a healthy old container. After startup, the accepted
 A03 worker performs its normal lease/recovery and lifecycle cleanup; the approved
 window must cover that behavior. All old file bytes are backed up first; no

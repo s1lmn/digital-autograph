@@ -3,6 +3,7 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '30s';
+\ir postgres-preflight.sql
 DO $$
 DECLARE item record; role_name text;
 BEGIN
@@ -23,6 +24,10 @@ BEGIN
     END IF;
     EXECUTE format('ALTER ROLE %I NOINHERIT LOGIN PASSWORD %L','da_'||role_name,current_setting('destka.'||role_name||'_scram'));
   END LOOP;
+  -- Direct/default ACL normalization precedes any ownership transfer.
+END $$;
+\ir postgres-normalize.sql
+DO $$ DECLARE item record; BEGIN
   EXECUTE format('GRANT CONNECT ON DATABASE %I TO da_api, da_worker, da_migrator',current_database());
   EXECUTE format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC',current_database());
   EXECUTE format('GRANT CREATE ON DATABASE %I TO da_migrator',current_database());

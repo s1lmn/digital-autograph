@@ -1,5 +1,7 @@
+import { prepareEnvironments } from '../../../deploy/manual-env.mjs';
 import {
   realpathSync,
+  statSync,
   copyFileSync,
   mkdirSync,
   mkdtempSync,
@@ -23,6 +25,8 @@ const toolFiles = [
   'Caddyfile',
   'Caddyfile.destka',
   'postgres-bootstrap.sql',
+  'postgres-preflight.sql',
+  'postgres-normalize.sql',
   'postgres-runtime.sql',
   'database-state.sql',
   'compose.yaml',
@@ -148,6 +152,18 @@ function fixture(failure = '') {
   };
   const commands: string[] = [];
   let migrated = false;
+  let clients = 0;
+  let dataVersion = 'a';
+  let epoch = 0;
+  let hba = '';
+  const legacy = ['api', 'worker'].map((app) => ({
+    Id: app + '-container',
+    Image: id,
+    State: { Status: 'running', StartedAt: 'initial', FinishedAt: 'initial' },
+    RestartCount: 0,
+    HostConfig: { RestartPolicy: { Name: 'unless-stopped' } },
+  }));
+  const inputs: string[] = [];
   const baseline = {
     migrations: m.migrations.slice(0, 17),
     tables: { users: 1 },
@@ -159,6 +175,37 @@ function fixture(failure = '') {
   ) => {
     const command = program + ' ' + args.join(' ');
     commands.push(command);
+    if (options?.input) inputs.push(options.input);
+    if (program === 'docker' && args[0] === 'update') {
+      legacy.forEach((c) => (c.HostConfig.RestartPolicy.Name = 'no'));
+      return '';
+    }
+    if (command.includes('stop --timeout')) {
+      legacy.forEach((c) => (c.State.Status = 'exited'));
+      return '';
+    }
+    if (command.includes('restart --timeout')) {
+      epoch++;
+      return '';
+    }
+    if (options?.input && command.includes('pg_hba.conf.destka-next')) {
+      hba = sha256(options.input);
+      return '';
+    }
+    if (program === 'docker' && args[0] === 'inspect' && args[1] !== '--format')
+      return JSON.stringify(legacy);
+    if (options?.input?.includes('pg_postmaster_start_time'))
+      return JSON.stringify({
+        epoch: 'epoch-' + epoch,
+        hba,
+        clients,
+        migratorLogin: false,
+      });
+    if (
+      options?.input?.includes('Direct/default ACL normalization') &&
+      failure === 'ownership-unknown'
+    )
+      throw Error('synthetic unknown commit');
     if (program === 'df') return 'Avail\n20000000000\n';
     if (command.includes('image inspect'))
       return JSON.stringify([
@@ -185,18 +232,27 @@ function fixture(failure = '') {
       });
       return '';
     }
-    if (command.includes('run --rm')) {
+    if (command.includes('run --rm') && command.endsWith(' migration')) {
       if (failure === 'migration') throw Error('synthetic');
       migrated = true;
       return '';
     }
     if (options?.input?.includes('pg_hba_file_rules')) return '0';
     if (options?.input?.includes('pg_database_size')) return '10';
+    if (options?.input?.includes('NOT datistemplate')) return '0';
+    if (
+      options?.input?.includes(
+        'SELECT count(*) FROM pg_roles WHERE rolcanlogin',
+      )
+    )
+      return '0';
     if (options?.input?.includes('pg_stat_activity')) return '0';
     if (options?.input?.includes('json_build_object'))
-      return JSON.stringify(
-        migrated ? { ...baseline, migrations: m.migrations } : baseline,
-      );
+      return JSON.stringify({
+        ...baseline,
+        migrations: migrated ? m.migrations : baseline.migrations,
+        contents: { users: dataVersion },
+      });
     if (command.includes('curl') && failure === 'health')
       throw Error('synthetic');
     if (command.includes('node --input-type'))
@@ -224,6 +280,9 @@ function fixture(failure = '') {
     writeFileSync(
       path.join(op, 'recovery-proof.json'),
       JSON.stringify({
+        checkpointId: record.checkpointId,
+        manifestHash: record.manifestHash,
+        fenceHash: fingerprint(record.fence),
         databaseArchiveSha256: fileHash(path.join(op, 'database.dump')),
         baselineHash: record.baselineHash,
         filesManifestSha256: sha256('files'),
@@ -243,6 +302,18 @@ function fixture(failure = '') {
     options,
     dir,
     recovery,
+    inputs,
+    resume: (app: string) => {
+      legacy.find((c) => c.Id === app + '-container')!.State.StartedAt =
+        'resumed';
+    },
+    idle: () => {
+      clients = 1;
+    },
+    update: () => {
+      dataVersion = 'updated';
+    },
+    proofPath: path.join(state, m.operation, 'recovery-proof.json'),
     record: () =>
       JSON.parse(
         readFileSync(path.join(state, m.operation, 'state.json'), 'utf8'),
@@ -259,9 +330,17 @@ it('stops old writers/restart policies before binary backup, requires off-VM rec
     expect(
       f.commands.findIndex((x) => x.includes('stop --timeout')),
     ).toBeLessThan(f.commands.indexOf('drained'));
-    expect(f.commands.some((x) => x.includes('run --rm'))).toBe(false);
+    expect(
+      f.commands.some(
+        (x) => x.includes('run --rm') && x.endsWith(' migration'),
+      ),
+    ).toBe(false);
     expect(() => deploy(f.m, 'apply', f.options)).toThrow();
-    expect(f.commands.some((x) => x.includes('run --rm'))).toBe(false);
+    expect(
+      f.commands.some(
+        (x) => x.includes('run --rm') && x.endsWith(' migration'),
+      ),
+    ).toBe(false);
     f.recovery();
     expect(deploy(f.m, 'apply', f.options).stage).toBe('MIGRATED');
     expect(deploy(f.m, 'start', f.options).stage).toBe('HEALTHY');
@@ -274,7 +353,7 @@ it('stops old writers/restart policies before binary backup, requires off-VM rec
     rmSync(f.dir, { recursive: true, force: true });
   }
 });
-it.each(['dump', 'migration', 'health'])(
+it.each(['dump', 'migration', 'health', 'ownership-unknown'])(
   'stops safely on %s failure and never starts incompatible old images',
   (failure) => {
     const f = fixture(failure);
@@ -284,7 +363,7 @@ it.each(['dump', 'migration', 'health'])(
       else {
         deploy(f.m, 'prepare', f.options);
         f.recovery();
-        if (failure === 'migration')
+        if (failure === 'migration' || failure === 'ownership-unknown')
           expect(() => deploy(f.m, 'apply', f.options)).toThrow();
         else {
           deploy(f.m, 'apply', f.options);
@@ -310,14 +389,110 @@ it('rejects partial migration replay and changed manifest before any migration',
     deploy(f.m, 'prepare', f.options);
     f.recovery();
     expect(() => deploy(f.m, 'apply', f.options)).toThrow();
-    const before = f.commands.filter((x) => x.includes('run --rm')).length;
+    const before = f.commands.filter(
+      (x) => x.includes('run --rm') && x.endsWith(' migration'),
+    ).length;
     expect(() => deploy(f.m, 'apply', f.options)).toThrow('partial');
-    expect(f.commands.filter((x) => x.includes('run --rm'))).toHaveLength(
-      before,
-    );
+    expect(
+      f.commands.filter(
+        (x) => x.includes('run --rm') && x.endsWith(' migration'),
+      ),
+    ).toHaveLength(before);
     expect(() =>
       deploy({ ...f.m, sourceSha: 'b'.repeat(40) }, 'start', f.options),
     ).toThrow('Manifest changed');
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+it.each(['api', 'worker', 'idle', 'update'])(
+  'invalidates checkpoint before ownership/DDL when %s changes after backup',
+  (change) => {
+    const f = fixture();
+    try {
+      deploy(f.m, 'prepare', f.options);
+      f.recovery();
+      if (change === 'api' || change === 'worker') f.resume(change);
+      else if (change === 'idle') f.idle();
+      else f.update();
+      expect(() => deploy(f.m, 'apply', f.options)).toThrow('invalidated');
+      expect(f.record().stage).toBe('INVALIDATED');
+      expect(
+        f.inputs.some((s) => s.includes('Direct/default ACL normalization')),
+      ).toBe(false);
+      expect(() => deploy(f.m, 'apply', f.options)).toThrow('partial');
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it.each(['checkpointId', 'manifestHash', 'fenceHash'])(
+  'rejects substituted/replayed %s in restore proof before DDL',
+  (field) => {
+    const f = fixture();
+    try {
+      deploy(f.m, 'prepare', f.options);
+      f.recovery();
+      const proof = JSON.parse(readFileSync(f.proofPath, 'utf8'));
+      proof[field] = 'f'.repeat(64);
+      writeFileSync(f.proofPath, JSON.stringify(proof), { mode: 0o600 });
+      expect(() => deploy(f.m, 'apply', f.options)).toThrow('recovery proof');
+      expect(
+        f.inputs.some((s) => s.includes('Direct/default ACL normalization')),
+      ).toBe(false);
+    } finally {
+      rmSync(f.dir, { recursive: true, force: true });
+    }
+  },
+);
+it('runs actual image config validation before freeze, and never masks config failure with payment shutdown', () => {
+  const f = fixture();
+  try {
+    const original = f.options.run;
+    f.options.run = (program, args, options) => {
+      if (args.includes('--check-config'))
+        throw Error('synthetic config rejection');
+      return original(program, args, options);
+    };
+    expect(() => deploy(f.m, 'prepare', f.options)).toThrow();
+    expect(f.commands.some((x) => x.includes('stop --timeout'))).toBe(false);
+    expect(
+      f.inputs.some((x) => x.includes('Direct/default ACL normalization')),
+    ).toBe(false);
+  } finally {
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+it('retains the exact previous env only as private evidence while removing all provider configuration', () => {
+  const f = fixture();
+  try {
+    const source = path.join(f.dir, 'source');
+    mkdirSync(source);
+    const old =
+      "PAYMENT_PROVIDER='yookassa'\nPAYMENT_MODE='sandbox'\nPAYMENT_RETURN_URL='https://old.invalid/return'\nPAYMENT_CREATOR_SHARE_BPS='5000'\nYOOKASSA_SECRET_KEY='test_synthetic_disabled'\n";
+    for (const app of ['api', 'worker'])
+      writeFileSync(path.join(source, app + '.env'), old, { mode: 0o600 });
+    const m = { ...f.m, operation: f.m.operation + '-env' };
+    mkdirSync(path.join(f.options.root, 'incoming', m.operation));
+    prepareEnvironments(m, {
+      source,
+      incoming: path.join(f.options.root, 'incoming'),
+      uid: process.getuid!(),
+    });
+    const target = path.join(f.options.root, 'incoming', m.operation, 'env');
+    expect(readFileSync(path.join(target, 'evidence', 'api.env'), 'utf8')).toBe(
+      old,
+    );
+    expect(
+      statSync(path.join(target, 'evidence', 'api.env')).mode & 0o777,
+    ).toBe(0o600);
+    expect(
+      /^(PAYMENT_|YOOKASSA_)/m.test(
+        readFileSync(path.join(target, 'api.env'), 'utf8'),
+      ),
+    ).toBe(false);
   } finally {
     rmSync(f.dir, { recursive: true, force: true });
   }

@@ -384,6 +384,21 @@ it('runs identity → private upload → worker → approval → moderation → 
   await createPgOAuthAttemptCleanup(worker)();
 }, 30000);
 
+it('refuses an existing runtime role granted to another login before changing credentials or ownership', async () => {
+  const c = await admin.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('CREATE ROLE destka_untrusted_role NOLOGIN');
+    await c.query('GRANT da_api TO destka_untrusted_role');
+    await expect(
+      c.query(readFileSync('deploy/postgres-bootstrap.sql', 'utf8')),
+    ).rejects.toMatchObject({ code: 'P0001' });
+  } finally {
+    await c.query('ROLLBACK');
+    c.release();
+  }
+});
+
 it('verifies the real database dump and actual private bytes with the off-VM restore command; source remains unchanged', async () => {
   const { backupPrivateFiles, S3Client } =
     await import('../../packages/integrations/src/file-backup');

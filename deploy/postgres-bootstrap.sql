@@ -10,7 +10,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname=role_name AND
         (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls))
        OR EXISTS (SELECT 1 FROM pg_database d JOIN pg_roles r ON r.oid=d.datdba WHERE r.rolname=role_name)
-       OR EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member WHERE r.rolname=role_name)
+       OR EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid=m.member OR r.oid=m.roleid WHERE r.rolname=role_name)
     THEN RAISE EXCEPTION 'Unsafe pre-existing deployment role'; END IF;
     IF role_name IN ('da_api','da_worker') AND (EXISTS (SELECT 1 FROM pg_class c JOIN pg_roles r ON r.oid=c.relowner WHERE r.rolname=role_name) OR EXISTS (SELECT 1 FROM pg_namespace n JOIN pg_roles r ON r.oid=n.nspowner WHERE r.rolname=role_name)) THEN RAISE EXCEPTION 'Runtime role must not own objects'; END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=role_name) THEN

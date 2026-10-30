@@ -31,6 +31,7 @@ let name: string | undefined,
   bucket: string | undefined;
 let restoredKeys: string[] = [];
 let publishProof: (() => void) | undefined;
+let stage = 'input-validation';
 try {
   const [recordFile, archive, files, configFile, proofFile] =
     process.argv.slice(2);
@@ -62,6 +63,7 @@ try {
   )
     throw Error('Loopback restore only');
   const manifest = await verifyPrivateFileBackup(files);
+  stage = 'postgres-start';
   name = 'destka-restore-' + randomUUID();
   volume = name + '-data';
   run([
@@ -97,6 +99,7 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   if (!ready) throw Error('Restore PostgreSQL unavailable');
+  stage = 'database-restore';
   const fd = openSync(archive, 'r');
   try {
     run(
@@ -119,6 +122,7 @@ try {
   } finally {
     closeSync(fd);
   }
+  stage = 'restored-baseline';
   const snapshot = JSON.parse(
     run(
       [
@@ -138,6 +142,7 @@ try {
   );
   if (fingerprint(snapshot) !== record.baselineHash)
     throw Error('Restored counts/migration hashes mismatch');
+  stage = 'private-file-restore';
   bucket = 'destka-restore-' + randomUUID();
   client = new S3Client({
     endpoint: endpoint.origin,
@@ -181,7 +186,7 @@ try {
     );
 } catch {
   console.error(
-    'Off-VM recovery proof refused/failed; no server/source restore performed.',
+    `Off-VM recovery proof failed at ${stage}; no server/source restore performed.`,
   );
   process.exitCode = 1;
 } finally {

@@ -1,6 +1,7 @@
 services:
   caddy:
-    image: caddy:2.10.2-alpine
+    image: ${CADDY_IMAGE:?Reviewed immutable Caddy image required}
+    pull_policy: never
     restart: unless-stopped
     environment:
       WEB_DOMAIN: ${WEB_DOMAIN:?WEB_DOMAIN is required}
@@ -20,7 +21,8 @@ services:
         condition: service_healthy
 
   web:
-    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/web:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ${WEB_IMAGE:?Reviewed immutable web image required}
+    pull_policy: never
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
@@ -42,16 +44,19 @@ services:
       start_period: 20s
 
   api:
-    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/api:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ${API_IMAGE:?Reviewed immutable api image required}
+    pull_policy: never
     restart: unless-stopped
     env_file:
-      - /etc/digital-autograph/env/api.env
+      - ${RUNTIME_ENV_DIR:?Reviewed runtime env directory required}/api.env
       - path: /etc/digital-autograph/env/incident.env
         required: false
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
       API_HOST: 0.0.0.0
       API_PORT: 4000
+      DISABLE_NEW_PAYMENTS: 'true'
+      AWS_EC2_METADATA_DISABLED: 'true'
     volumes:
       - /etc/digital-autograph/certs/yandex-cloud-root.crt:/run/secrets/postgres-ca.pem:ro
     expose:
@@ -68,21 +73,24 @@ services:
       start_period: 20s
 
   worker:
-    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/worker:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ${WORKER_IMAGE:?Reviewed immutable worker image required}
+    pull_policy: never
     restart: unless-stopped
     init: true
     env_file:
-      - /etc/digital-autograph/env/worker.env
+      - ${RUNTIME_ENV_DIR:?Reviewed runtime env directory required}/worker.env
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
+      AWS_EC2_METADATA_DISABLED: 'true'
     volumes:
       - /etc/digital-autograph/certs/yandex-cloud-root.crt:/run/secrets/postgres-ca.pem:ro
 
   migration:
-    image: cr.yandex/${YC_REGISTRY_ID:?YC_REGISTRY_ID is required}/digital-autograph/migration:${IMAGE_TAG:?IMAGE_TAG is required}
+    image: ${MIGRATION_IMAGE:?Reviewed immutable migration image required}
+    pull_policy: never
     profiles: [migration]
     env_file:
-      - /etc/digital-autograph/env/api.env
+      - ${RUNTIME_ENV_DIR:?Reviewed runtime env directory required}/migration.env
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
     volumes:

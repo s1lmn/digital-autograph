@@ -1,496 +1,264 @@
-# Yandex Cloud deployment and rollback
+# Manual deployment on the existing single VM
 
-## Ingress bounds
+The supported path is manual SSH with the existing Docker Compose project.
+**Release stays disabled. Never restore the old GitHub runner or its sudo/Docker
+access.** The old SHA-only `deploy-on-vm.sh SHA` and `rollback` entrypoints now
+refuse before doing work. No new VM, cloud lab, registry, service account, paid
+service, workflow or runner is required. Two competent maintainers review and
+operate this change; no third reviewer is required for ordinary code review.
 
-The reviewed [HTTP ingress policy](http-ingress.md) bounds body/header sizes and
-connection lifetimes, with an isolated pinned-Caddy smoke in hosted CI. These
-source defaults need physical mobile/capacity acceptance before deployment; they
-do not replace API validation or the A01 runner trust gate.
+Keep the existing private S3 bucket as the file store, including all old objects.
+Moving files to a different backend is not part of this update. Web, API, Worker,
+PostgreSQL and Caddy continue on the same VM. Existing storage/snapshot charges
+continue; no additional fixed monthly resource is introduced.
 
-## MVP topology
+## Before the owner authorizes a server change
 
-### Staging: budget single VM
+1. Merge one independently reviewed PR through existing protected checks. Keep
+   A02/A03 and migrations 0000–0023 unchanged. Record the resulting accepted main
+   SHA; do not label an image with another checkout's SHA.
+2. Run unit tests, real local PostgreSQL/MinIO integrations and recovery drill.
+   `restricted-runtime.test.ts` upgrades a separate local populated 0016 DB as a
+   non-superuser migrator, exercises restricted API/worker paths, concurrent Free
+   Claim, denied privileges, and the actual dump/file restore command. These are
+   synthetic compatibility results, not physical site acceptance.
+3. On a trusted workstation, prepare a private site JSON with `operation` (unique
+   lowercase ID), `instanceId`, `runtimeServiceAccountId`, the two existing
+   `runtimeSecretIds`, `effectiveAuthorityReviewedBy`, `database`, `domains.web`,
+   `domains.api`, `caddyConfig: "Caddyfile"`, `publicDomainApproved: false`,
+   `drainSeconds: 330` or greater, and `infrastructure.postgres/caddy` immutable
+   image IDs from read-only inventory. Use the existing staging origins first.
+4. Build once from a **clean exact reviewed checkout**, outside the VM:
 
-Staging uses one Ubuntu 24.04 x64 VM: 2 vCPU at 20% baseline, 2 GB RAM,
-25–30 GB network HDD, and about 4 GB host swap. It runs web, API, worker,
-Caddy, the repository-only runner, and local PostgreSQL 17. Object Storage,
-Container Registry, and Lockbox remain external services. This is deliberately
-not production-grade HA: losing the VM/disk can lose both DB and local backups.
-Staging preserves application/container/release semantics, but DB hosting is
-intentionally cheaper than production.
+   ```sh
+   node scripts/prepare-manual-release.mjs FULL_MAIN_SHA /private/offline-release /private/site.json
+   ```
 
-`compose.yaml` plus `compose.staging.yaml` adds PostgreSQL only for staging.
-The DB has no published port and is on an internal Docker network shared only
-with API, worker, and migration. Data lives in the persistent named volume
-`digital-autograph-staging-postgres`. Normal Compose up/down and application
-rollback retain that volume. Never run `docker compose down -v`, volume prune,
-or delete this volume during release or routine cleanup.
+   This uses the local Docker builder, linux/amd64, and `docker save`; it does not
+   publish anything. Four archives, their SHA256, immutable Docker config IDs,
+   source revision labels, 24 migration SQL hashes and the deploy-tool bundle
+   hash are recorded in `manifest.json`. Tags alone are never trusted. Build
+   inputs/context must not contain secrets. Keep artifacts outside the checkout.
 
-PostgreSQL reserves 128 MB and has a 384 MB RAM / 768 MB RAM-plus-swap limit,
-with 64 MB shared buffers and 30 connections. These are conservative starting
-settings for low-traffic smoke testing, not a capacity guarantee. No application
-memory caps are imposed: photo processing needs transient memory. Monitor OOM,
-RSS, swap usage, free disk, and worker processing during physical smoke.
+5. Obtain one exact owner permission naming VM, operation, accepted SHA/image
+   IDs/tool hash, downtime, backup location/data recipients, two maintainers and
+   the changes below. No actual server changes have been authorized merely by
+   preparing this runbook or PR.
 
-### Production: Managed PostgreSQL
+## Approved maintenance window
 
-Production keeps a separate VM and Managed PostgreSQL cluster on a private
-network, managed backups/PITR and a tested restore procedure. Separate private
-buckets, Lockbox secrets, runtime service accounts, and domains are required.
-No local PostgreSQL service is added to the production Compose path. The
-Compose/images can later move to Instance Groups without changing application
-architecture. No new production backup architecture is introduced here.
+Use the already trusted operator SSH key and strict host-key checking. Preserve
+all old backups, snapshot, runner forensic evidence and volumes. Do not run
+volume/image prune, `down -v`, backup rotation or old retention helpers.
 
-The VM accepts inbound HTTP/HTTPS for Caddy only. A self-hosted GitHub Actions
-runner on each VM uses outbound HTTPS to GitHub and Yandex Cloud; deployment
-does not open SSH to GitHub-hosted runner address ranges or store a deployment
-SSH key. Restrict the runner to this repository, trusted `main`-branch
-workflows, and the matching `da-staging` or `da-production` label. The runner's
-Docker access is effectively root access; do not run pull-request code on
-these runners. GitHub Free private repositories do not provide protected
-Environment approvals, so production release authorization is enforced by a
-repository Actions variable and an explicit manual confirmation in the release
-workflow.
+Install only the reviewed source/artifact files and prepare the new private env
+set, then run `prepare` below. These staging/capacity operations do not change DB
+ownership/schema or replace running images. Freeze, final backup and off-VM
+restore proof come **before** metadata/IAM changes and `apply`. Keep writers
+stopped throughout the checkpoint. If backup/restore fails, do not change
+credentials, VM options, IAM, ownership or schema.
 
-## One-time Yandex Cloud provisioning
+### Install reviewed files and prepare separate credentials
 
-Provision resources separately for each environment, except for the shared
-immutable-image Container Registry:
-
-- Ubuntu 24.04 VM, public IP, and a network security group permitting inbound
-  TCP 80/443. Limit any administrative SSH to the operator's IP. For staging,
-  use the budget spec above; do not provision Managed PostgreSQL.
-- For production only, provision Managed PostgreSQL database/app user on the
-  private network; allow port 6432 only from its application VM security group.
-  Enable managed backups/PITR and test a restore.
-- Private Object Storage bucket. Never enable public access; originals must
-  remain private. Create S3-compatible access keys scoped to the bucket.
-  Configure browser CORS during provisioning as described below; a private
-  bucket without CORS cannot accept browser direct uploads.
-- Lockbox secrets and a runtime service account attached to the VM. Grant
-  registry pull access, Lockbox payload access only to this environment's
-  secrets, and only the bucket read/write/delete permissions needed by the
-  API and worker.
-- One shared Container Registry for release artifacts and a GitHub staging CI
-  service account with `container-registry.images.pusher` on that registry.
-  The publisher is used only on the standard GitHub-hosted builder: no Lockbox,
-  S3, VM runtime or production grants. Both VM runtime service accounts get
-  `container-registry.images.puller` on this registry, never publisher/pusher
-  roles. Keep staging Lockbox/S3 grants staging-only and production runtime
-  grants separate. Use a dedicated repository with no tag-overwrite workflow
-  outside the release workflow.
-- A Yandex workload identity federation for GitHub Actions. Use issuer
-  `https://token.actions.githubusercontent.com`, JWKS URL
-  `https://token.actions.githubusercontent.com/.well-known/jwks`, and
-  audience `https://github.com/<OWNER>`. Bind the federation selector to this
-  repository's trusted `main` ref (`repo:<OWNER>/<REPO>:ref:refs/heads/main`)
-  and the staging CI service account. Production does not need an
-  image-publishing identity: production pulls the image already deployed to
-  staging.
-- A GitHub Actions self-hosted runner per VM, labelled `da-staging` and
-  `da-production` respectively. Install Docker Engine, the Compose v2 plugin (2.24.4 or newer for `!reset`),
-  Node.js 24 for the Lockbox renderer, `yc`, `gh`, `curl`, and `jq` on the VM.
-  Docker Buildx is used on the hosted builder, not required by the VM deploy path. Configure the VM's attached service
-  account for `yc`, Lockbox, and the registry credential helper. The runner
-  user must be trusted with Docker/root access and non-interactive `sudo`;
-  configure the helper/token profile for the same root context. Provision the
-  reviewed [runner authorization contract](runner-authorization.md) before
-  enabling Release; never grant an unrestricted sudo shell to the runner.
-- Domain A records for `WEB_DOMAIN` and `API_DOMAIN` pointed at that
-  environment's VM. Caddy obtains and renews HTTPS certificates; ensure ports
-  80/443 and outbound ACME traffic are available.
-
-See the official [GitHub workload identity federation tutorial](https://yandex.cloud/en/docs/iam/tutorials/wlif-github-integration),
-[Container Registry authentication](https://yandex.cloud/en/docs/container-registry/operations/authentication),
-[Managed PostgreSQL connection guide](https://yandex.cloud/en/docs/managed-postgresql/operations/connect),
-[Object Storage access](https://yandex.cloud/en/docs/storage/concepts/bucket), and
-[Lockbox payload CLI reference](https://yandex.cloud/en/docs/lockbox/cli-ref/payload/get).
-
-### Staging Object Storage CORS (operator provisioning)
-
-Browser direct uploads require bucket CORS for the exact web origin. The
-reviewed staging configuration is `deploy/storage-cors.staging.xml`:
-
-- Origin: `https://staging.destka.online`, without a wildcard.
-- Methods: `PUT` for private original uploads and `GET` for signed private
-  previews (`ReadyAutographPicker` uses `crossOrigin="anonymous"`).
-- Allowed headers: `Content-Type` and `If-None-Match`. Both remain signed;
-  uploads retain the `If-None-Match: *` overwrite protection.
-- Preflight cache: 300 seconds. Do not add `OPTIONS` as an allowed method.
-
-CORS is not authorization and does not make objects public. Anonymous read,
-list, and config read must remain disabled; keep the existing private ACL and
-bucket policy. Presigned PUT/GET remain required. Do not grant runtime or
-publisher service accounts additional permissions or give the release workflow
-bucket administration access.
-
-Using an authenticated **operator** `yc` provisioning profile and Node.js 24:
+After permission, transfer the exact tool bundle and archives over SSH to root-
+owned `/opt/digital-autograph/` and `incoming/OPERATION/`. Public source tools are
+root-owned and not writable by another user; private manifests/archives/envs are
+0600, directories0700. Match `toolBundleSha256` against the approved source.
+Ensure installed Compose supports `!override` (existing observed2.40.3 does).
+Do not replace `/etc/digital-autograph/env/postgres.env`: it remains the existing
+sealed bootstrap/operator login. Do not derive it from an application DSN.
 
 ```sh
-node deploy/staging-storage-cors.mjs validate
-node deploy/staging-storage-cors.mjs check
-# Explicit environment change, only after reviewing the configuration:
-node deploy/staging-storage-cors.mjs apply
-node deploy/staging-storage-cors.mjs check
+sudo node /opt/digital-autograph/manual-env.mjs /opt/digital-autograph/incoming/OPERATION/manifest.json
 ```
 
-Set `YC_BIN` to the installed CLI path if `yc` is not on PATH. `validate` only
-checks the repository XML; `check` reads full bucket configuration and exits
-nonzero on drift or a privacy violation. `apply` targets only
-`digital-autograph-staging-e6ic8eh2`, verifies privacy before writing, updates
-only CORS, and verifies the result and unchanged non-CORS settings. Repeated
-application of matching configuration performs no write. CLI payloads/errors
-are suppressed; the script does not handle credentials or signed object URLs.
+This copies existing API/worker configuration privately, strips old DB URLs and
+YooKassa keys, generates three distinct random passwords, and writes separate
+API/worker/migration env files. It does not change PostgreSQL. API/worker keep
+only their runtime env; migrator gets only its DB URL. The existing bootstrap
+credential is never copied into these files. Domains/callback URLs follow the
+approved manifest; first use the currently registered staging origins.
 
-The CLI mapping uses the documented `yc storage bucket update --cors` array
-syntax (`method-put`, `method-get`); see the official
-[Yandex CORS provisioning guide](https://yandex.cloud/en/docs/storage/operations/buckets/cors).
-This is a provisioning action, **not a per-release deployment step**. Neither
-application/worker startup nor the release workflow changes CORS. Applying this
-configuration does not rebuild/redeploy images or modify release image tags.
+Compose forces `DISABLE_NEW_PAYMENTS=true`; the prepared free path uses
+`DISABLE_FREE_CLAIMS=false` and
+explicit storage credentials; test auth is prohibited. Existing incident.env is
+retained: an active Free Claim freeze fails preflight instead of being silently
+cleared. Base Compose also requires immutable IDs and the versioned runtime env
+directory, so an old release.env cannot accidentally start incompatible images. No legal registry flag,
+production pricing, decay or YooKassa/live payment is enabled.
 
-Before physical browser smoke, verify an unsigned synthetic preflight against
-a nonexistent diagnostic key (no object is written):
+### Phase 1 — freeze and final database backup
 
 ```sh
-curl --silent --show-error --include --request OPTIONS \
-  --header 'Origin: https://staging.destka.online' \
-  --header 'Access-Control-Request-Method: PUT' \
-  --header 'Access-Control-Request-Headers: content-type,if-none-match' \
-  'https://storage.yandexcloud.net/digital-autograph-staging-e6ic8eh2/__cors-preflight/check'
+sudo /opt/digital-autograph/deploy-on-vm.sh --manual prepare /opt/digital-autograph/incoming/OPERATION/manifest.json
 ```
 
-Expect a successful HTTP response with the exact staging
-`Access-Control-Allow-Origin`, `PUT` in allowed methods, and both requested
-headers allowed. Repeat with method `GET` to check private preview CORS. Repeat
-with `Origin: https://example.com`: it must not be permitted. A successful
-OPTIONS is **not** proof of a successful presigned PUT: the user must repeat
-upload, completion, worker processing, cleaned preview, approval, and placement
-smoke against the unchanged application release.
+Preflight validates the manifest/proofs/config, >=7GiB and200k free inodes,
+archive checksums, source labels, amd64 immutable images and existing PG/Caddy
+image IDs. It never prunes data. It disables restart on **old API/worker only**,
+stops them gracefully, waits at least the actual old upload TTL+approved skew,
+and checks no other DB client sessions remain. Then it writes a binary custom
+`database.dump`, migration/row-count baseline and durable `BACKUP_REQUIRED`
+receipt under `/var/lib/digital-autograph/manual/OPERATION/`.
 
-Production must have its **own exact web origin**, never the staging origin or
-a wildcard. This staging script deliberately cannot target production; provision
-and review production CORS separately. Do not change public access to fix CORS.
+Confirm the old configured upload TTL really fits the manifest's drain bound
+(the last observed value was300seconds). Expiration does not cancel an already
+accepted remote PUT. File inventory stability is checked, late/unknown originals
+must remain preserved/tracked, and no source objects are deleted during backup.
+If storage is still changing, preserve the partial archive, extend the reviewed
+bounded drain and take a fresh checkpoint; do not claim a consistent backup.
 
-### Lockbox payloads
+Web may serve an error while API is stopped. This planned downtime also covers
+the restore rehearsal. There is no automated restart of the old writers. If SSH
+is lost, inspect the durable stage and container state with a fresh connection;
+never replay an unknown phase or assume a successful deployment.
 
-For independent new-payment/claim shutdown, see
-[incident controls](incident-controls.md). The API additionally reads the optional
-administrator-owned `/etc/digital-autograph/env/incident.env` after `api.env`;
-this override survives normal release/rollback environment refresh. No worker,
-migration or web service reads it. Use matching supported application images.
+### Phase 2 — prove recovery off the VM
 
-Create one API secret and one worker secret per environment. Payload entries
-are plain-text key/value pairs; do not put them in GitHub Actions variables,
-the repository, or deployment logs.
+Copy the dump, operation `state.json` and required protected file-backup input to
+the existing trusted workstation, without printing payloads into the terminal or
+chat. Backups may contain personal/session data: exact recipient, encrypted-at-
+rest location and retention must be included in owner permission. No third party
+or new cloud storage is required.
 
-Fetch runtime payloads with `yc lockbox payload get --format json-rest`.
-That CLI format uses camelCase fields, including `textValue`, as required by
-the renderer; plain `--format json` uses incompatible snake_case fields. Pipe the
-payload directly to the renderer without printing its contents.
-
-API payload keys:
-
-- `DATABASE_URL`: staging uses
-  `postgresql://<user>:<URL-encoded-password>@postgres:5432/<staging-db>?sslmode=disable`.
-  API and worker must use the same user/database/password. The renderer derives
-  the staging PostgreSQL env file from the API URI, validates both app URIs use
-  the private `postgres` service, and rejects external hosts or TLS overrides.
-  Production keeps its Managed PostgreSQL URI with
-  `sslmode=verify-full&sslrootcert=/run/secrets/postgres-ca.pem`.
-- `SESSION_TTL_SECONDS`, `TRUSTED_WEB_ORIGINS`, and `WEB_ORIGIN`.
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`.
-- `TELEGRAM_CLIENT_ID`, `TELEGRAM_CLIENT_SECRET`, `TELEGRAM_REDIRECT_URI`.
-- `S3_ENDPOINT=https://storage.yandexcloud.net`, `S3_REGION=ru-central1`,
-  `S3_BUCKET`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY`.
-- `UPLOAD_URL_TTL_SECONDS` and `PREVIEW_URL_TTL_SECONDS`.
-- Optional notification Telegram linking/webhook: configure
-  `NOTIFICATION_TELEGRAM_BOT_USERNAME` and `NOTIFICATION_TELEGRAM_WEBHOOK_SECRET`
-  together. The username is 5–32 alphanumeric/underscore characters without `@`;
-  the webhook secret is 32–256 URL-safe characters. Do not include
-  `NOTIFICATION_TELEGRAM_BOT_TOKEN` in the API payload.
-
-Worker payload keys are `DATABASE_URL` (same environment, with TLS settings),
-`S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
-`S3_SECRET_ACCESS_KEY`, `WORKER_POLL_INTERVAL_MS`, `WORKER_LEASE_SECONDS`,
-and `UPLOAD_CLEANUP_GRACE_SECONDS`.
-
-For optional notification Telegram sending, add `NOTIFICATION_TELEGRAM_BOT_TOKEN`
-and `WEB_ORIGIN` to the worker payload. The token is the Bot API credential,
-distinct from Telegram OIDC credentials. `WEB_ORIGIN` must be the same canonical
-HTTPS web origin as the API. Do not include the bot username or webhook secret
-in the worker payload. `APP_ENV` already comes from deployment configuration for
-both services. Without the respective component's notification keys its Telegram
-functionality is disabled; in-app notifications continue to work. Incomplete or
-invalid component configuration fails startup without printing credential values.
-
-When upgrading an installation configured with all three notification variables
-in both payloads, remove the bot token from the API payload; remove the username
-and webhook secret from the worker payload and retain its `WEB_ORIGIN`. Use the
-same bot across API/worker. After applying migrations 0015/0016 and deploying the
-updated images, configure the API's HTTPS `/notifications/telegram/webhook` using
-Bot API `setWebhook` with the API payload's webhook secret as `secret_token` and
-only `message` updates. Run this from an authorized operator environment using
-the token; never print token-bearing URLs or payloads in release logs. Verify
-linking, delivery and `/stop` with an authorized test account before enabling the
-channel for a pilot. Deploy/rollback the matching payload versions with their
-images: an older image requires the older combined configuration. No live secret
-or webhook changes are performed by this code change.
-
-For production, install the database TLS root certificate read-only at
-`/etc/digital-autograph/certs/yandex-cloud-root.crt` and verify the external DB
-connection with TLS. The staging override removes these CA mounts; its DB
-traffic stays on the internal Docker network. Confirm URI encoding for reserved
-characters in credentials. PostgreSQL initialization credentials apply only to
-an empty volume: rotate an existing DB password with an explicit SQL procedure
-and update both Lockbox payloads together; changing the env file alone does not
-change an existing PostgreSQL role. Use real HTTPS domains and
-provider callback URLs in each environment; register each exact OAuth callback
-with Google and Telegram.
-
-## GitHub configuration
-
-The repository is now public. The private-Free limitations below describe the
-original deployment design, not current GitHub feature availability. See
-[public repository CI/CD controls](public-repository-security.md) before enabling
-the deployment runner or configuring protection. No Environment migration has
-been applied; the existing release authorization remains in force.
-
-For the private GitHub Free repository, do not create or depend on protected
-GitHub Environments, environment secrets, or required reviewers. Configure
-these non-secret values as repository-level Actions variables:
-
-- `YC_SERVICE_ACCOUNT_ID`: staging image-publisher service account.
-- `YC_REGISTRY_ID`: shared immutable-image Container Registry.
-- `RELEASE_OPERATOR`: the exact GitHub login authorized to start production
-  deploys and rollbacks.
-
-Keep all runtime secrets in Yandex Lockbox. Add `APP_ENV` (`staging` or
-`production`), `YC_REGISTRY_ID`, `YC_LOCKBOX_API_SECRET_ID`,
-`YC_LOCKBOX_WORKER_SECRET_ID`, `WEB_DOMAIN`, and `API_DOMAIN` to
-`/etc/digital-autograph/deploy.conf` on each VM (this file contains resource
-identifiers and domains, never secret values).
-
-The release workflow only accepts manual dispatches from `main`. A production
-operation runs only for `RELEASE_OPERATOR`, requires the operator to enter
-`APPROVED`, verifies successful CI and a successful staging deployment for the
-same full SHA from trusted main history (successful push CI, not PR CI), then dispatches to the dedicated production runner. The
-operator's confirmation is the review gate on GitHub Free; a reviewer must
-review the change before the operator confirms. Do not describe this as GitHub
-Environment protection or branch protection.
-
-## Release behavior
-
-Deploy operations check out the exact validated `IMAGE_SHA` and verify the Git
-HEAD before executing any release scripts. Manual rollback uses the current
-main release configuration and the previous image tag recorded on the VM,
-independent of a developer checkout.
-
-1. Successful trusted same-repository push CI for `main` starts hosted `prepare`.
-   It validates the request and exports the exact CI head SHA. Hosted
-   `build_publish` (`ubuntu-latest`) checks out/verifies that SHA, exchanges a
-   short-lived GitHub OIDC token for the registry-only publisher IAM token,
-   and builds/pushes API/web/worker/migration images under the immutable commit
-   tag. Existing SHA images are reused; registry errors fail closed.
-   Only a successful publication schedules the self-hosted `deploy` job.
-   Manual deploy/rollback bypass publication; their authorization gates run
-   on the hosted prepare job before any VM is scheduled.
-2. The dedicated VM job checks out/verifies the exact published (or manually
-   validated) SHA and creates its deployment record. It has only GitHub contents
-   read/deployments write, no publishing OIDC permission or publisher token.
-   Before installing any release config, the job verifies the administrator-owned
-   preflight entrypoint/helper match the checkout and calls the fixed entrypoint
-   with `sudo -n` and the explicit operation. Missing/stale provisioning or denied
-   authorization fails closed before writes. All subsequent sudo calls also use
-   `-n`; their exact commands are versioned in `deploy/runner.sudoers`.
-   The VM obtains the API and worker payloads from its environment's Lockbox,
-   writes owner-only runtime environment files, pulls the SHA-tagged images,
-   and uses one environment-selected Compose helper for pull, startup, migration,
-   health checks, and rollback. Deploy pulls all four ready images, including
-   migration, before DB startup or migration. Missing images stop the operation;
-   manual staging and production never rebuild. Staging first starts/waits for PostgreSQL, then
-   takes a custom-format `pg_dump` before running migration (including an empty
-   first-deploy DB). It
-   then starts/replaces Compose services.
-3. Smoke checks require the API readiness endpoint, the public web origin,
-   and a running worker. The deploy script records the active and previous
-   image tags only after checks pass. The workflow records GitHub deployment
-   status so a production dispatch can verify that the exact SHA completed
-   staging successfully.
-4. The SHA tags are published only when missing; a rerun will reuse existing
-   SHA-tagged images rather than rebuilding over them. Do not manually retag a
-   release image. After review and successful staging, the configured
-   `RELEASE_OPERATOR` dispatches `Release` from `main` with target `production`,
-   operation `deploy`, that exact image SHA, and `APPROVED` confirmation.
-5. To roll back an application, dispatch the same workflow with the target
-   environment and operation `rollback`. The VM redeploys its recorded
-   previous image without rerunning migrations or making a DB backup. Its
-   operation-specific guard checks cached api/web/worker and infrastructure
-   images with 256 MiB write reserve and 200,000 free inodes. It reuses existing
-   runtime env files, skips cloud secret fetch/registry login/pull, and uses
-   Compose `--pull never`; migration is not a required cached rollback target. A failed health check during a
-   new deploy also attempts to restore the previously healthy application
-   image. Compose startup errors cannot count as a successful release; smoke
-   checks also verify API/web/worker containers use the requested image tags.
-   Registry login remains available through an automatic rollback and is
-   removed on script exit. Registry inspection errors fail closed instead of
-   treating authentication/network failures as permission to overwrite a tag.
-
-Database schema is not automatically rolled back. Migrations must follow
-expand/deploy/contract: add backward-compatible schema, deploy and verify the
-application, then remove obsolete schema in a later release. A failed
-migration blocks application replacement. If a migration has already
-succeeded, restore compatibility with a forward-fix; restore from a tested
-database backup/PITR only for data recovery, with a controlled connection
-cutover. Roll back secrets separately by reactivating the intended Lockbox
-version; never print payloads or IAM tokens.
-
-## Local validation
-
-Build the same image targets and validate the compose model before using the
-release workflow:
+With existing S3 configuration supplied privately in the process environment:
 
 ```sh
-docker buildx bake --file deploy/docker-bake.hcl release
+pnpm exec tsx scripts/backup-files.mts snapshot /private/files-backup MAX_TOTAL_BYTES
+pnpm exec tsx scripts/backup-files.mts verify /private/files-backup
 ```
 
-Before connecting a VM to the runner, validate Compose without printing the
-resolved secrets, after provisioning its runtime environment files:
+The snapshot lists/GETs the existing bucket, conditional on each ETag, hashes the
+actual bytes, rechecks inventory and writes opaque local filenames0600. It never
+writes/deletes in the source. Changing/incomplete data or a budget failure blocks
+promotion. The archive's `manifest.json` includes source endpoint/bucket and is
+private; do not publish object keys.
+
+Prepare a protected restore config with a **local immutable PostgreSQL17 image
+ID**, a loopback-only MinIO endpoint (`http://127.0.0.1:PORT`), its synthetic local
+credentials, and the actual second maintainer's `reviewedBy`. Then:
 
 ```sh
-# Production
-sudo docker compose --env-file /opt/digital-autograph/release.env \
-  -f /opt/digital-autograph/compose.yaml config --quiet
-# Staging
-sudo docker compose --env-file /opt/digital-autograph/release.env \
-  -f /opt/digital-autograph/compose.yaml \
-  -f /opt/digital-autograph/compose.staging.yaml config --quiet
+pnpm exec tsx scripts/verify-manual-backup.mts /private/state.json /private/database.dump /private/files-backup /private/local-restore.json /private/recovery-proof.json
 ```
 
-Use only the command for the VM's environment. Those files must contain only that environment's values
-and must never be copied between staging and production.
+This restores the actual DB archive in a fresh local Docker volume/container with
+no network, checks all baseline migration hashes/table counts, restores the actual
+backed-up files into a fresh private **loopback** MinIO bucket and verifies bytes.
+It removes only its own temporary restore resources. Unknown schema/functions
+in an old archive remain untrusted input; no host mounts, sockets or outbound
+network are allowed in that PostgreSQL container. No restore touches the server
+or source bucket. Retain the original archives and evidence.
 
-## Staging backups and migration failure
+Copy `recovery-proof.json` and the file archive's `manifest.json` (as
+`files-manifest.json`) owner-only into the server's operation directory. They
+must match the exact DB archive, baseline, source S3 endpoint/bucket and reviewed
+operator state. A human name is an attestation, not an automatic independent
+review. The second maintainer actually inspects/reproduces the result.
 
-Before every staging deploy migration, write a dump under
-`/var/lib/digital-autograph/staging-backups` (directory 0700, dumps 0600).
-Only the newest three successfully completed dumps are retained. A failed dump
-blocks migration. A failed migration exits before replacing application
-containers, leaves the recorded current image unchanged, and retains the dump.
-Rollback uses the same staging Compose context and persistent volume, skips
-migration/backup, and never restores schema automatically. These local dumps
-protect a small staging test DB from operator mistakes, not VM/disk loss.
+### Security change — only after Phase 2 recovery proof
 
-To rehearse recovery, copy a completed dump into an isolated test environment,
-inspect it with `pg_restore --list`, and restore only after reviewing the
-migration compatibility and selecting an explicit recovery target. Do not
-restore over the active staging DB automatically. Production continues its
-managed backup/PITR procedure.
-
-## Host swap and GitHub-hosted builds
-
-Release now fails before deployment mutations when byte/inode capacity is
-insufficient and selectively retains old local project images only after a
-healthy release. See [staging capacity and recovery](staging-capacity.md) for
-thresholds, protected rollback/data state and EGO-142 incident evidence.
-
-Configure swap on the VM host, never inside containers. On a newly provisioned
-Ubuntu VM with no existing `/swapfile`, an operator can configure 4 GB:
+The new deployment does not fetch Lockbox or registry credentials on the VM.
+Runtime still uses its existing explicit static S3 pair. After the quiesced final
+recovery checkpoint and off-VM restore proof, the owner/provisioner on the workstation changes **only**:
 
 ```sh
-sudo dd if=/dev/zero of=/swapfile bs=1M count=4096 status=progress
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-# Add this line once to /etc/fstab:
-# /swapfile none swap sw 0 0
-free -h
+yc compute instance update "$EXISTING_VM_ID" --metadata-options aws-v1-http-token=disabled,aws-v2-http-token=disabled,gce-http-token=disabled
+# Repeat for exactly the existing API and worker secret, with reviewed IDs:
+yc lockbox secret remove-access-binding --id "$EXISTING_SECRET_ID" --role lockbox.payloadViewer --service-account-id "$EXISTING_RUNTIME_SA_ID"
 ```
 
-Do not overwrite an existing swapfile. Set a disk-space alarm: OS, swap,
-PostgreSQL volume, three dumps, pulled images and container logs share only
-25–30 GB. Manage obsolete images/logs selectively; never prune volumes. Keep
-active and previous release images available for rollback. Buildx cache lives
-on the hosted builder, not on this VM.
+These commands require the owner's explicit permission; they are not executed by
+any source script. Verify the command/schema against the installed `yc` version
+before the window. Endpoints and SSH/firewall rules are otherwise unchanged.
+Do not use the withdrawn M01 v1, a new firewall rule, or a token-endpoint probe.
+Disabling credential issuance is not a claim that the metadata directory itself
+is unreachable. Removing both Lockbox bindings also addresses already issued
+runtime tokens; allow IAM propagation and review inherited/group authority. Do
+not infer absence of historical disclosure or compromise from this change.
 
-The Dockerfile has one shared build stage: dependency installation, API/worker
-TypeScript builds, Next.js production build and two pnpm deploy operations.
-Buildx reuses this stage across four targets. Release builds now run exclusively
-on the standard GitHub-hosted `ubuntu-latest` x64 runner, currently documented
-as 2 CPUs / 8 GB RAM / 14 GB SSD for private repositories. No paid larger runner
-is configured. The 2 GB staging VM only pulls ready images, backs up/migrates
-its DB, starts containers and checks health; routine deployment does not require
-a temporary resize to 4 GB. Keep 4 GB host swap for runtime memory bursts,
-not for building release images.
-
-Private-repository GitHub-hosted Actions minutes, artifact/cache storage and
-any overage are limited resources. Check the repository owner's GitHub Billing
-and set budgets/alerts before enabling releases. CI container validation and
-release publication both consume hosted minutes; reruns reuse existing release
-tags rather than overwriting them. Cloud balance does not cover GitHub charges.
-See the [standard runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
-and [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
-
-## Fixed staging domains and OAuth
-
-Registrar/DNS: **REG.RU**. The future staging VM non-secret deploy configuration
-must contain:
+Capture read-only evidence on the workstation:
 
 ```sh
-APP_ENV=staging
-WEB_DOMAIN=staging.destka.online
-API_DOMAIN=api.staging.destka.online
+node scripts/capture-runtime-authority.mjs /private/site.json /private/metadata-proof.json
 ```
 
-After provisioning a static staging IP, configure these DNS records:
+Only VM options and access bindings are read; no payloads, token endpoints or
+secret metadata entry names. The proof must show all three token settings
+`DISABLED`, no runtime-SA bindings on either secret, and a named inherited-access
+review. Its SHA256 is recorded in the operation receipt. Keep proof/site/manifest owner-only.
+A setting/grant regression blocks apply/start. Do not restore an exposed
+key or automatically re-enable credential issuance as recovery.
 
-| Name                      | Type | Value          |
-| ------------------------- | ---- | -------------- |
-| staging.destka.online     | A    | `<STAGING_IP>` |
-| api.staging.destka.online | A    | `<STAGING_IP>` |
+### Phase 3 — authority proof, roles/migrations, then restricted startup
 
-No DNS changes are performed by this PR. Allow HTTP/HTTPS to Caddy and verify
-both names resolve to the staging IP before release. Keep production domains
-and runtime resources separate.
+```sh
+sudo /opt/digital-autograph/deploy-on-vm.sh --manual apply /opt/digital-autograph/incoming/OPERATION/manifest.json
+sudo /opt/digital-autograph/deploy-on-vm.sh --manual start /opt/digital-autograph/incoming/OPERATION/manifest.json
+```
 
-Register exact staging provider callbacks manually:
+`apply` first requires the security changes and fresh proof described above.
+It rechecks the frozen baseline and recovery proof before writes. The sealed
+operator creates `da_api/da_worker` non-owner runtime roles and a separate
+`da_migrator` object owner, all NOSUPERUSER/NOCREATEDB/NOCREATEROLE/NOREPLICATION/
+NOBYPASSRLS without memberships. PostgreSQL gets SCRAM verifiers, not plaintext
+passwords in SQL. The migrator alone runs0017–0023; the operator then applies the
+explicit runtime table/column/sequence grants. Default PUBLIC TEMP/CREATE and
+PUBLIC function execution are restricted. Runtime cannot grant admin, DDL,
+TRUNCATE, rewrite append-only evidence, or use the migration credential.
 
-- Google: `https://api.staging.destka.online/auth/google/callback`
-- Telegram: `https://api.staging.destka.online/auth/telegram/callback`
+Worker intentionally has column UPDATE(web) on notification_preferences and
+UPDATE(consumed_at) on oauth_login_attempts to permit PostgreSQL row locks; these
+are real bounded extra capabilities, reviewed with the SQL. It cannot read/write
+financial tables. The original bootstrap privileges are preserved for recovery;
+they are not returned to API/worker.
 
-Use those same URLs in the respective staging Lockbox keys; set `WEB_ORIGIN`
-and `TRUSTED_WEB_ORIGINS` to `https://staging.destka.online`. Provider settings
-are not changed by this PR.
+Only all24exact migration receipts allow `MIGRATED`. `start` requires that receipt,
+unchanged config and proof, uses the exact loaded immutable IDs with `--pull
+never`, waits for app health, verifies actual API/worker identities, recreates
+Caddy using its existing cert volumes, then checks public Web/API health. New
+containers regain normal `unless-stopped` behavior. No auto-fallback uses a cached
+old image; the previous6847339/14cbe16 images are incompatible with schema0023.
 
-## Staging cost target
+Failure/unknown COMMIT is `STOPPED`: writers stay down, backups/DB/files preserved.
+Inspect receipts/schema with read-only SQL. Prefer a reviewed compatible forward
+fix. Any whole-DB restore requires a separate recovery decision covering writes
+since the checkpoint; never automatically replay a charge or discard history.
+Before schema writes, restarting the exact old containers is a distinct operator
+recovery action; after ownership/DDL changes do not assume it is safe. No stage
+claims success solely from a healthy old container. After startup, the accepted
+A03 worker performs its normal lease/recovery and lifecycle cleanup; the approved
+window must cover that behavior. All old file bytes are backed up first; no
+operator data/volume/evidence pruning is included.
 
-Planning target: **approximately 1500–1700 RUB/month** at 24/7 use with little
-user traffic, no Managed PostgreSQL, no production resources and controlled
-image/secret version retention. This is a budget target, not a tariff quote.
+## Physical staging acceptance, then domain permission
 
-| Component          | Budget basis                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| Compute VM         | Main cost; official Ice Lake example for 2 × 20% vCPU + 2 GB RAM is 1224 RUB per 30 days            |
-| Public IP          | About 190 RUB per 30 days at the documented active-IP example rate                                  |
-| Disk               | Budget separately for 25–30 GB network HDD, including swap/DB/backups/cache                         |
-| Lockbox            | Budget for two active secret versions and payload read operations; old versions add cost            |
-| Object Storage     | Small private test uploads plus request/traffic charges                                             |
-| Container Registry | Unique stored image layers, traffic and optional vulnerability scans; retain only reviewed releases |
+The three mandatory live gates are: the actual checkpoint's recovery proof,
+exact24migration receipts/restricted identities, and a **real** approved actor's
+login→autograph→processing→approval→moderation→FreeClaim→history. Include Wall
+lifecycle/retry, private-original denial, creator/moderator permissions and worker
+recovery. Existing test seams/mocks/local proofs do not satisfy physical OAuth or
+mobile acceptance. Google/Telegram callback registrations need matching origins;
+resolve the observed Telegram auth error privately, never by printing credentials.
 
-Actual cost depends on current tariffs, selected platform/region, month length,
-stored data and hosted Actions usage (billed separately by GitHub). Check the live calculator before
-provisioning and set billing alerts. With a 3990 RUB balance, 1500–1700 per
-month leaves roughly 590–990 RUB after two months, before unexpected usage.
-Do not treat that as a guaranteed minimum lifetime.
+After these gates, obtain separate DNS permission. Prepare A records for
+`destka.ru`, `www.destka.ru` and `api.destka.ru` pointing to the **same existing VM**,
+check AAAA/CAA/old records, DNS TTL, cert issuance and rollback record set. No
+record changes are performed by this PR. A new approved manifest selects
+`Caddyfile.destka`, `domains.web=destka.ru`, `domains.api=api.destka.ru` and
+`publicDomainApproved=true`. It provides HTTPS and permanent
+`www.destka.ru{uri}→https://destka.ru{uri}`; Caddy handles HTTP→HTTPS. Update the
+existing OAuth registrations to exact `https://api.destka.ru/auth/PROVIDER/callback`
+and runtime Web/CORS origins together under that permission. `manual-env.mjs`
+sets the corresponding private values; Web uses the approved API origin.
 
-Stop the staging VM during long idle periods to reduce compute charges. Disk,
-Lockbox, registry and bucket storage charges continue. A reserved static IP also
-continues billing and becomes more expensive while inactive, so stopping is not
-zero cost. No automatic deletion of cloud resources is performed.
+Website/Merchant acceptance remains open until actual privacy/OAuth/mobile/legal
+checks. Keep unapproved legal documents unpublished and all paid operations off.
+Prices stay89RUB minimum,+100 per successful takeover,cap4989,900s protection,
+creator50%. No YooKassa activation or merchant submission is included.
 
-Current pricing sources (reviewed 2026-10-01):
-[Compute](https://yandex.cloud/ru/docs/compute/pricing),
-[VPC/IP](https://yandex.cloud/ru/docs/vpc/pricing),
-[Lockbox](https://yandex.cloud/ru/docs/lockbox/pricing),
-[Object Storage](https://yandex.cloud/ru/docs/storage/pricing), and
-[Container Registry](https://yandex.cloud/ru/docs/container-registry/pricing).
+Preserve the paid recovery snapshot and root-only historical runner evidence.
+Closing runtime credential paths is not a forensic declaration that the old host
+was never compromised; both maintainers/owner explicitly review that residual
+risk before public launch. No additional security lab or third ordinary reviewer
+is required by this manual path.

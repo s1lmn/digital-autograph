@@ -1,0 +1,37 @@
+# Install only after separate DNS/origin/callback approval. No paid endpoints enabled.
+{
+  servers {
+    max_header_size 32KB
+    timeouts {
+      read_header 10s
+      read_body 35s
+      write 45s
+      idle 60s
+    }
+  }
+}
+
+www.destka.ru {
+  redir https://destka.ru{uri} permanent
+}
+
+destka.ru {
+  encode zstd gzip
+  request_body {
+    max_size 10485760
+  }
+  reverse_proxy web:3000
+}
+
+api.destka.ru {
+  encode zstd gzip
+  request_body {
+    max_size 10485760
+  }
+  reverse_proxy api:4000 {
+    transport http {
+      dial_timeout 5s
+      response_header_timeout 40s
+    }
+  }
+}

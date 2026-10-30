@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: ${POSTGRES_IMAGE:?Existing immutable PostgreSQL image required}
+    pull_policy: never
     restart: unless-stopped
     env_file:
       - /etc/digital-autograph/env/postgres.env

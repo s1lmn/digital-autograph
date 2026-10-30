@@ -86,3 +86,6 @@ export {
 export { createPgLegalRepository } from './legal-repository';
 
 export { createPgAgeDeclarationRepository } from './age-declaration-repository';
+
+// Operator/local migration verification uses the same PostgreSQL dialect as the CLI.
+export { migrate } from 'drizzle-orm/node-postgres/migrator';

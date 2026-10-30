@@ -92,6 +92,27 @@ function request({
   });
 }
 try {
+  const domains = JSON.parse(
+    docker(
+      'run',
+      '--rm',
+      '--network',
+      'none',
+      '--mount',
+      `type=bind,source=${resolve('deploy/Caddyfile.destka')},target=/etc/caddy/Caddyfile,readonly`,
+      image,
+      'caddy',
+      'adapt',
+      '--config',
+      '/etc/caddy/Caddyfile',
+      '--adapter',
+      'caddyfile',
+    ),
+  );
+  const domainConfig = JSON.stringify(domains);
+  assert(domainConfig.includes('www.destka.ru'));
+  assert(domainConfig.includes('https://destka.ru{http.request.uri}'));
+  assert(domainConfig.includes('301'));
   // Fixture consumes streams without buffering, and counts only complete bodies.
   writeFileSync(
     join(directory, 'fixture.mjs'),

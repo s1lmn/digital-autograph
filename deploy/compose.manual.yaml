@@ -1,0 +1,35 @@
+# Manual SSH only. Images are local immutable config digests loaded from reviewed archives.
+services:
+  api:
+    image: ${API_IMAGE:?Immutable API image required}
+    pull_policy: never
+    env_file: !override
+      - ${RUNTIME_ENV_DIR:?Reviewed env directory required}/api.env
+      - path: /etc/digital-autograph/env/incident.env
+        required: false
+    environment:
+      DISABLE_NEW_PAYMENTS: 'true'
+      AWS_EC2_METADATA_DISABLED: 'true'
+  worker:
+    image: ${WORKER_IMAGE:?Immutable worker image required}
+    pull_policy: never
+    env_file: !override
+      - ${RUNTIME_ENV_DIR:?Reviewed env directory required}/worker.env
+    environment:
+      AWS_EC2_METADATA_DISABLED: 'true'
+  web:
+    image: ${WEB_IMAGE:?Immutable Web image required}
+    pull_policy: never
+  migration:
+    image: ${MIGRATION_IMAGE:?Immutable migration image required}
+    pull_policy: never
+    env_file: !override
+      - ${RUNTIME_ENV_DIR:?Reviewed env directory required}/migration.env
+  postgres:
+    image: ${POSTGRES_IMAGE:?Existing immutable PostgreSQL image required}
+    pull_policy: never
+  caddy:
+    image: ${CADDY_IMAGE:?Existing immutable Caddy image required}
+    pull_policy: never
+    volumes:
+      - ${CADDY_CONFIG:?Reviewed Caddy configuration required}:/etc/caddy/Caddyfile:ro

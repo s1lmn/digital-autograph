@@ -20,6 +20,8 @@ GRANT INSERT ON users,social_identities,sessions,oauth_login_attempts,walls,slot
  autograph_moderation_decisions,legal_evidence_events,age_declarations,checkout_confirmations,pricing_config_versions,
  platform_pricing_default,takeover_quotes,takeover_reservations,payment_orders,payments,payment_event_receipts,
  creator_earnings,notification_events,notification_subscriptions,share_links,share_interactions TO da_api;
+GRANT INSERT ON creators,creator_profiles TO da_api;
+GRANT UPDATE(slug,display_name,updated_at) ON creator_profiles TO da_api;
 GRANT INSERT(user_id) ON notification_preferences TO da_api;
 GRANT UPDATE ON walls,autographs,autograph_assets,takeover_reservations,payment_orders,payments,notification_preferences TO da_api;
 GRANT UPDATE(updated_at) ON users,creators TO da_api;

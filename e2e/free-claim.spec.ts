@@ -314,6 +314,7 @@ test('new user uploads, reviews, claims and reads only their persistent history'
   );
   expect(claims.rows[0].claims).toBe(1);
   await page.getByRole('link', { name: 'Your account', exact: true }).click();
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'You are signed in' }),
   ).toBeVisible();
@@ -325,6 +326,7 @@ test('new user uploads, reviews, claims and reads only their persistent history'
   await expect(
     page.getByRole('heading', { name: 'Sign in to continue' }),
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page
     .getByRole('link', { name: 'Placement history', exact: true })
     .click();

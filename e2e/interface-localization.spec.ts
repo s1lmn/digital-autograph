@@ -13,15 +13,14 @@ test('Destka language and theme persist while an unfinished autograph survives s
     'Твой автограф.Часть их мира.',
   );
   await expect(page).toHaveTitle('Destka');
+  await page.goto('/me/settings');
   await page
     .getByRole('combobox', { name: 'Цветовая тема' })
     .selectOption('dark');
   await page
     .getByRole('combobox', { name: 'Язык интерфейса' })
     .selectOption('en');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Your mark.Their world.',
-  );
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -49,20 +48,21 @@ test('Destka language and theme persist while an unfinished autograph survives s
   await expect(
     editor.getByRole('button', { name: 'Создать приватный предпросмотр' }),
   ).toBeEnabled();
-  await editor
+  // Preferences live in their own tab; the in-progress canvas is not navigated away.
+  const preferences = await actor.newPage();
+  await preferences.goto(`${web}/me/settings`);
+  await preferences
     .getByRole('combobox', { name: 'Язык интерфейса' })
     .selectOption('en');
-  await expect(editor.getByRole('heading', { level: 1 })).toHaveText(
-    'Create a digital autograph',
+  await expect(preferences.getByRole('heading', { level: 1 })).toHaveText(
+    'Settings',
   );
   await expect(
-    editor.getByRole('button', { name: 'Create private preview' }),
+    editor.getByRole('button', { name: 'Создать приватный предпросмотр' }),
   ).toBeEnabled();
   await expect
     .poll(() =>
-      editor
-        .getByLabel('Autograph drawing area')
-        .evaluate((element: HTMLCanvasElement) => element.toDataURL()),
+      canvas.evaluate((element: HTMLCanvasElement) => element.toDataURL()),
     )
     .toBe(pixels);
   const second = await actor.newPage();

@@ -1,3 +1,4 @@
+import { registerAccountWorkspace } from './account-workspace';
 import { loadApiStartupConfig } from './startup-config';
 import type { LegalHttp } from './legal-http';
 import {
@@ -249,6 +250,7 @@ export async function startApi(
         }
       : undefined,
   );
+  registerAccountWorkspace(app, database);
   let closing = false;
 
   const shutdown = async (): Promise<void> => {

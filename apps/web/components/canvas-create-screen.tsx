@@ -128,6 +128,15 @@ export function CanvasCreateScreen({ apiOrigin }: { apiOrigin: string }) {
     }
   }, [mode]);
 
+  useEffect(() => {
+    if ((!hasMarks && !hasPhoto) || state.kind === 'preview') return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasMarks, hasPhoto, state.kind]);
+
   const startOver = () => {
     if (busy.current) return;
     strokes.current = [];

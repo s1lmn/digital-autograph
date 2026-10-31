@@ -120,3 +120,32 @@ it('creates a draft explicitly and does not publish it or duplicate a pending re
   ).toBeTruthy();
   expect(screen.queryByRole('link', { name: 'Open Wall' })).toBeNull();
 });
+it.each([
+  ['ready', 'Approved'],
+  ['moderation_rejected', 'Rejected'],
+])(
+  'opens the private preview action for backend status %s',
+  async (status, label) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ...data,
+            autographs: [{ ...data.autographs[0], status }],
+          }),
+        ),
+      ),
+    );
+    render(
+      <AccountWorkspace
+        apiOrigin="https://api.example.test"
+        section="autographs"
+      />,
+    );
+    expect(await screen.findByText(label)).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Open private preview' }),
+    ).toBeTruthy();
+  },
+);

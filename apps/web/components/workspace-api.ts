@@ -1,12 +1,18 @@
+import type { AutographStatus, WallStatus } from '@digital-autograph/domain';
 export type Workspace = {
   profile: { id: string; slug: string; displayName: string } | null;
   autographs: {
     id: string;
     source: string;
-    status: string;
+    status: AutographStatus;
     createdAt: string;
   }[];
-  walls: { id: string; status: string; slotCount: number; createdAt: string }[];
+  walls: {
+    id: string;
+    status: WallStatus;
+    slotCount: number;
+    createdAt: string;
+  }[];
   canModerate: boolean;
 };
 export async function workspaceRequest<T>(

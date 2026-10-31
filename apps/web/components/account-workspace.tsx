@@ -1,4 +1,5 @@
 'use client';
+import type { AutographStatus, WallStatus } from '@digital-autograph/domain';
 import { useEffect, useRef, useState } from 'react';
 import { useLocale } from './locale-provider';
 import { AccountSession } from './account-session';
@@ -9,15 +10,15 @@ import { autographApi } from '../lib/autograph-api';
 import { CleanedAutographReview } from './cleaned-autograph-review';
 import styles from './workspace.module.css';
 type Section = 'overview' | 'autographs' | 'walls' | 'settings';
-const statuses: Record<string, string> = {
+const statuses: Record<AutographStatus | WallStatus, string> = {
   draft: 'Draft',
   upload_pending: 'Waiting for upload',
   uploaded_unverified: 'Verifying upload',
   processing: 'Processing',
   awaiting_approval: 'Review your preview',
   awaiting_moderation: 'Awaiting moderation',
-  approved: 'Approved',
-  rejected: 'Rejected',
+  ready: 'Approved',
+  moderation_rejected: 'Rejected',
   processing_failed: 'Processing failed',
   live: 'Live',
   paused: 'Paused',
@@ -205,8 +206,8 @@ export function AccountWorkspace({
                   {[
                     'awaiting_approval',
                     'awaiting_moderation',
-                    'approved',
-                    'rejected',
+                    'ready',
+                    'moderation_rejected',
                   ].includes(a.status) && (
                     <button
                       disabled={pending}

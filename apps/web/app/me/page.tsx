@@ -1,9 +1,10 @@
+import workspaceStyles from '../../components/workspace.module.css';
 import { localizeMetadata } from '../../lib/i18n-server';
 
 import { getTranslator } from '../../lib/i18n-server';
 import type { Metadata } from 'next';
 import { loadWebConfig } from '@digital-autograph/config';
-import { AccountSession } from '../../components/account-session';
+import { AccountWorkspace } from '../../components/account-workspace';
 
 export const dynamic = 'force-dynamic';
 const pageMetadata: Metadata = {
@@ -19,9 +20,9 @@ export default async function AccountPage() {
 
   const { API_PUBLIC_ORIGIN } = loadWebConfig();
   return (
-    <main className="accountPage">
+    <main className={workspaceStyles.page}>
       <h1>{t('Your account')}</h1>
-      <AccountSession apiOrigin={API_PUBLIC_ORIGIN} />
+      <AccountWorkspace apiOrigin={API_PUBLIC_ORIGIN} />
     </main>
   );
 }

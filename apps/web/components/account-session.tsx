@@ -7,7 +7,13 @@ import { VkIdSignIn } from './vk-id-sign-in';
 import { useEffect, useRef, useState } from 'react';
 import { wallClaimApi } from '../lib/wall-claim-api';
 
-export function AccountSession({ apiOrigin }: { apiOrigin: string }) {
+export function AccountSession({
+  apiOrigin,
+  onSignedOut,
+}: {
+  apiOrigin: string;
+  onSignedOut?: () => void;
+}) {
   const { t } = useLocale();
 
   const [auth, setAuth] = useState<
@@ -47,7 +53,10 @@ export function AccountSession({ apiOrigin }: { apiOrigin: string }) {
         signal: controller.signal,
       });
       if (!response.ok) throw new Error('Logout failed');
-      if (!controller.signal.aborted) setAuth('anonymous');
+      if (!controller.signal.aborted) {
+        setAuth('anonymous');
+        onSignedOut?.();
+      }
     } catch {
       if (!controller.signal.aborted) setLogoutError(true);
     } finally {

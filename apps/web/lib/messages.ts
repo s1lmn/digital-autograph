@@ -1,5 +1,82 @@
 // Interface translations only. Published legal document bodies remain unchanged.
 export const messages: Record<string, string> = {
+  'Places: {count}': 'Мест: {count}',
+  'Preview expired. Open it again.':
+    'Срок предпросмотра истёк. Открой его ещё раз.',
+  'Changes saved.': 'Изменения сохранены.',
+  Overview: 'Обзор',
+  'My autographs': 'Мои автографы',
+  'My Walls': 'Мои стены',
+  Settings: 'Настройки',
+  'Settings (opens in a new tab)': 'Настройки (откроются в новой вкладке)',
+  Menu: 'Меню',
+  'Close menu': 'Закрыть меню',
+  'Your space': 'Твоё пространство',
+  'Account sections': 'Разделы аккаунта',
+  Moderation: 'Модерация',
+  'Loading your space…': 'Загружаем твой кабинет…',
+  'Could not load your account. Please retry.':
+    'Не удалось загрузить кабинет. Попробуй ещё раз.',
+  'Could not save changes. Refresh before retrying.':
+    'Не удалось подтвердить сохранение. Обнови страницу перед повторной попыткой.',
+  'This username is already taken.': 'Этот ник уже занят.',
+  'Choose a name in settings to create your first Wall.':
+    'Выбери имя в настройках, чтобы создать первую стену.',
+  'Your drawings, private previews and moderation status.':
+    'Твои рисунки, приватные предпросмотры и статус модерации.',
+  'Open my autographs': 'Открыть мои автографы',
+  'Create a Wall and invite people to leave their mark.':
+    'Создай стену и пригласи людей оставить свой автограф.',
+  'Open my Walls': 'Открыть мои стены',
+  'Original uploads stay private. Only you can review these previews.':
+    'Оригиналы остаются приватными. Эти предпросмотры видны только тебе.',
+  'No autographs yet. Start with a drawing or a photo.':
+    'Пока нет автографов. Начни с рисунка или фотографии.',
+  'Open private preview': 'Открыть приватный предпросмотр',
+  'Close preview': 'Закрыть предпросмотр',
+  'Your private cleaned autograph': 'Твой приватный очищенный автограф',
+  'Showing up to 50 recent autographs. Refresh to update processing status.':
+    'Показаны последние 50 автографов. Обнови список, чтобы проверить обработку.',
+  'Give your Wall a name': 'Твоя первая стена',
+  'Set up your public creator profile first. Your original uploads will remain private.':
+    'Сначала заполни публичный профиль автора. Оригиналы автографов останутся приватными.',
+  'Set up profile': 'Заполнить профиль',
+  'A new Wall starts as a private draft. Publish it only when you are ready.':
+    'Новая стена — приватный черновик. Опубликуй её, когда будешь готов.',
+  'Number of places': 'Количество мест',
+  'Saving…': 'Сохраняем…',
+  'Create draft Wall': 'Создать черновик стены',
+  'Your Walls will appear here.': 'Здесь появятся твои стены.',
+  places: 'мест',
+  'Open Wall': 'Открыть стену',
+  'Publish Wall': 'Опубликовать стену',
+  'Showing up to 50 recent Walls.': 'Показаны последние 50 стен.',
+  'Public profile': 'Публичный профиль',
+  'Your name and username appear on your creator page. Your sign-in details stay private.':
+    'Имя и ник видны на странице автора. Данные входа остаются приватными.',
+  'Display name': 'Отображаемое имя',
+  Username: 'Ник',
+  'Use lowercase Latin letters, numbers and hyphens. Changing this changes your public profile link.':
+    'Строчные латинские буквы, цифры и дефисы. Изменение ника меняет ссылку на профиль.',
+  'Save profile': 'Сохранить профиль',
+  'Open public profile': 'Открыть публичный профиль',
+  'Appearance and language': 'Оформление и язык',
+  Session: 'Вход и выход',
+  Draft: 'Черновик',
+  'Waiting for upload': 'Ожидает загрузки',
+  'Verifying upload': 'Проверяем загрузку',
+  Processing: 'Обрабатывается',
+  'Review your preview': 'Проверь предпросмотр',
+  'Awaiting moderation': 'На модерации',
+  Approved: 'Одобрен',
+  Rejected: 'Отклонён',
+  'Processing failed': 'Ошибка обработки',
+  Live: 'Открыта',
+  Paused: 'Приостановлена',
+  Scheduled: 'Запланирована',
+  Ended: 'Завершена',
+  Archived: 'В архиве',
+
   '{name} left a mark. View the Wall.':
     '{name} оставил свой след. Посмотри стену.',
   'Interface language': 'Язык интерфейса',
@@ -517,7 +594,7 @@ export const messages: Record<string, string> = {
     'Переход к провайдеру не подтверждает оплату или размещение.',
   'Continue to YooKassa payment': 'Перейти к оплате в ЮKassa',
   'Check order status': 'Проверить состояние заказа',
-  Wall: 'Стенд',
+  Wall: 'Стена',
   'Creator name': 'Создатель',
   'Slot number': 'Ячейка',
   'Total price': 'Полная стоимость',

@@ -2,12 +2,11 @@ import { localizeMetadata } from '../lib/i18n-server';
 
 import { getLocale, getTranslator } from '../lib/i18n-server';
 import type { Metadata } from 'next';
-import { BrandMark, Icon } from '../components/ui-icon';
-import { ThemeSwitcher } from '../components/theme-switcher';
+import { WorkspaceNavigation } from '../components/workspace-navigation';
+import { loadWebConfig } from '@digital-autograph/config';
 import { themeInitScript } from '../lib/theme-init';
 import './styles.css';
 import { LocaleProvider } from '../components/locale-provider';
-import { LanguageSwitcher } from '../components/language-switcher';
 
 const pageMetadata: Metadata = {
   title: {
@@ -42,37 +41,7 @@ export default async function RootLayout({
           <a className="skipLink" href="#main-content">
             {t('Skip to content')}
           </a>
-          <header className="siteHeader">
-            <nav className="siteNav" aria-label={t('Main navigation')}>
-              <a className="brand" href="/">
-                <BrandMark />
-                <span>
-                  {t('Destka')}
-                  <span className="brandDot">.</span>
-                </span>
-              </a>
-              <div className="navLinks">
-                <a href="/me/placements">
-                  <Icon name="history" />
-                  <span>{t('Placement history')}</span>
-                </a>
-                <a href="/me/notifications">
-                  <Icon name="bell" />
-                  <span>{t('Notifications')}</span>
-                </a>
-                <a href="/me">
-                  <Icon name="user" />
-                  <span>{t('Your account')}</span>
-                </a>
-              </div>
-              <ThemeSwitcher />
-              <LanguageSwitcher />
-              <a className="navCreate" href="/autograph/create">
-                <Icon name="pen" />
-                <span>{t('Create autograph')}</span>
-              </a>
-            </nav>
-          </header>
+          <WorkspaceNavigation apiOrigin={loadWebConfig().API_PUBLIC_ORIGIN} />
           <div id="main-content" tabIndex={-1}>
             {children}
           </div>
